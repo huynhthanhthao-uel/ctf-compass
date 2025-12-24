@@ -59,12 +59,21 @@ Generate the writeup now:"""
         description: str,
         evidence_pack: Dict,
     ) -> str:
-        """Generate writeup using MegaLLM API."""
+        """Generate writeup using MegaLLM API or fallback to template."""
         # Format commands section
         commands_section = self._format_commands(evidence_pack.get("commands", []))
         
         # Format candidates section
         candidates_section = self._format_candidates(evidence_pack.get("candidates", []))
+        
+        # Check if LLM is enabled
+        if not settings.llm_enabled:
+            # Generate a basic template writeup without LLM
+            writeup = self._generate_template_writeup(
+                title, description, evidence_pack, commands_section, candidates_section
+            )
+            self._save_writeup(job_id, writeup)
+            return writeup
         
         # Build user prompt
         user_prompt = self.USER_PROMPT_TEMPLATE.format(
@@ -74,36 +83,87 @@ Generate the writeup now:"""
             candidates_section=candidates_section,
         )
         
-        # Call MegaLLM API
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            response = await client.post(
-                settings.megallm_api_url,
-                headers={
-                    "Authorization": f"Bearer {settings.megallm_api_key}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": settings.megallm_model,  # Uses configurable model (default: llama3.3-70b-instruct)
-                    "messages": [
-                        {"role": "system", "content": self.SYSTEM_PROMPT},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    "temperature": 0.3,
-                    "max_tokens": 4000,
-                },
-            )
+        try:
+            # Call MegaLLM API
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                response = await client.post(
+                    settings.megallm_api_url,
+                    headers={
+                        "Authorization": f"Bearer {settings.megallm_api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": settings.megallm_model,
+                        "messages": [
+                            {"role": "system", "content": self.SYSTEM_PROMPT},
+                            {"role": "user", "content": user_prompt},
+                        ],
+                        "temperature": 0.3,
+                        "max_tokens": 4000,
+                    },
+                )
+                
+                response.raise_for_status()
+                result = response.json()
             
-            response.raise_for_status()
-            result = response.json()
-        
-        writeup = result["choices"][0]["message"]["content"]
-        
-        # Validate writeup doesn't reference unknown commands
-        writeup = self._validate_writeup(writeup, evidence_pack)
+            writeup = result["choices"][0]["message"]["content"]
+            
+            # Validate writeup doesn't reference unknown commands
+            writeup = self._validate_writeup(writeup, evidence_pack)
+            
+        except Exception as e:
+            # Fallback to template if API fails
+            writeup = self._generate_template_writeup(
+                title, description, evidence_pack, commands_section, candidates_section
+            )
+            writeup += f"\n\n---\n*Note: AI-generated writeup failed ({str(e)}). This is a template writeup.*"
         
         # Save writeup
         self._save_writeup(job_id, writeup)
         
+        return writeup
+    
+    def _generate_template_writeup(
+        self,
+        title: str,
+        description: str,
+        evidence_pack: Dict,
+        commands_section: str,
+        candidates_section: str,
+    ) -> str:
+        """Generate a basic template writeup without LLM."""
+        commands = evidence_pack.get("commands", [])
+        candidates = evidence_pack.get("candidates", [])
+        
+        writeup = f"""# CTF Writeup: {title}
+
+## Overview
+
+{description}
+
+## Analysis Summary
+
+**Total Commands Executed:** {len(commands)}
+**Flag Candidates Found:** {len(candidates)}
+
+## Executed Commands
+
+{commands_section}
+
+## Flag Candidates
+
+{candidates_section}
+
+## Reproduction Steps
+
+1. Upload the challenge files to CTF Compass
+2. Run the analysis
+3. Review the command outputs above
+4. Verify the flag candidates
+
+---
+*This writeup was generated automatically. Configure your MegaLLM API key for AI-enhanced writeups.*
+"""
         return writeup
     
     def _format_commands(self, commands: List[Dict]) -> str:
@@ -130,7 +190,7 @@ Stderr:
 """
             sections.append(section)
         
-        return '\n'.join(sections)
+        return '\n'.join(sections) if sections else "No commands executed."
     
     def _format_candidates(self, candidates: List[Dict]) -> str:
         """Format flag candidates for the prompt."""

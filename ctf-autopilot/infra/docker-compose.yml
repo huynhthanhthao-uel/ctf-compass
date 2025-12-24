@@ -156,7 +156,7 @@ services:
     image: postgres:16-alpine
     environment:
       - POSTGRES_USER=${POSTGRES_USER:-ctfautopilot}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-ctfautopilot}
       - POSTGRES_DB=${POSTGRES_DB:-ctfautopilot}
     volumes:
       - postgres_data:/var/lib/postgresql/data
