@@ -18,6 +18,11 @@ services:
     restart: unless-stopped
     networks:
       - frontend
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   # =============================================================================
   # Backend API - FastAPI Application
@@ -49,7 +54,7 @@ services:
       - SANDBOX_CPU_LIMIT=${SANDBOX_CPU_LIMIT:-1}
       - ENABLE_TLS=${ENABLE_TLS:-false}
     volumes:
-      - ./data:/data
+      - ../data:/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
     depends_on:
       postgres:
@@ -60,6 +65,11 @@ services:
     networks:
       - frontend
       - backend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   # =============================================================================
   # Celery Worker - Background Job Processing
@@ -87,7 +97,7 @@ services:
       - SANDBOX_MEMORY_LIMIT=${SANDBOX_MEMORY_LIMIT:-512m}
       - SANDBOX_CPU_LIMIT=${SANDBOX_CPU_LIMIT:-1}
     volumes:
-      - ./data:/data
+      - ../data:/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
     depends_on:
       postgres:
@@ -147,8 +157,8 @@ services:
       - "${HTTP_PORT:-80}:80"
       - "${HTTPS_PORT:-443}:443"
     volumes:
-      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./infra/nginx/ssl:/etc/nginx/ssl:ro
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
     depends_on:
       - web
       - api

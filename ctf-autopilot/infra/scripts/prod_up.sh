@@ -69,6 +69,28 @@ if [[ -z "${MEGALLM_API_KEY:-}" ]]; then
     fi
 fi
 
+# Find docker-compose file
+COMPOSE_FILE=""
+if [[ -f "ctf-autopilot/infra/docker-compose.yml" ]]; then
+    COMPOSE_FILE="ctf-autopilot/infra/docker-compose.yml"
+elif [[ -f "infra/docker-compose.yml" ]]; then
+    COMPOSE_FILE="infra/docker-compose.yml"
+elif [[ -f "docker-compose.yml" ]]; then
+    COMPOSE_FILE="docker-compose.yml"
+fi
+
+if [[ -z "$COMPOSE_FILE" ]]; then
+    log_error "docker-compose.yml not found!"
+fi
+
+log_info "Using compose file: $COMPOSE_FILE"
+
+# Copy .env to compose directory if needed
+COMPOSE_DIR=$(dirname "$COMPOSE_FILE")
+if [[ "$COMPOSE_DIR" != "." ]] && [[ -f ".env" ]]; then
+    cp .env "$COMPOSE_DIR/.env" 2>/dev/null || true
+fi
+
 # Build sandbox image if not exists
 if ! docker image inspect ctf-compass-sandbox:latest > /dev/null 2>&1; then
     if ! docker image inspect ctf-autopilot-sandbox:latest > /dev/null 2>&1; then
@@ -91,35 +113,18 @@ if ! docker image inspect ctf-compass-sandbox:latest > /dev/null 2>&1; then
 fi
 
 # Create data directories
-mkdir -p data/runs
-chmod 755 data
-
-# Find docker-compose location
-COMPOSE_FILE=""
-if [[ -f "infra/docker-compose.yml" ]]; then
-    COMPOSE_FILE="infra/docker-compose.yml"
-elif [[ -f "ctf-autopilot/infra/docker-compose.yml" ]]; then
-    COMPOSE_FILE="ctf-autopilot/infra/docker-compose.yml"
-elif [[ -f "docker-compose.yml" ]]; then
-    COMPOSE_FILE="docker-compose.yml"
-fi
-
-if [[ -z "$COMPOSE_FILE" ]]; then
-    log_error "docker-compose.yml not found!"
-fi
-
-COMPOSE_DIR=$(dirname "$COMPOSE_FILE")
-cd "$COMPOSE_DIR"
+mkdir -p data/runs ctf-autopilot/data/runs ctf-autopilot/infra/data/runs
+chmod -R 755 data ctf-autopilot/data 2>/dev/null || true
 
 # Start all services
 log_info "Starting all services..."
 
 if [[ "${ENABLE_TLS:-false}" == "true" ]]; then
     log_info "Starting with TLS enabled..."
-    docker compose --profile production up -d --build
+    docker compose -f "$COMPOSE_FILE" --profile production up -d --build
 else
     log_info "Starting without TLS..."
-    docker compose up -d --build
+    docker compose -f "$COMPOSE_FILE" up -d --build
 fi
 
 # Wait for services
@@ -140,7 +145,7 @@ else
 fi
 
 # Check database
-if docker compose exec -T postgres pg_isready -U "${POSTGRES_USER:-ctfautopilot}" > /dev/null 2>&1; then
+if docker compose -f "$COMPOSE_FILE" exec -T postgres pg_isready -U "${POSTGRES_USER:-ctfautopilot}" > /dev/null 2>&1; then
     log_success "PostgreSQL is healthy"
 else
     log_warn "PostgreSQL is not ready"
@@ -148,7 +153,7 @@ else
 fi
 
 # Check Redis
-if docker compose exec -T redis redis-cli ping > /dev/null 2>&1; then
+if docker compose -f "$COMPOSE_FILE" exec -T redis redis-cli ping > /dev/null 2>&1; then
     log_success "Redis is healthy"
 else
     log_warn "Redis is not ready"
@@ -181,9 +186,9 @@ else
 fi
 echo ""
 echo -e "Useful commands:"
-echo -e "  View logs:     ${CYAN}docker compose logs -f${NC}"
-echo -e "  Stop services: ${CYAN}docker compose down${NC}"
-echo -e "  Check status:  ${CYAN}docker compose ps${NC}"
+echo -e "  View logs:     ${CYAN}docker compose -f $PROJECT_ROOT/$COMPOSE_FILE logs -f${NC}"
+echo -e "  Stop services: ${CYAN}docker compose -f $PROJECT_ROOT/$COMPOSE_FILE down${NC}"
+echo -e "  Check status:  ${CYAN}docker compose -f $PROJECT_ROOT/$COMPOSE_FILE ps${NC}"
 echo ""
 echo -e "Update system:"
 echo -e "  ${CYAN}sudo bash $PROJECT_ROOT/ctf-autopilot/infra/scripts/update.sh${NC}"

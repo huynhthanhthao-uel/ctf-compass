@@ -197,23 +197,24 @@ cleanup_docker() {
     cd "$INSTALL_DIR"
     
     # Find docker-compose location
-    COMPOSE_DIR=""
-    if [[ -f "infra/docker-compose.yml" ]]; then
-        COMPOSE_DIR="infra"
-    elif [[ -f "ctf-autopilot/infra/docker-compose.yml" ]]; then
-        COMPOSE_DIR="ctf-autopilot/infra"
+    COMPOSE_FILE=""
+    if [[ -f "ctf-autopilot/infra/docker-compose.yml" ]]; then
+        COMPOSE_FILE="ctf-autopilot/infra/docker-compose.yml"
+    elif [[ -f "infra/docker-compose.yml" ]]; then
+        COMPOSE_FILE="infra/docker-compose.yml"
     elif [[ -f "docker-compose.yml" ]]; then
-        COMPOSE_DIR="."
+        COMPOSE_FILE="docker-compose.yml"
     fi
     
-    if [[ -n "$COMPOSE_DIR" ]]; then
-        cd "$COMPOSE_DIR"
+    if [[ -n "$COMPOSE_FILE" ]]; then
+        # Export environment variables
+        set -a
+        source .env 2>/dev/null || true
+        set +a
         
         # Stop services gracefully
         log_info "Stopping services..."
-        docker compose down --remove-orphans 2>&1 | tee -a "$LOG_FILE" || true
-        
-        cd "$INSTALL_DIR"
+        docker compose -f "$COMPOSE_FILE" down --remove-orphans 2>&1 | tee -a "$LOG_FILE" || true
     fi
     
     # Remove old containers
@@ -285,29 +286,38 @@ restart_services() {
     cd "$INSTALL_DIR"
     
     # Create data directories if not exist
-    mkdir -p data/runs
-    chmod 755 data
+    mkdir -p data/runs ctf-autopilot/data/runs ctf-autopilot/infra/data/runs
+    chmod -R 755 data ctf-autopilot/data 2>/dev/null || true
     
     # Find docker-compose location
-    COMPOSE_DIR=""
-    if [[ -f "infra/docker-compose.yml" ]]; then
-        COMPOSE_DIR="infra"
-    elif [[ -f "ctf-autopilot/infra/docker-compose.yml" ]]; then
-        COMPOSE_DIR="ctf-autopilot/infra"
+    COMPOSE_FILE=""
+    if [[ -f "ctf-autopilot/infra/docker-compose.yml" ]]; then
+        COMPOSE_FILE="ctf-autopilot/infra/docker-compose.yml"
+    elif [[ -f "infra/docker-compose.yml" ]]; then
+        COMPOSE_FILE="infra/docker-compose.yml"
     elif [[ -f "docker-compose.yml" ]]; then
-        COMPOSE_DIR="."
+        COMPOSE_FILE="docker-compose.yml"
     fi
     
-    if [[ -z "$COMPOSE_DIR" ]]; then
+    if [[ -z "$COMPOSE_FILE" ]]; then
         log_warn "docker-compose.yml not found, skipping service restart..."
         return 0
     fi
     
-    cd "$COMPOSE_DIR"
+    # Copy .env to compose directory if needed
+    COMPOSE_DIR=$(dirname "$COMPOSE_FILE")
+    if [[ "$COMPOSE_DIR" != "." ]] && [[ -f ".env" ]]; then
+        cp .env "$COMPOSE_DIR/.env" 2>/dev/null || true
+    fi
+    
+    # Export environment variables
+    set -a
+    source .env 2>/dev/null || true
+    set +a
     
     # Start services with rebuild
     log_info "Starting services..."
-    docker compose up -d --build 2>&1 | tee -a "$LOG_FILE"
+    docker compose -f "$COMPOSE_FILE" up -d --build 2>&1 | tee -a "$LOG_FILE"
     
     # Wait for services
     log_info "Waiting for services to start (20 seconds)..."
