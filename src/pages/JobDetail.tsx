@@ -20,7 +20,8 @@ import {
   Archive,
   FileDown,
   PlayCircle,
-  Square
+  Square,
+  FileCode
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -36,6 +37,7 @@ import { WriteupView } from '@/components/jobs/WriteupView';
 import { SandboxTerminal } from '@/components/jobs/SandboxTerminal';
 import { AutopilotPanel } from '@/components/jobs/AutopilotPanel';
 import { AnalysisHistory } from '@/components/jobs/AnalysisHistory';
+import { SolveScriptGenerator } from '@/components/jobs/SolveScriptGenerator';
 import { useJobDetail } from '@/hooks/use-jobs';
 import { useJobWebSocket, JobUpdate } from '@/hooks/use-websocket';
 import { cn } from '@/lib/utils';
@@ -66,6 +68,7 @@ export default function JobDetail() {
   // AI Analysis state - managed by AutopilotPanel
   const [foundFlags, setFoundFlags] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState('analysis');
+  const [analysisContext, setAnalysisContext] = useState<string>('');
   
   const handleJobUpdate = useCallback((update: JobUpdate) => {
     if (update.type === 'job_update' && update.job_id === id) {
@@ -240,6 +243,134 @@ export default function JobDetail() {
       return prev;
     });
   }, []);
+
+  // Update analysis context when commands change
+  useEffect(() => {
+    if (jobDetail?.commands?.length > 0) {
+      const context = jobDetail.commands
+        .map(cmd => `$ ${cmd.tool} ${cmd.args}\n${cmd.stdout || ''}${cmd.stderr ? '\n[stderr]: ' + cmd.stderr : ''}`)
+        .join('\n\n');
+      setAnalysisContext(context);
+    }
+  }, [jobDetail?.commands]);
+
+  // Detect category from description or files
+  const detectCategory = useCallback(() => {
+    if (!jobDetail) return 'misc';
+    const desc = (jobDetail.description || '').toLowerCase();
+    const title = (jobDetail.title || '').toLowerCase();
+    const combined = `${desc} ${title}`;
+    
+    if (combined.includes('crypto') || combined.includes('rsa') || combined.includes('cipher') || combined.includes('encrypt')) return 'crypto';
+    if (combined.includes('forensic') || combined.includes('pcap') || combined.includes('memory') || combined.includes('disk')) return 'forensics';
+    if (combined.includes('pwn') || combined.includes('buffer') || combined.includes('overflow') || combined.includes('exploit')) return 'pwn';
+    if (combined.includes('reverse') || combined.includes('binary') || combined.includes('disassembl')) return 'rev';
+    if (combined.includes('web') || combined.includes('sql') || combined.includes('xss') || combined.includes('http')) return 'web';
+    
+    return 'misc';
+  }, [jobDetail]);
+
+  // Export analysis as reproducible Python script
+  const handleExportScript = useCallback(() => {
+    if (!jobDetail) return;
+    
+    const category = detectCategory();
+    const script = `#!/usr/bin/env python3
+"""
+CTF Solve Script - ${jobDetail.title}
+Auto-exported from CTF Autopilot
+Category: ${category}
+Created: ${new Date().toISOString()}
+Job ID: ${jobDetail.id}
+"""
+import subprocess
+import os
+import re
+from pathlib import Path
+
+# Challenge metadata
+CHALLENGE_TITLE = "${jobDetail.title}"
+FLAG_FORMAT = r"${jobDetail.flagFormat || 'CTF{.*}'}"
+INPUT_FILES = ${JSON.stringify(jobDetail.inputFiles || [])}
+
+# Commands executed during analysis
+COMMANDS = [
+${jobDetail.commands.map(cmd => {
+  const argsStr = Array.isArray(cmd.args) ? cmd.args.join(' ') : (cmd.args || '');
+  return `    ("${cmd.tool}", "${argsStr.replace(/"/g, '\\"')}", ${cmd.exitCode}),`;
+}).join('\n')}
+]
+
+def run_command(tool: str, args: str) -> tuple[int, str, str]:
+    """Execute a command and return (exit_code, stdout, stderr)"""
+    try:
+        result = subprocess.run(
+            f"{tool} {args}",
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=60
+        )
+        return result.returncode, result.stdout, result.stderr
+    except subprocess.TimeoutExpired:
+        return -1, "", "Command timed out"
+    except Exception as e:
+        return -1, "", str(e)
+
+def find_flags(text: str) -> list[str]:
+    """Extract flags matching the expected format"""
+    pattern = FLAG_FORMAT.replace(".*", ".+?")
+    flags = re.findall(pattern, text, re.IGNORECASE)
+    return list(set(flags))
+
+def replay_analysis():
+    """Replay the analysis commands from the original session"""
+    print(f"[*] Replaying analysis for: {CHALLENGE_TITLE}")
+    print(f"[*] Expected flag format: {FLAG_FORMAT}")
+    print("-" * 60)
+    
+    all_output = ""
+    for tool, args, expected_exit in COMMANDS:
+        print(f"\\n$ {tool} {args}")
+        exit_code, stdout, stderr = run_command(tool, args)
+        
+        if stdout:
+            print(stdout[:500] + ("..." if len(stdout) > 500 else ""))
+            all_output += stdout
+        if stderr:
+            print(f"[stderr]: {stderr[:200]}")
+            all_output += stderr
+        
+        if exit_code != expected_exit:
+            print(f"[!] Exit code mismatch: got {exit_code}, expected {expected_exit}")
+    
+    # Search for flags in all output
+    flags = find_flags(all_output)
+    if flags:
+        print("\\n" + "=" * 60)
+        print(f"[+] FLAGS FOUND: {flags}")
+        print("=" * 60)
+    else:
+        print("\\n[*] No flags found automatically. Manual analysis may be required.")
+    
+    return flags
+
+if __name__ == "__main__":
+    replay_analysis()
+`;
+
+    const blob = new Blob([script], { type: 'text/x-python' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `solve_${jobDetail.id}.py`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    
+    toast.success('Reproducible solve script exported');
+  }, [jobDetail, detectCategory]);
 
   // Apply strategy from history
   const handleApplyStrategy = useCallback((tools: string[]) => {
@@ -486,6 +617,10 @@ export default function JobDetail() {
                   <DropdownMenuItem onClick={handleExportJSON} className="gap-2">
                     <FileText className="h-4 w-4" />
                     Export as JSON
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleExportScript} className="gap-2">
+                    <FileCode className="h-4 w-4" />
+                    Export as Python Script
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -740,13 +875,30 @@ export default function JobDetail() {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="analysis">
+          <TabsContent value="analysis" className="space-y-4">
             <AutopilotPanel 
               jobId={jobDetail.id} 
               files={jobDetail.inputFiles || []}
               description={jobDetail.description}
               expectedFormat={jobDetail.flagFormat}
               onFlagFound={handleFlagFound}
+            />
+            
+            {/* Solve Script Generator */}
+            <SolveScriptGenerator
+              jobId={jobDetail.id}
+              category={detectCategory()}
+              files={jobDetail.inputFiles || []}
+              flagFormat={jobDetail.flagFormat}
+              analysisContext={analysisContext}
+              onScriptExecuted={(result) => {
+                if (result.stdout) {
+                  const flagMatch = result.stdout.match(new RegExp(jobDetail.flagFormat || 'CTF{.*}', 'g'));
+                  if (flagMatch) {
+                    flagMatch.forEach(handleFlagFound);
+                  }
+                }
+              }}
             />
           </TabsContent>
 
