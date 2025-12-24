@@ -1,0 +1,245 @@
+# =============================================================================
+# CTF Autopilot Analyzer - Git Ignore Configuration
+# =============================================================================
+
+# =============================================================================
+# CRITICAL: SECRETS AND SENSITIVE DATA
+# =============================================================================
+
+# Environment files with secrets
+.env
+.env.local
+.env.*.local
+*.env
+
+# Secret keys and certificates
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+secrets/
+.secrets/
+
+# API keys file
+api_keys.txt
+api_keys.json
+
+# =============================================================================
+# DATA AND ARTIFACTS
+# =============================================================================
+
+# Job data and uploads
+/data/
+data/
+runs/
+uploads/
+artifacts/
+*.upload
+
+# Generated reports
+reports/
+*.report.md
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# =============================================================================
+# PYTHON
+# =============================================================================
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+.env/
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+pytest_cache/
+
+# Translations
+*.mo
+*.pot
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# =============================================================================
+# NODE.JS / NEXT.JS
+# =============================================================================
+
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Next.js
+.next/
+out/
+
+# Production build
+build/
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Local env files
+.env*.local
+
+# Vercel
+.vercel
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# =============================================================================
+# DOCKER
+# =============================================================================
+
+# Docker volumes (should not be committed)
+docker-volumes/
+.docker/
+
+# =============================================================================
+# IDE AND EDITOR
+# =============================================================================
+
+# VSCode
+.vscode/
+*.code-workspace
+
+# JetBrains
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# Sublime Text
+*.sublime-workspace
+*.sublime-project
+
+# =============================================================================
+# OPERATING SYSTEM
+# =============================================================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# =============================================================================
+# LOGS
+# =============================================================================
+
+logs/
+*.log
+log/
+
+# =============================================================================
+# MISCELLANEOUS
+# =============================================================================
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# Lock files (keep package-lock.json and poetry.lock)
+# Uncomment if you want to ignore lock files
+# package-lock.json
+# poetry.lock
+
+# Coverage reports
+coverage/
+.nyc_output/
+
+# Test results
+test-results/
+test-reports/
