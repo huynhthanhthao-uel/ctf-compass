@@ -1,5 +1,5 @@
 """System management endpoints for updates and configuration."""
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional
@@ -9,6 +9,7 @@ import json
 import asyncio
 
 from app.routers.auth import get_current_session, verify_csrf
+from app.config import settings
 
 
 router = APIRouter()
@@ -202,8 +203,6 @@ async def get_api_key_status(
     _session=Depends(get_current_session),
 ):
     """Check if API key is configured."""
-    from app.config import settings
-    
     # Check environment variable first, then runtime config
     env_key = settings.megallm_api_key
     runtime_key = _runtime_config.get("api_key")
@@ -295,9 +294,8 @@ async def set_model_config(
     )
 
 
-def get_megallm_api_key() -> str:
+def get_megallm_api_key() -> Optional[str]:
     """Get the current MegaLLM API key (runtime or env)."""
-    from app.config import settings
     return _runtime_config.get("api_key") or settings.megallm_api_key
 
 
