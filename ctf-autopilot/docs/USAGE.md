@@ -1,6 +1,8 @@
 # User Guide
 
-Complete guide for using CTF Autopilot Analyzer. This document covers the web interface, job creation, analysis workflow, and best practices.
+Complete guide for using CTF Compass. This document covers the web interface, job creation, analysis workflow, and best practices.
+
+**GitHub:** [github.com/huynhtrungcipp/ctf-compass](https://github.com/huynhtrungcipp/ctf-compass)
 
 ---
 
@@ -12,8 +14,7 @@ Complete guide for using CTF Autopilot Analyzer. This document covers the web in
 4. [Understanding Results](#understanding-results)
 5. [Working with Writeups](#working-with-writeups)
 6. [Best Practices](#best-practices)
-7. [Keyboard Shortcuts](#keyboard-shortcuts)
-8. [FAQ](#faq)
+7. [FAQ](#faq)
 
 ---
 
@@ -27,13 +28,11 @@ Complete guide for using CTF Autopilot Analyzer. This document covers the web in
 
 2. Login with your admin credentials:
    - **Username**: `admin`
-   - **Password**: (the password generated during installation, found in `CREDENTIALS.txt`)
+   - **Password**: (from `CREDENTIALS.txt` or your configured password)
 
 ### First-Time Setup
 
-Before analyzing challenges, verify your setup:
-
-1. **Check Configuration**: Go to **Configuration** page
+1. **Check Configuration**: Click the gear icon (⚙️) in the top right
 2. **Verify API Key**: Ensure MegaLLM API key is configured
 3. **Select Models**: Choose analysis and writeup generation models
 4. **Test Connection**: Use the test button to verify API connectivity
@@ -44,33 +43,21 @@ Before analyzing challenges, verify your setup:
 
 ### Navigation
 
-| Section | Description |
-|---------|-------------|
-| **Dashboard** | Overview of all jobs, statistics, recent activity |
-| **New Job** | Create a new analysis job |
-| **Job Details** | View job results, artifacts, writeup |
-| **Configuration** | System settings, API keys, model selection |
+CTF Compass uses a modern top navigation bar:
+
+| Element | Location | Description |
+|---------|----------|-------------|
+| **Logo** | Top left | Click to go to Dashboard |
+| **Dashboard** | Top nav | View all jobs and statistics |
+| **New Analysis** | Top nav | Create a new analysis job |
+| **Settings** | Top right (⚙️) | System configuration |
+| **User Menu** | Top right | Profile, logout options |
 
 ### Dashboard Elements
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  CTF Autopilot                    [Config] [New Job] [User] │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  ┌───────────┐ ┌───────────┐ ┌───────────┐ ┌───────────┐   │
-│  │ Total: 42 │ │Running: 2 │ │Done: 38   │ │Failed: 2  │   │
-│  └───────────┘ └───────────┘ └───────────┘ └───────────┘   │
-│                                                             │
-│  Recent Jobs                                                │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │ ▶ Web Challenge 1          │ completed │ 2 flags    │   │
-│  │ ▶ Crypto - RSA Basic       │ running   │ analyzing  │   │
-│  │ ▶ Forensics - Memory Dump  │ completed │ 1 flag     │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-```
+- **Statistics Cards**: Total jobs, running, completed, failed
+- **Recent Jobs**: List of recent analysis jobs with status
+- **Quick Actions**: Create new job, view details
 
 ---
 
@@ -78,13 +65,13 @@ Before analyzing challenges, verify your setup:
 
 ### Step 1: Basic Information
 
-1. Click **New Job** or the `+` button
+1. Click **New Analysis** in the navigation
 2. Enter job details:
 
 | Field | Description | Example |
 |-------|-------------|---------|
-| **Title** | Descriptive name for the challenge | "picoCTF 2024 - forensics_corruption" |
-| **Description** | Challenge description, hints, context | Full challenge text from CTF |
+| **Title** | Descriptive name | "picoCTF 2024 - forensics_corruption" |
+| **Description** | Challenge description, hints | Full challenge text from CTF |
 | **Flag Format** | Regex pattern for flags | `picoCTF\{[^}]+\}` |
 | **Category** | Challenge category | Forensics, Crypto, Web, etc. |
 
@@ -103,32 +90,15 @@ Upload challenge files by:
 - Network: `.pcap`, `.pcapng`
 - Code: `.py`, `.c`, `.cpp`, `.java`, `.js`
 
-**Upload Limits:**
-- Maximum file size: 200MB (configurable)
-- Maximum total size: 500MB per job
-
-### Step 3: Analysis Options
-
-Configure analysis settings:
-
-| Option | Description | Recommendation |
-|--------|-------------|----------------|
-| **Analysis Model** | AI model for analysis | `llama3.3-70b-instruct` (fast, free) |
-| **Writeup Model** | AI model for writeup | `gpt-4o` (best quality) |
-| **Deep Analysis** | Run extended analysis | Enable for complex challenges |
-| **Extract Archives** | Auto-extract zip/tar | Usually enabled |
-
-### Step 4: Submit & Monitor
+### Step 3: Submit & Monitor
 
 1. Click **Start Analysis**
 2. Job enters queue and starts processing
-3. Monitor progress on Dashboard or Job Details page
+3. Monitor progress on Dashboard
 
 **Job Status Flow:**
 ```
 QUEUED → RUNNING → ANALYZING → EXTRACTING → GENERATING → COMPLETED
-                                                    ↓
-                                                 FAILED
 ```
 
 ---
@@ -137,111 +107,36 @@ QUEUED → RUNNING → ANALYZING → EXTRACTING → GENERATING → COMPLETED
 
 ### Job Details Page
 
-After analysis completes, the Job Details page shows:
+After analysis completes:
 
 #### 1. Summary Tab
-
-- **Status**: Current job status
-- **Duration**: Time taken for analysis
-- **Files Analyzed**: Number of files processed
-- **Flags Found**: Candidate flags extracted
+- Status, duration, files analyzed, flags found
 
 #### 2. Artifacts Tab
-
-View all analysis outputs:
-
-| Artifact Type | Description |
-|---------------|-------------|
-| **strings_output.txt** | Extracted printable strings |
-| **file_info.txt** | File type identification |
-| **exif_data.json** | Metadata from images |
-| **binwalk_output.txt** | Embedded file signatures |
-| **hex_dump.txt** | Hexadecimal representation |
+- `strings_output.txt`: Extracted strings
+- `file_info.txt`: File type identification
+- `exif_data.json`: Image metadata
+- `binwalk_output.txt`: Embedded signatures
 
 #### 3. Evidence Tab
+- Extracted evidence with confidence scores
+- Flag candidates with context
 
-Extracted evidence with confidence scores:
-
-```json
-{
-  "flags": [
-    {
-      "value": "picoCTF{corrupted_but_recovered_abc123}",
-      "confidence": 0.95,
-      "source": "strings analysis",
-      "context": "Found in file header at offset 0x100"
-    }
-  ],
-  "indicators": [
-    {
-      "type": "encoding",
-      "value": "base64",
-      "location": "file.txt:42"
-    }
-  ]
-}
-```
-
-#### 4. Commands Tab
-
-View executed analysis commands:
-
-```
-[✓] file challenge.bin          (0.2s)
-[✓] strings -n 8 challenge.bin  (0.5s)
-[✓] binwalk challenge.bin       (1.2s)
-[✓] xxd challenge.bin | head    (0.1s)
-```
-
-#### 5. Writeup Tab
-
-AI-generated writeup with:
-- Challenge overview
-- Analysis methodology
-- Step-by-step solution
-- Flag extraction
-- Learning points
+#### 4. Writeup Tab
+- AI-generated writeup with:
+  - Challenge overview
+  - Step-by-step solution
+  - Flag extraction
+  - Learning points
 
 ---
 
 ## Working with Writeups
 
-### Writeup Structure
+### Export Options
 
-Generated writeups follow this format:
-
-```markdown
-# Challenge: [Title]
-
-## Overview
-Brief description of the challenge type and difficulty.
-
-## Initial Analysis
-What files were provided and initial observations.
-
-## Solution Steps
-1. First step...
-2. Second step...
-3. Flag extraction...
-
-## Flag
-`picoCTF{the_flag_here}`
-
-## Tools Used
-- strings
-- binwalk
-- exiftool
-
-## Lessons Learned
-Key takeaways from this challenge.
-```
-
-### Exporting Writeups
-
-Export options:
 - **Markdown**: Download as `.md` file
 - **PDF**: Generate PDF document
-- **HTML**: Formatted HTML page
 - **Copy**: Copy to clipboard
 
 ### Editing Writeups
@@ -259,7 +154,6 @@ Export options:
 1. **Provide Full Context**
    - Include complete challenge description
    - Add any hints provided
-   - Mention the CTF and category
 
 2. **Use Accurate Flag Format**
    - Specify exact regex pattern
@@ -267,37 +161,11 @@ Export options:
 
 3. **Upload All Relevant Files**
    - Include all challenge files
-   - Don't forget related files (configs, scripts)
+   - Don't forget related configs
 
 4. **Choose Appropriate Models**
    - Complex challenges: Use larger models
    - Simple challenges: Fast models work fine
-
-### Organizing Jobs
-
-- Use descriptive titles: `[CTF Name] - [Category] - [Challenge Name]`
-- Add tags for filtering
-- Archive completed jobs regularly
-
-### Security Reminders
-
-- Never upload files you don't have permission to analyze
-- Don't upload malware without proper precautions
-- Results are stored locally - protect your server
-
----
-
-## Keyboard Shortcuts
-
-| Shortcut | Action |
-|----------|--------|
-| `Ctrl + N` | New Job |
-| `Ctrl + /` | Search |
-| `Ctrl + Enter` | Submit Form |
-| `Esc` | Close Modal |
-| `J` / `K` | Navigate Jobs |
-| `Enter` | Open Selected Job |
-| `?` | Show Shortcuts |
 
 ---
 
@@ -309,40 +177,21 @@ Export options:
 - Small text files: 10-30 seconds
 - Medium binaries: 1-3 minutes
 - Large archives: 3-10 minutes
-- Deep analysis: Add 50% more time
 
 ### Q: What if analysis fails?
 
-**A:** Check these common causes:
+**A:** Check:
 1. Unsupported file type
 2. File too large
 3. Timeout (complex files)
 4. API key issues
 
-### Q: Can I analyze multiple files together?
-
-**A:** Yes! Upload all related files to the same job. The analyzer will process them as a set and correlate findings.
-
-### Q: How accurate is flag detection?
-
-**A:** Detection accuracy depends on:
-- Correct flag format regex
-- Challenge complexity
-- File obfuscation level
-
-Confidence scores help identify likely flags.
-
 ### Q: Can I use this during a live CTF?
 
-**A:** Yes, but remember:
+**A:** Yes, but:
 - This is for analysis assistance
 - Always verify flags manually
-- Don't rely solely on automation
-- Learn the techniques, not just the answers
-
-### Q: How do I add custom analysis tools?
-
-**A:** See the [Architecture Guide](ARCHITECTURE.md) for extending the sandbox with custom tools.
+- Learn the techniques
 
 ### Q: Are my files kept private?
 
@@ -355,7 +204,6 @@ Confidence scores help identify likely flags.
 
 ## Getting Help
 
-- **Documentation**: Check other docs in `/docs` folder
-- **Debug Guide**: See [DEBUG.md](DEBUG.md) for troubleshooting
-- **Logs**: Check application logs for errors
-- **Issues**: Open a GitHub issue for bugs
+- **Debug Guide**: [DEBUG.md](DEBUG.md)
+- **Runbook**: [RUNBOOK.md](RUNBOOK.md)
+- **GitHub**: [github.com/huynhtrungcipp/ctf-compass](https://github.com/huynhtrungcipp/ctf-compass)
