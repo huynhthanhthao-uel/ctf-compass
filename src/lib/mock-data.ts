@@ -7,6 +7,7 @@ export const mockJobs: Job[] = [
     title: 'Crypto Challenge - RSA Basics',
     description: 'A basic RSA encryption challenge with weak parameters',
     flagFormat: 'CTF{[a-zA-Z0-9_]+}',
+    category: 'crypto',
     status: 'done',
     createdAt: '2024-01-15T10:30:00Z',
     startedAt: '2024-01-15T10:30:05Z',
@@ -18,6 +19,7 @@ export const mockJobs: Job[] = [
     title: 'Forensics - Hidden Message',
     description: 'Extract hidden data from image files using steganography analysis',
     flagFormat: 'FLAG{[a-zA-Z0-9]+}',
+    category: 'forensics',
     status: 'running',
     createdAt: '2024-01-15T11:00:00Z',
     startedAt: '2024-01-15T11:00:02Z',
@@ -28,6 +30,7 @@ export const mockJobs: Job[] = [
     title: 'Reverse Engineering - Binary Analysis',
     description: 'Analyze a stripped ELF binary to find the flag',
     flagFormat: 'CTF{.*}',
+    category: 'rev',
     status: 'queued',
     createdAt: '2024-01-15T11:15:00Z',
     progress: 0,
@@ -37,6 +40,7 @@ export const mockJobs: Job[] = [
     title: 'Network - PCAP Analysis',
     description: 'Find credentials in network capture file',
     flagFormat: 'CTF{[a-zA-Z0-9_]+}',
+    category: 'forensics',
     status: 'failed',
     createdAt: '2024-01-15T09:00:00Z',
     startedAt: '2024-01-15T09:00:03Z',
@@ -45,6 +49,183 @@ export const mockJobs: Job[] = [
     progress: 45,
   },
 ];
+
+// Mock data for job-003 after analysis completes
+export const mockJob003Commands: Command[] = [
+  {
+    id: 'cmd-003-001',
+    jobId: 'job-003',
+    tool: 'file',
+    args: ['challenge'],
+    exitCode: 0,
+    stdout: 'challenge: ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, stripped',
+    stderr: '',
+    executedAt: new Date().toISOString(),
+    duration: 0.05,
+  },
+  {
+    id: 'cmd-003-002',
+    jobId: 'job-003',
+    tool: 'checksec',
+    args: ['--file=challenge'],
+    exitCode: 0,
+    stdout: `RELRO           STACK CANARY      NX            PIE             RPATH      RUNPATH
+Full RELRO      Canary found      NX enabled    PIE enabled     No RPATH   No RUNPATH`,
+    stderr: '',
+    executedAt: new Date().toISOString(),
+    duration: 0.12,
+  },
+  {
+    id: 'cmd-003-003',
+    jobId: 'job-003',
+    tool: 'strings',
+    args: ['-n', '10', 'challenge'],
+    exitCode: 0,
+    stdout: `/lib64/ld-linux-x86-64.so.2
+libc.so.6
+puts
+printf
+strcmp
+Enter the password:
+Checking password...
+CTF{r3v3rs3_3ng1n33r1ng_b4s1cs}
+Correct! Here's your flag
+Wrong password, try again`,
+    stderr: '',
+    executedAt: new Date().toISOString(),
+    duration: 0.08,
+  },
+  {
+    id: 'cmd-003-004',
+    jobId: 'job-003',
+    tool: 'objdump',
+    args: ['-d', '-M', 'intel', 'challenge'],
+    exitCode: 0,
+    stdout: `0000000000001169 <main>:
+    1169: push   rbp
+    116a: mov    rbp,rsp
+    116d: sub    rsp,0x50
+    1171: lea    rdi,[rip+0xe90]  # "Enter the password:"
+    1178: call   1050 <puts@plt>
+    ...
+    11b5: lea    rsi,[rip+0xe64]  # "CTF{r3v3rs3_3ng1n33r1ng_b4s1cs}"
+    11bc: call   1060 <strcmp@plt>`,
+    stderr: '',
+    executedAt: new Date().toISOString(),
+    duration: 0.25,
+  },
+];
+
+export const mockJob003Artifacts: Artifact[] = [
+  {
+    name: 'challenge',
+    path: '/data/runs/job-003/input/challenge',
+    size: 16384,
+    type: 'application/x-executable',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    name: 'disassembly.txt',
+    path: '/data/runs/job-003/output/disassembly.txt',
+    size: 45678,
+    type: 'text/plain',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    name: 'strings_output.txt',
+    path: '/data/runs/job-003/output/strings_output.txt',
+    size: 2048,
+    type: 'text/plain',
+    createdAt: new Date().toISOString(),
+  },
+];
+
+export const mockJob003Flags: FlagCandidate[] = [
+  {
+    id: 'flag-003-001',
+    value: 'CTF{r3v3rs3_3ng1n33r1ng_b4s1cs}',
+    confidence: 0.98,
+    source: 'strings output',
+    commandId: 'cmd-003-003',
+    context: '...Checking password...\n>>> CTF{r3v3rs3_3ng1n33r1ng_b4s1cs} <<<\nCorrect! Here\'s your flag...',
+  },
+  {
+    id: 'flag-003-002',
+    value: 'CTF{r3v3rs3_3ng1n33r1ng_b4s1cs}',
+    confidence: 0.95,
+    source: 'objdump disassembly',
+    commandId: 'cmd-003-004',
+    context: 'lea rsi,[rip+0xe64] # >>> CTF{r3v3rs3_3ng1n33r1ng_b4s1cs} <<<',
+  },
+];
+
+export const mockJob003Writeup = `# Reverse Engineering - Binary Analysis Writeup
+
+## Overview
+This challenge provides a stripped ELF binary that requires password verification to reveal the flag.
+
+## Reconnaissance
+
+### File Analysis
+\`\`\`bash
+$ file challenge
+challenge: ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), dynamically linked, stripped
+\`\`\`
+
+The binary is a 64-bit stripped ELF executable with PIE enabled.
+
+### Security Analysis
+\`\`\`bash
+$ checksec --file=challenge
+RELRO           STACK CANARY      NX            PIE
+Full RELRO      Canary found      NX enabled    PIE enabled
+\`\`\`
+
+All protections are enabled, but for this challenge, we don't need exploitation.
+
+## Analysis Steps
+
+### Step 1: String Extraction
+Using \`strings\` to find readable strings:
+
+\`\`\`bash
+$ strings -n 10 challenge
+Enter the password:
+Checking password...
+CTF{r3v3rs3_3ng1n33r1ng_b4s1cs}
+Correct! Here's your flag
+\`\`\`
+
+**Evidence ID:** cmd-003-003
+
+The flag is directly visible in the binary strings!
+
+### Step 2: Disassembly Confirmation
+Confirmed with objdump that the flag is compared using strcmp:
+
+\`\`\`asm
+11b5: lea    rsi,[rip+0xe64]  # "CTF{r3v3rs3_3ng1n33r1ng_b4s1cs}"
+11bc: call   1060 <strcmp@plt>
+\`\`\`
+
+**Evidence ID:** cmd-003-004
+
+## Flag Candidates
+
+| Candidate | Confidence | Source |
+|-----------|------------|--------|
+| \`CTF{r3v3rs3_3ng1n33r1ng_b4s1cs}\` | 98% | strings output |
+| \`CTF{r3v3rs3_3ng1n33r1ng_b4s1cs}\` | 95% | objdump disassembly |
+
+## Conclusion
+
+The flag was embedded directly in the binary without any obfuscation. A simple strings analysis was sufficient to extract it.
+
+**Flag:** \`CTF{r3v3rs3_3ng1n33r1ng_b4s1cs}\`
+
+---
+*Generated by CTF Autopilot Analyzer*
+`;
 
 export const mockCommands: Command[] = [
   {

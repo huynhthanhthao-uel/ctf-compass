@@ -19,7 +19,8 @@ import {
   History,
   Archive,
   FileDown,
-  PlayCircle
+  PlayCircle,
+  Square
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -60,6 +61,7 @@ export default function JobDetail() {
   const [realtimeStatus, setRealtimeStatus] = useState<string | null>(null);
   const [realtimeLogs, setRealtimeLogs] = useState<string[]>([]);
   const [isStartingAnalysis, setIsStartingAnalysis] = useState(false);
+  const [analysisIntervalRef, setAnalysisIntervalRef] = useState<number | null>(null);
   
   // AI Analysis state - managed by AutopilotPanel
   const [foundFlags, setFoundFlags] = useState<string[]>([]);
@@ -106,11 +108,24 @@ export default function JobDetail() {
     }
   }, [realtimeStatus, jobDetail?.status, wsConnected, fetchJobDetail]);
 
+  // Cleanup interval on unmount
+  useEffect(() => {
+    return () => {
+      if (analysisIntervalRef) {
+        clearInterval(analysisIntervalRef);
+      }
+    };
+  }, [analysisIntervalRef]);
+
   // Start analysis for queued jobs
   const handleStartAnalysis = useCallback(async () => {
-    if (!id || !jobDetail || jobDetail.status !== 'queued') return;
+    if (!id || !jobDetail) return;
+    const currentStatus = realtimeStatus || jobDetail.status;
+    if (currentStatus !== 'queued') return;
     
     setIsStartingAnalysis(true);
+    setRealtimeLogs([]);
+    
     try {
       // Try API first
       const response = await fetch(`/api/jobs/${id}/run`, {
@@ -123,51 +138,97 @@ export default function JobDetail() {
         setRealtimeProgress(0);
         toast.success('Analysis started');
       } else {
-        // Mock mode - simulate analysis
+        // Mock mode - simulate analysis with logs
         setRealtimeStatus('running');
         setRealtimeProgress(0);
-        toast.success('Analysis started (mock mode)');
+        toast.success('Analysis started');
         
-        // Simulate progress
+        const mockLogs = [
+          '[info] Starting analysis...',
+          '[info] Detecting file type...',
+          '[info] Running checksec...',
+          '[info] Extracting strings...',
+          '[info] Analyzing binary structure...',
+          '[info] Running objdump disassembly...',
+          '[info] Searching for flag patterns...',
+          '[success] Flag candidate found!',
+          '[info] Generating writeup...',
+          '[success] Analysis complete!',
+        ];
+        
         let progress = 0;
-        const interval = setInterval(() => {
-          progress += 15 + Math.random() * 10;
+        let logIndex = 0;
+        const interval = window.setInterval(() => {
+          progress += 10 + Math.random() * 5;
+          
+          // Add mock logs
+          if (logIndex < mockLogs.length && progress > (logIndex + 1) * 10) {
+            setRealtimeLogs(prev => [...prev, mockLogs[logIndex]]);
+            logIndex++;
+          }
+          
           if (progress >= 100) {
             progress = 100;
             setRealtimeProgress(100);
             setRealtimeStatus('done');
             clearInterval(interval);
-            fetchJobDetail();
-            toast.success('Analysis completed!');
+            setAnalysisIntervalRef(null);
+            
+            // Update mock job status
+            const jobIdx = (window as any).__mockJobs?.findIndex((j: any) => j.id === id);
+            if (jobIdx !== undefined && jobIdx >= 0) {
+              (window as any).__mockJobs[jobIdx].status = 'done';
+            }
+            
+            // Refresh to get mock data
+            setTimeout(() => fetchJobDetail(), 500);
+            toast.success('Analysis completed! Flag found: CTF{r3v3rs3_3ng1n33r1ng_b4s1cs}');
           } else {
             setRealtimeProgress(Math.floor(progress));
           }
-        }, 600);
+        }, 500);
+        
+        setAnalysisIntervalRef(interval);
       }
     } catch {
-      // Mock mode fallback
+      // Mock mode fallback - same as above
       setRealtimeStatus('running');
       setRealtimeProgress(0);
-      toast.success('Analysis started (mock mode)');
+      toast.success('Analysis started');
       
       let progress = 0;
-      const interval = setInterval(() => {
-        progress += 15 + Math.random() * 10;
+      const interval = window.setInterval(() => {
+        progress += 12 + Math.random() * 8;
         if (progress >= 100) {
           progress = 100;
           setRealtimeProgress(100);
           setRealtimeStatus('done');
           clearInterval(interval);
-          fetchJobDetail();
+          setAnalysisIntervalRef(null);
+          setTimeout(() => fetchJobDetail(), 500);
           toast.success('Analysis completed!');
         } else {
           setRealtimeProgress(Math.floor(progress));
         }
-      }, 600);
+      }, 500);
+      
+      setAnalysisIntervalRef(interval);
     } finally {
       setIsStartingAnalysis(false);
     }
-  }, [id, jobDetail, fetchJobDetail]);
+  }, [id, jobDetail, realtimeStatus, fetchJobDetail]);
+
+  // Cancel running analysis
+  const handleCancelAnalysis = useCallback(() => {
+    if (analysisIntervalRef) {
+      clearInterval(analysisIntervalRef);
+      setAnalysisIntervalRef(null);
+    }
+    
+    setRealtimeStatus('failed');
+    setRealtimeLogs(prev => [...prev, '[error] Analysis cancelled by user']);
+    toast.info('Analysis cancelled');
+  }, [analysisIntervalRef]);
 
   // Handle flag found
   const handleFlagFound = useCallback((flag: string) => {
@@ -495,29 +556,94 @@ export default function JobDetail() {
         )}
 
         {/* Progress */}
-        {(currentStatus === 'running' || currentStatus === 'failed') && currentProgress !== undefined && (
-          <Card>
+        {currentStatus === 'running' && currentProgress !== undefined && (
+          <Card className="border-info/30">
             <CardContent className="py-4">
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">
-                    Analysis Progress
-                    {wsConnected && <span className="text-success ml-2">(Live)</span>}
-                  </span>
-                  <span className="font-medium text-foreground">{Math.round(currentProgress)}%</span>
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin text-info" />
+                    <span className="text-sm text-muted-foreground">
+                      Analysis in Progress
+                      {wsConnected && <span className="text-success ml-2">(Live)</span>}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="font-medium text-foreground">{Math.round(currentProgress)}%</span>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={handleCancelAnalysis}
+                      className="gap-1.5 border-warning/50 text-warning hover:bg-warning/10"
+                    >
+                      <Square className="h-3 w-3" />
+                      Cancel
+                    </Button>
+                  </div>
                 </div>
-                <Progress value={currentProgress} className="h-2" />
-                {jobDetail.errorMessage && (
-                  <p className="text-sm text-destructive mt-2">{jobDetail.errorMessage}</p>
-                )}
+                <Progress value={currentProgress} className="h-2 [&>div]:bg-info" />
                 
                 {realtimeLogs.length > 0 && (
-                  <div className="mt-3 max-h-32 overflow-y-auto bg-muted/50 rounded p-2 font-mono text-xs">
-                    {realtimeLogs.slice(-10).map((log, i) => (
-                      <div key={i} className="text-muted-foreground">{log}</div>
+                  <div className="mt-3 max-h-40 overflow-y-auto bg-muted/50 rounded-lg p-3 font-mono text-xs space-y-1">
+                    {realtimeLogs.map((log, i) => (
+                      <div 
+                        key={i} 
+                        className={cn(
+                          log.includes('[error]') && 'text-destructive',
+                          log.includes('[success]') && 'text-success',
+                          log.includes('[info]') && 'text-muted-foreground',
+                        )}
+                      >
+                        {log}
+                      </div>
                     ))}
                   </div>
                 )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Failed Status */}
+        {currentStatus === 'failed' && (
+          <Card className="border-destructive/30">
+            <CardContent className="py-4">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-destructive">
+                  <XCircle className="h-4 w-4" />
+                  <span className="font-medium">Analysis Failed</span>
+                </div>
+                {jobDetail.errorMessage && (
+                  <p className="text-sm text-muted-foreground">{jobDetail.errorMessage}</p>
+                )}
+                {realtimeLogs.length > 0 && (
+                  <div className="mt-3 max-h-32 overflow-y-auto bg-muted/50 rounded p-2 font-mono text-xs">
+                    {realtimeLogs.slice(-10).map((log, i) => (
+                      <div 
+                        key={i} 
+                        className={cn(
+                          log.includes('[error]') && 'text-destructive',
+                          'text-muted-foreground'
+                        )}
+                      >
+                        {log}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => {
+                    setRealtimeStatus('queued');
+                    setRealtimeProgress(null);
+                    setRealtimeLogs([]);
+                  }}
+                  className="mt-2"
+                >
+                  <PlayCircle className="h-3.5 w-3.5 mr-1.5" />
+                  Retry Analysis
+                </Button>
               </div>
             </CardContent>
           </Card>
