@@ -14,32 +14,133 @@ from app.config import settings
 class SandboxService:
     """Service for running analysis tools in isolated containers."""
     
-    # Allowlist of safe analysis tools
+    # Allowlist of safe analysis tools for CTF challenges
     allowed_tools: List[str] = [
+        # Binary analysis
         "strings",
         "file",
-        "exiftool",
-        "binwalk",
-        "pdfinfo",
-        "pdftotext",
-        "tshark",
         "readelf",
         "objdump",
+        "nm",
+        "size",
+        "ldd",
+        "checksec",
+        
+        # Hex/Binary viewing
         "xxd",
+        "hexdump",
+        "od",
+        
+        # Encoding/Decoding
         "base64",
+        "base32",
+        "openssl",
+        
+        # Image/Media forensics
+        "exiftool",
+        "identify",
+        "convert",
+        "steghide",
+        "zsteg",
+        "stegseek",
+        "foremost",
+        "binwalk",
+        
+        # PDF analysis
+        "pdfinfo",
+        "pdftotext",
+        "pdfimages",
+        "pdftk",
+        
+        # Network analysis
+        "tshark",
+        "tcpdump",
+        "ssldump",
+        
+        # Archive handling
         "unzip",
+        "zipinfo",
         "tar",
         "gzip",
         "gunzip",
+        "bzip2",
+        "xz",
+        "7z",
+        "unrar",
+        "cabextract",
+        
+        # Text processing
         "head",
         "tail",
         "cat",
         "wc",
         "grep",
+        "egrep",
+        "awk",
+        "gawk",
+        "sed",
+        "cut",
+        "sort",
+        "uniq",
+        "tr",
+        "rev",
+        
+        # File system
         "find",
         "ls",
+        "stat",
+        "file",
+        
+        # Hashing
         "sha256sum",
+        "sha1sum",
         "md5sum",
+        "sha512sum",
+        "cksum",
+        
+        # Python for scripting
+        "python3",
+        
+        # Crypto analysis
+        "john",
+        "hashcat",
+        "hash-identifier",
+        
+        # Memory/Disk forensics
+        "volatility",
+        "bulk_extractor",
+        "photorec",
+        "testdisk",
+        
+        # Reverse engineering
+        "radare2",
+        "r2",
+        "rabin2",
+        "rasm2",
+        "rafind2",
+        "rahash2",
+        
+        # Debugging
+        "gdb",
+        "ltrace",
+        "strace",
+        
+        # QR/Barcode
+        "zbarimg",
+        
+        # Audio analysis
+        "sox",
+        "ffmpeg",
+        "ffprobe",
+        
+        # Misc utilities
+        "jq",
+        "yq",
+        "xmllint",
+        "curl",
+        "wget",
+        "nc",
+        "ncat",
     ]
     
     def __init__(self):
