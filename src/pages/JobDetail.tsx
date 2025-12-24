@@ -685,7 +685,7 @@ if __name__ == "__main__":
           </Card>
         )}
 
-        {/* Queued Job - Start Analysis Prompt */}
+        {/* Queued Job - Direct to Autopilot */}
         {currentStatus === 'queued' && (
           <Card className="border-primary/30 bg-primary/5">
             <CardContent className="py-6">
@@ -695,29 +695,28 @@ if __name__ == "__main__":
                     <Clock className="h-6 w-6 text-primary" />
                   </div>
                   <div>
-                    <p className="font-medium text-foreground">Job Queued</p>
+                    <p className="font-medium text-foreground">Ready to Solve</p>
                     <p className="text-sm text-muted-foreground">
-                      This job is waiting to be analyzed. Click "Start Analysis" to begin.
+                      Click "Solve Challenge" to start Full Autopilot - AI will automatically find the flag.
                     </p>
                   </div>
                 </div>
                 <Button 
-                  onClick={handleStartAnalysis}
-                  disabled={isStartingAnalysis}
+                  onClick={() => {
+                    setActiveTab('analysis');
+                    // Trigger Full Autopilot after tab switch
+                    setTimeout(() => {
+                      if (autopilotStartRef.current) {
+                        autopilotStartRef.current();
+                        toast.info('Full Autopilot started');
+                      }
+                    }, 300);
+                  }}
                   size="lg"
                   className="gap-2"
                 >
-                  {isStartingAnalysis ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Starting...
-                    </>
-                  ) : (
-                    <>
-                      <PlayCircle className="h-4 w-4" />
-                      Start Analysis
-                    </>
-                  )}
+                  <PlayCircle className="h-4 w-4" />
+                  Solve Challenge
                 </Button>
               </div>
             </CardContent>
