@@ -83,7 +83,7 @@ Generate the writeup now:"""
                     "Content-Type": "application/json",
                 },
                 json={
-                    "model": "megallm-pro",
+                    "model": settings.megallm_model,  # Uses configurable model (default: llama3.3-70b-instruct)
                     "messages": [
                         {"role": "system", "content": self.SYSTEM_PROMPT},
                         {"role": "user", "content": user_prompt},
