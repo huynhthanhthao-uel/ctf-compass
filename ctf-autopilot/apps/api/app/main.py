@@ -2,6 +2,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+import asyncio
 
 from app.config import settings
 from app.middleware.security import SecurityHeadersMiddleware
@@ -14,12 +15,32 @@ from app.models import Base
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    # Startup: wait for DB and initialize schema (first boot)
+    max_attempts = 30
+    delay_seconds = 2
+
+    last_error: Exception | None = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            last_error = None
+            break
+        except Exception as e:
+            last_error = e
+            # Keep retrying for a short window (common in docker-compose start order)
+            if attempt < max_attempts:
+                print(f"[startup] DB init failed (attempt {attempt}/{max_attempts}): {e}")
+                await asyncio.sleep(delay_seconds)
+
+    if last_error is not None:
+        raise last_error
+
     yield
+
     # Shutdown
     await engine.dispose()
+
 
 
 app = FastAPI(
