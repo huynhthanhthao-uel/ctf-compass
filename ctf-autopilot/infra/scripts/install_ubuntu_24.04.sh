@@ -488,29 +488,40 @@ start_services() {
     cd "$INSTALL_DIR"
     
     # Create data directories
-    mkdir -p data/runs
-    chmod 755 data
+    mkdir -p data/runs ctf-autopilot/data/runs ctf-autopilot/infra/data/runs
+    chmod -R 755 data ctf-autopilot/data 2>/dev/null || true
     
     # Find docker-compose.yml location
-    COMPOSE_DIR=""
-    if [[ -f "infra/docker-compose.yml" ]]; then
-        COMPOSE_DIR="infra"
-    elif [[ -f "ctf-autopilot/infra/docker-compose.yml" ]]; then
-        COMPOSE_DIR="ctf-autopilot/infra"
+    COMPOSE_FILE=""
+    if [[ -f "ctf-autopilot/infra/docker-compose.yml" ]]; then
+        COMPOSE_FILE="ctf-autopilot/infra/docker-compose.yml"
+    elif [[ -f "infra/docker-compose.yml" ]]; then
+        COMPOSE_FILE="infra/docker-compose.yml"
     elif [[ -f "docker-compose.yml" ]]; then
-        COMPOSE_DIR="."
+        COMPOSE_FILE="docker-compose.yml"
     fi
     
-    if [[ -z "$COMPOSE_DIR" ]]; then
+    if [[ -z "$COMPOSE_FILE" ]]; then
         log_warn "docker-compose.yml not found, skipping service start..."
         log_info "You can start services manually later"
         return 0
     fi
     
-    cd "$COMPOSE_DIR"
+    # Copy .env to compose directory if needed
+    COMPOSE_DIR=$(dirname "$COMPOSE_FILE")
+    if [[ "$COMPOSE_DIR" != "." ]] && [[ -f ".env" ]]; then
+        cp .env "$COMPOSE_DIR/.env" 2>/dev/null || true
+    fi
+    
+    log_info "Using compose file: $COMPOSE_FILE"
+    
+    # Export environment variables for docker compose
+    set -a
+    source .env 2>/dev/null || true
+    set +a
     
     log_info "Starting Docker containers..."
-    docker compose up -d --build 2>&1 | tee -a "$LOG_FILE"
+    docker compose -f "$COMPOSE_FILE" up -d --build 2>&1 | tee -a "$LOG_FILE"
     
     # Wait for services to be ready
     log_info "Waiting for services to start (30 seconds)..."
@@ -530,7 +541,7 @@ start_services() {
     fi
     
     # Check PostgreSQL
-    if docker compose exec -T postgres pg_isready -U ctfautopilot > /dev/null 2>&1; then
+    if docker compose -f "$COMPOSE_FILE" exec -T postgres pg_isready -U ctfautopilot > /dev/null 2>&1; then
         log_success "  PostgreSQL: Healthy"
     else
         log_warn "  PostgreSQL: Not ready"
@@ -538,7 +549,7 @@ start_services() {
     fi
     
     # Check Redis
-    if docker compose exec -T redis redis-cli ping > /dev/null 2>&1; then
+    if docker compose -f "$COMPOSE_FILE" exec -T redis redis-cli ping > /dev/null 2>&1; then
         log_success "  Redis: Healthy"
     else
         log_warn "  Redis: Not ready"
@@ -555,7 +566,7 @@ start_services() {
     
     if [[ "$HEALTH_OK" == "false" ]]; then
         log_warn "Some services may still be starting. Check logs with:"
-        log_warn "  cd $INSTALL_DIR/$COMPOSE_DIR && docker compose logs -f"
+        log_warn "  docker compose -f $INSTALL_DIR/$COMPOSE_FILE logs -f"
     fi
     
     log_success "Services started"
@@ -593,13 +604,13 @@ print_summary() {
     echo -e "     Add: MEGALLM_API_KEY=your-key-here"
     echo ""
     echo -e "  2. Restart services after editing .env:"
-    echo -e "     ${CYAN}cd $INSTALL_DIR && docker compose restart${NC}"
+    echo -e "     ${CYAN}cd $INSTALL_DIR && docker compose -f ctf-autopilot/infra/docker-compose.yml restart${NC}"
     echo ""
     echo -e "${YELLOW}Useful Commands:${NC}"
-    echo -e "  View logs:       ${CYAN}cd $INSTALL_DIR && docker compose logs -f${NC}"
-    echo -e "  Stop services:   ${CYAN}cd $INSTALL_DIR && docker compose down${NC}"
-    echo -e "  Start services:  ${CYAN}cd $INSTALL_DIR && docker compose up -d${NC}"
-    echo -e "  Check status:    ${CYAN}cd $INSTALL_DIR && docker compose ps${NC}"
+    echo -e "  View logs:       ${CYAN}docker compose -f $INSTALL_DIR/ctf-autopilot/infra/docker-compose.yml logs -f${NC}"
+    echo -e "  Stop services:   ${CYAN}docker compose -f $INSTALL_DIR/ctf-autopilot/infra/docker-compose.yml down${NC}"
+    echo -e "  Start services:  ${CYAN}docker compose -f $INSTALL_DIR/ctf-autopilot/infra/docker-compose.yml up -d${NC}"
+    echo -e "  Check status:    ${CYAN}docker compose -f $INSTALL_DIR/ctf-autopilot/infra/docker-compose.yml ps${NC}"
     echo -e "  Update system:   ${CYAN}sudo bash $INSTALL_DIR/ctf-autopilot/infra/scripts/update.sh${NC}"
     echo ""
     echo -e "${YELLOW}Documentation:${NC}"
