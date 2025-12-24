@@ -5,17 +5,115 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Mock command outputs for demo purposes when Docker backend is not available
-const mockOutputs: Record<string, Record<string, { stdout: string; stderr: string; exit_code: number }>> = {
-  file: {
-    default: {
-      stdout: "ELF 64-bit LSB executable, x86-64, version 1 (SYSV), dynamically linked, stripped",
+// Job-specific mock outputs for different challenge types
+const jobMockOutputs: Record<string, Record<string, { stdout: string; stderr: string; exit_code: number }>> = {
+  // Job 001 - Crypto RSA
+  'job-001': {
+    file: {
+      stdout: "challenge.py: Python script, ASCII text executable\noutput.txt: ASCII text",
+      stderr: "",
+      exit_code: 0
+    },
+    strings: {
+      stdout: `n = 323
+e = 5
+c = 245
+p = 17
+q = 19
+# n = p * q = 323
+# phi = (p-1)*(q-1) = 288
+# d = inverse(e, phi) = 173
+# m = pow(c, d, n)
+# Decrypted: CTF{sm4ll_pr1m3s_br34k_rs4}`,
+      stderr: "",
+      exit_code: 0
+    },
+    cat: {
+      stdout: `from Crypto.Util.number import bytes_to_long, long_to_bytes
+import math
+
+n = 323  # Very small, easily factored!
+e = 5
+c = 245
+
+# TODO: Factor n and decrypt
+# Hint: n = 17 * 19`,
+      stderr: "",
+      exit_code: 0
+    },
+    ls: {
+      stdout: `challenge.py\noutput.txt\nREADME.txt`,
       stderr: "",
       exit_code: 0
     }
   },
-  strings: {
-    default: {
+  // Job 002 - Forensics Steganography
+  'job-002': {
+    file: {
+      stdout: "secret.png: PNG image data, 1024 x 768, 8-bit/color RGBA, non-interlaced",
+      stderr: "",
+      exit_code: 0
+    },
+    strings: {
+      stdout: `IHDR
+sRGB
+gAMA
+pHYs
+IDAT
+IEND
+Steghide password: "hidden"`,
+      stderr: "",
+      exit_code: 0
+    },
+    exiftool: {
+      stdout: `ExifTool Version Number         : 12.40
+File Name                       : secret.png
+File Size                       : 245 kB
+File Type                       : PNG
+MIME Type                       : image/png
+Image Width                     : 1024
+Image Height                    : 768
+Comment                         : FLAG{h1dd3n_1n_pl41n_s1ght}
+Author                          : CTF Challenge`,
+      stderr: "",
+      exit_code: 0
+    },
+    binwalk: {
+      stdout: `DECIMAL       HEXADECIMAL     DESCRIPTION
+--------------------------------------------------------------------------------
+0             0x0             PNG image, 1024 x 768, 8-bit/color RGBA
+41            0x29            Zlib compressed data
+245760        0x3C000         Zip archive data, name: hidden.txt
+245800        0x3C028         End of Zip archive`,
+      stderr: "",
+      exit_code: 0
+    },
+    steghide: {
+      stdout: `wrote extracted data to "hidden.txt".
+Content: FLAG{h1dd3n_1n_pl41n_s1ght}`,
+      stderr: "",
+      exit_code: 0
+    },
+    zsteg: {
+      stdout: `b1,r,lsb,xy         .. text: "FLAG{h1dd3n_1n_pl41n_s1ght}"
+b1,rgb,lsb,xy       .. file: data`,
+      stderr: "",
+      exit_code: 0
+    },
+    ls: {
+      stdout: `secret.png\nREADME.txt`,
+      stderr: "",
+      exit_code: 0
+    }
+  },
+  // Job 003 - Reverse Engineering (existing)
+  'job-003': {
+    file: {
+      stdout: "challenge: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), dynamically linked, stripped",
+      stderr: "",
+      exit_code: 0
+    },
+    strings: {
       stdout: `/lib64/ld-linux-x86-64.so.2
 libc.so.6
 puts
@@ -30,171 +128,227 @@ check_password
 main`,
       stderr: "",
       exit_code: 0
-    }
-  },
-  objdump: {
-    default: {
+    },
+    checksec: {
+      stdout: `RELRO           STACK CANARY      NX            PIE             RPATH      RUNPATH
+Partial RELRO   No canary found   NX enabled    No PIE          No RPATH   No RUNPATH`,
+      stderr: "",
+      exit_code: 0
+    },
+    objdump: {
       stdout: `challenge:     file format elf64-x86-64
 
-Disassembly of section .text:
-
 0000000000401000 <main>:
-  401000:       55                      push   %rbp
-  401001:       48 89 e5                mov    %rsp,%rbp
-  401004:       48 83 ec 10             sub    $0x10,%rsp
-  401008:       48 8d 3d f9 0f 00 00    lea    0xff9(%rip),%rdi
-  40100f:       e8 1c 00 00 00          callq  401030 <puts@plt>
-  401014:       48 8d 7d f0             lea    -0x10(%rbp),%rdi
-  401018:       e8 23 00 00 00          callq  401040 <gets@plt>
-  40101d:       48 8d 7d f0             lea    -0x10(%rbp),%rdi
-  401021:       e8 0a 00 00 00          callq  401030 <check_password>`,
+  401000:       push   %rbp
+  401001:       mov    %rsp,%rbp
+  401008:       lea    0xff9(%rip),%rdi        # "Enter password:"
+  40100f:       call   401030 <puts@plt>
+  401014:       lea    -0x10(%rbp),%rdi
+  401018:       call   401040 <gets@plt>        ; VULN: buffer overflow
+  40101d:       lea    -0x10(%rbp),%rdi
+  401021:       call   401060 <check_password>
+  401026:       cmp    $0x1,%eax
+  401029:       je     401040 <print_flag>`,
       stderr: "",
       exit_code: 0
-    }
-  },
-  checksec: {
-    default: {
-      stdout: `RELRO           STACK CANARY      NX            PIE             RPATH      RUNPATH      Symbols         FORTIFY
-Partial RELRO   No canary found   NX enabled    No PIE          No RPATH   No RUNPATH   No Symbols      No`,
-      stderr: "",
-      exit_code: 0
-    }
-  },
-  readelf: {
-    default: {
-      stdout: `ELF Header:
-  Magic:   7f 45 4c 46 02 01 01 00 00 00 00 00 00 00 00 00 
-  Class:                             ELF64
-  Data:                              2's complement, little endian
-  Version:                           1 (current)
-  OS/ABI:                            UNIX - System V
-  Type:                              EXEC (Executable file)
-  Machine:                           Advanced Micro Devices X86-64
-  Entry point address:               0x401000`,
-      stderr: "",
-      exit_code: 0
-    }
-  },
-  hexdump: {
-    default: {
-      stdout: `00000000  7f 45 4c 46 02 01 01 00  00 00 00 00 00 00 00 00  |.ELF............|
-00000010  02 00 3e 00 01 00 00 00  00 10 40 00 00 00 00 00  |..>.......@.....|
-00000020  40 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |@...............|`,
-      stderr: "",
-      exit_code: 0
-    }
-  },
-  xxd: {
-    default: {
-      stdout: `00000000: 7f45 4c46 0201 0100 0000 0000 0000 0000  .ELF............
-00000010: 0200 3e00 0100 0000 0010 4000 0000 0000  ..>.......@.....
-00000020: 4000 0000 0000 0000 0000 0000 0000 0000  @...............`,
-      stderr: "",
-      exit_code: 0
-    }
-  },
-  nm: {
-    default: {
-      stdout: `nm: challenge: no symbols`,
-      stderr: "",
-      exit_code: 1
-    }
-  },
-  ltrace: {
-    default: {
+    },
+    ltrace: {
       stdout: `puts("Enter password: ") = 17
 gets(0x7ffd12345678, 0, 0, 0) = 0x7ffd12345678
 strcmp("test", "s3cr3t_p4ss") = -1
 puts("Wrong password!") = 16`,
       stderr: "",
       exit_code: 0
-    }
-  },
-  strace: {
-    default: {
-      stdout: `execve("./challenge", ["./challenge"], 0x7ffd...) = 0
-brk(NULL) = 0x5555557f3000
-write(1, "Enter password: ", 16) = 16
-read(0, "test\\n", 1024) = 5
-write(1, "Wrong password!\\n", 16) = 16
-exit_group(1) = ?`,
+    },
+    ls: {
+      stdout: `challenge\nREADME.txt`,
       stderr: "",
       exit_code: 0
     }
   },
-  grep: {
-    default: {
-      stdout: `Binary file challenge matches`,
+  // Job 004 - Web SQL Injection
+  'job-004': {
+    file: {
+      stdout: "app.py: Python script, ASCII text executable\nrequirements.txt: ASCII text",
+      stderr: "",
+      exit_code: 0
+    },
+    strings: {
+      stdout: `from flask import Flask, request
+import sqlite3
+
+@app.route('/login', methods=['POST'])
+def login():
+    username = request.form['username']
+    password = request.form['password']
+    query = f"SELECT * FROM users WHERE username='{username}' AND password='{password}'"
+    # SQL Injection vulnerable!
+    
+# Admin credentials in database
+# username: admin, password: CTF{sql1_1nj3ct10n_w1ns}`,
+      stderr: "",
+      exit_code: 0
+    },
+    cat: {
+      stdout: `# SQL Injection Challenge
+# Target: http://localhost:5000/login
+# Hint: The login form is vulnerable to SQL injection
+# Payload: ' OR '1'='1' --
+
+# Expected flag format: CTF{...}`,
+      stderr: "",
+      exit_code: 0
+    },
+    curl: {
+      stdout: `{"message": "Login successful!", "flag": "CTF{sql1_1nj3ct10n_w1ns}"}`,
+      stderr: "",
+      exit_code: 0
+    },
+    grep: {
+      stdout: `CTF{sql1_1nj3ct10n_w1ns}`,
+      stderr: "",
+      exit_code: 0
+    },
+    ls: {
+      stdout: `app.py\nrequirements.txt\ndatabase.db\nREADME.txt`,
       stderr: "",
       exit_code: 0
     }
   },
-  cat: {
-    default: {
-      stdout: `# Challenge Binary
-This is a reverse engineering challenge.
-Find the hidden flag inside the binary.`,
+  // Job 005 - PWN Buffer Overflow
+  'job-005': {
+    file: {
+      stdout: "vuln: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), dynamically linked, not stripped",
+      stderr: "",
+      exit_code: 0
+    },
+    checksec: {
+      stdout: `RELRO           STACK CANARY      NX            PIE             RPATH      RUNPATH
+No RELRO        No canary found   NX disabled   No PIE          No RPATH   No RUNPATH`,
+      stderr: "",
+      exit_code: 0
+    },
+    strings: {
+      stdout: `/lib64/ld-linux-x86-64.so.2
+gets
+puts
+system
+/bin/sh
+CTF{buff3r_0v3rfl0w_m4st3r}
+win_function
+main
+vulnerable_function`,
+      stderr: "",
+      exit_code: 0
+    },
+    objdump: {
+      stdout: `vuln:     file format elf64-x86-64
+
+0000000000401156 <win_function>:
+  401156:       push   %rbp
+  401157:       mov    %rsp,%rbp
+  40115a:       lea    0xe9f(%rip),%rdi        # "CTF{buff3r_0v3rfl0w_m4st3r}"
+  401161:       call   401030 <puts@plt>
+  401166:       leave
+  401167:       ret
+
+0000000000401168 <vulnerable_function>:
+  401168:       push   %rbp
+  401169:       mov    %rsp,%rbp
+  40116c:       sub    $0x40,%rsp              # 64 byte buffer
+  401170:       lea    -0x40(%rbp),%rax
+  401174:       mov    %rax,%rdi
+  401177:       call   401040 <gets@plt>       # VULN: no bounds check
+  40117c:       leave
+  40117d:       ret`,
+      stderr: "",
+      exit_code: 0
+    },
+    readelf: {
+      stdout: `Symbol table '.symtab' contains 15 entries:
+   Num:    Value          Size Type    Bind   Vis      Ndx Name
+    10: 0000000000401156    18 FUNC    GLOBAL DEFAULT   14 win_function
+    11: 0000000000401168    22 FUNC    GLOBAL DEFAULT   14 vulnerable_function
+    12: 0000000000401180    35 FUNC    GLOBAL DEFAULT   14 main`,
+      stderr: "",
+      exit_code: 0
+    },
+    ls: {
+      stdout: `vuln\nREADME.txt`,
       stderr: "",
       exit_code: 0
     }
   },
-  ls: {
-    default: {
-      stdout: `challenge
-README.txt`,
+  // Job 006 - Misc Encoding
+  'job-006': {
+    file: {
+      stdout: "encoded.txt: ASCII text",
       stderr: "",
       exit_code: 0
-    }
-  },
-  binwalk: {
-    default: {
-      stdout: `DECIMAL       HEXADECIMAL     DESCRIPTION
---------------------------------------------------------------------------------
-0             0x0             ELF, 64-bit LSB executable, AMD x86-64, version 1 (SYSV)`,
+    },
+    cat: {
+      stdout: `Q1RGe20xeHQzdXJfM25jMGQxbmdfbTRzdDNyfQ==`,
       stderr: "",
       exit_code: 0
-    }
-  },
-  r2: {
-    default: {
-      stdout: `[0x00401000]> aaa
-[x] Analyze all flags starting with sym. and entry0
-[0x00401000]> afl
-0x00401000    1 87           main
-0x00401060    1 42           check_password
-0x00401090    1 6            entry0
-[0x00401000]> pdf @ main
-            ; DATA XREF from entry0
-            ;-- main:
-            0x00401000      push rbp
-            0x00401001      mov rbp, rsp
-            0x00401004      sub rsp, 0x10
-            0x00401008      lea rdi, str.Enter_password:
-            0x0040100f      call sym.imp.puts
-            0x00401014      lea rdi, [rbp - 0x10]
-            0x00401018      call sym.imp.gets          ; dangerous!
-            0x0040101d      lea rdi, [rbp - 0x10]
-            0x00401021      call check_password`,
+    },
+    strings: {
+      stdout: `Q1RGe20xeHQzdXJfM25jMGQxbmdfbTRzdDNyfQ==
+# Hint: base64 -> flag`,
+      stderr: "",
+      exit_code: 0
+    },
+    base64: {
+      stdout: `CTF{m1xt3ur_3nc0d1ng_m4st3r}`,
+      stderr: "",
+      exit_code: 0
+    },
+    xxd: {
+      stdout: `00000000: 5131 5247 6532 3031 6548 5130 6458 5666  Q1RGe20xeHQzdXJf
+00000010: 4d32 356a 4d47 5178 626d 6466 6254 5274  M25jMGQxbmdfbTRt
+00000020: 4d33 4a39                                M3J9`,
+      stderr: "",
+      exit_code: 0
+    },
+    ls: {
+      stdout: `encoded.txt\nREADME.txt`,
       stderr: "",
       exit_code: 0
     }
   }
 };
 
+// Default mock outputs when job not found
+const defaultMockOutputs: Record<string, { stdout: string; stderr: string; exit_code: number }> = {
+  file: {
+    stdout: "ELF 64-bit LSB executable, x86-64, version 1 (SYSV), dynamically linked, stripped",
+    stderr: "",
+    exit_code: 0
+  },
+  strings: {
+    stdout: `[Mock strings output]
+CTF{m0ck_fl4g_h3r3}`,
+    stderr: "",
+    exit_code: 0
+  },
+  ls: {
+    stdout: `challenge\nREADME.txt`,
+    stderr: "",
+    exit_code: 0
+  },
+  checksec: {
+    stdout: `RELRO           STACK CANARY      NX            PIE
+Partial RELRO   No canary found   NX enabled    No PIE`,
+    stderr: "",
+    exit_code: 0
+  }
+};
+
 serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const url = new URL(req.url);
-    const pathParts = url.pathname.split('/').filter(Boolean);
-    
-    // Expected path: /sandbox-terminal or with job_id in body
-    console.log('[sandbox-terminal] Request path:', url.pathname);
-    console.log('[sandbox-terminal] Method:', req.method);
-
     if (req.method !== 'POST') {
       return new Response(JSON.stringify({ error: 'Method not allowed' }), {
         status: 405,
@@ -214,27 +368,19 @@ serve(async (req) => {
       });
     }
 
-    // Get mock output for the tool
-    const toolOutputs = mockOutputs[tool];
-    let result = toolOutputs?.default || {
+    // Get job-specific mock output first, then fallback to default
+    const jobOutputs = jobMockOutputs[job_id] || {};
+    let result = jobOutputs[tool] || defaultMockOutputs[tool] || {
       stdout: `[Mock] ${tool} ${(args || []).join(' ')}`,
       stderr: "",
       exit_code: 0
     };
 
-    // Special handling for certain tools with specific args
-    if (tool === 'grep' && args?.some((a: string) => a.includes('CTF{'))) {
-      result = {
-        stdout: "CTF{str1ngs_r3v34l_s3cr3ts}",
-        stderr: "",
-        exit_code: 0
-      };
-    }
-
     // Simulate processing delay
     await new Promise(resolve => setTimeout(resolve, 100 + Math.random() * 200));
 
     console.log('[sandbox-terminal] Result:', { 
+      job_id,
       tool, 
       stdout_length: result.stdout.length,
       exit_code: result.exit_code 

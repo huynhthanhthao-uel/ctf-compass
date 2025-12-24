@@ -456,6 +456,9 @@ export interface AIAnalysisResponse {
   flag_candidates: string[];
   should_continue: boolean;
   rule_based: boolean;
+  strategy?: string;
+  alternative_approaches?: string[];
+  playbook?: string;
 }
 
 export async function analyzeWithAI(

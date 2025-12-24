@@ -68,6 +68,9 @@ interface AIInsight {
   confidence: number;
   findings: string[];
   isRuleBased: boolean;
+  strategy?: string;
+  alternativeApproaches?: string[];
+  playbook?: string;
 }
 
 // AI Trace log entry for debugging
@@ -573,6 +576,9 @@ export function FullAutopilot({
           confidence: aiResponse.confidence,
           findings: aiResponse.findings,
           isRuleBased: aiResponse.rule_based,
+          strategy: aiResponse.strategy,
+          alternativeApproaches: aiResponse.alternative_approaches,
+          playbook: aiResponse.playbook,
         };
         setAiInsight(latestInsight);
 
@@ -1031,26 +1037,69 @@ ${insight ? `# AI Analysis: ${insight.analysis.slice(0, 200)}` : ''}
             </div>
           )}
 
-          {/* AI Insight */}
+          {/* AI Insight with Strategy & Playbook */}
           {aiInsight && (
-            <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
-              <div className="flex items-center gap-2 mb-2">
-                <Brain className="h-4 w-4 text-primary" />
-                <span className="font-medium text-sm">AI Analysis</span>
-                <Badge variant="outline" className="ml-auto text-xs">
-                  {Math.round(aiInsight.confidence * 100)}% confidence
-                </Badge>
-              </div>
-              <p className="text-sm text-muted-foreground">{aiInsight.analysis}</p>
-              {aiInsight.findings.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {aiInsight.findings.slice(0, 3).map((f, i) => (
-                    <Badge key={i} variant="secondary" className="text-xs">
-                      <Lightbulb className="h-3 w-3 mr-1" />
-                      {f.slice(0, 50)}
-                    </Badge>
-                  ))}
+            <div className="space-y-3">
+              {/* Strategy & Alternative Approaches */}
+              {aiInsight.strategy && (
+                <div className="p-3 rounded-lg bg-info/10 border border-info/30">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Target className="h-4 w-4 text-info" />
+                    <span className="font-medium text-sm">Current Strategy</span>
+                  </div>
+                  <p className="text-sm font-medium text-foreground">{aiInsight.strategy}</p>
+                  
+                  {aiInsight.alternativeApproaches && aiInsight.alternativeApproaches.length > 0 && (
+                    <div className="mt-2 pt-2 border-t border-info/20">
+                      <span className="text-xs text-muted-foreground">Alternative approaches:</span>
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {aiInsight.alternativeApproaches.slice(0, 3).map((approach, i) => (
+                          <Badge key={i} variant="outline" className="text-xs">
+                            {approach.slice(0, 40)}{approach.length > 40 ? '...' : ''}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
+              )}
+
+              {/* AI Analysis */}
+              <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
+                <div className="flex items-center gap-2 mb-2">
+                  <Brain className="h-4 w-4 text-primary" />
+                  <span className="font-medium text-sm">AI Analysis</span>
+                  <Badge variant="outline" className="ml-auto text-xs">
+                    {Math.round(aiInsight.confidence * 100)}% confidence
+                  </Badge>
+                </div>
+                <p className="text-sm text-muted-foreground">{aiInsight.analysis}</p>
+                {aiInsight.findings.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {aiInsight.findings.slice(0, 3).map((f, i) => (
+                      <Badge key={i} variant="secondary" className="text-xs">
+                        <Lightbulb className="h-3 w-3 mr-1" />
+                        {f.slice(0, 50)}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Playbook (collapsible) */}
+              {aiInsight.playbook && (
+                <Collapsible>
+                  <CollapsibleTrigger className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground w-full p-2 rounded-lg hover:bg-muted/50">
+                    <FileCode className="h-4 w-4" />
+                    <span>View Playbook ({aiInsight.category})</span>
+                    <ChevronRight className="h-4 w-4 ml-auto transition-transform group-data-[state=open]:rotate-90" />
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <pre className="mt-2 p-3 bg-muted/50 rounded-lg text-xs font-mono overflow-x-auto whitespace-pre-wrap">
+                      {aiInsight.playbook}
+                    </pre>
+                  </CollapsibleContent>
+                </Collapsible>
               )}
             </div>
           )}
