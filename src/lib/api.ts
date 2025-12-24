@@ -384,3 +384,175 @@ export async function detectCategory(
     }),
   });
 }
+
+// ============ History API ============
+
+export interface AnalysisSessionSummary {
+  id: string;
+  job_id: string;
+  name: string;
+  strategy: string | null;
+  detected_category: string | null;
+  status: string;
+  started_at: string;
+  ended_at: string | null;
+  total_commands: number;
+  successful_commands: number;
+  flags_found_count: number;
+  ai_suggestions_used: number;
+  notes: string | null;
+  summary: string | null;
+}
+
+export interface CommandSummary {
+  id: string;
+  tool: string;
+  arguments: string[];
+  exit_code: number | null;
+  stdout_preview: string;
+  executed_at: string;
+  duration_ms: number;
+}
+
+export interface FlagSummary {
+  id: string;
+  value: string;
+  confidence: number;
+  source: string | null;
+}
+
+export interface SessionDetail {
+  session: AnalysisSessionSummary;
+  commands: CommandSummary[];
+  flags: FlagSummary[];
+  ai_insights: Array<{
+    analysis: string;
+    category: string;
+    confidence: number;
+    findings: string[];
+    timestamp: string;
+  }>;
+  effective_tools: Array<{
+    tool: string;
+    context: string | null;
+    timestamp: string;
+  }>;
+}
+
+export interface ToolRecommendation {
+  tool: string;
+  score: number;
+  reason: string;
+}
+
+export interface SimilarSolve {
+  id: string;
+  category: string;
+  file_types: string[];
+  successful_tools: string[];
+  tool_sequence: string[];
+  time_to_solve_seconds: number | null;
+  total_commands: number;
+}
+
+export async function createAnalysisSession(
+  jobId: string,
+  name: string = "Analysis Session",
+  strategy: string = "auto"
+): Promise<AnalysisSessionSummary> {
+  return apiFetch('/history/sessions', {
+    method: 'POST',
+    body: JSON.stringify({ job_id: jobId, name, strategy }),
+  });
+}
+
+export async function getJobSessions(
+  jobId: string,
+  limit: number = 20
+): Promise<{ sessions: AnalysisSessionSummary[]; total: number }> {
+  return apiFetch(`/history/sessions/${jobId}?limit=${limit}`);
+}
+
+export async function getSessionDetails(
+  jobId: string,
+  sessionId: string
+): Promise<SessionDetail> {
+  return apiFetch(`/history/sessions/${jobId}/${sessionId}`);
+}
+
+export async function endAnalysisSession(
+  sessionId: string,
+  status: string = "completed",
+  summary?: string
+): Promise<void> {
+  await apiFetch(`/history/sessions/${sessionId}/end`, {
+    method: 'POST',
+    body: JSON.stringify({ status, summary }),
+  });
+}
+
+export async function addSessionInsight(
+  sessionId: string,
+  insight: {
+    analysis: string;
+    category: string;
+    confidence: number;
+    findings: string[];
+    next_commands: Array<{ tool: string; args: string[]; reason: string }>;
+  }
+): Promise<void> {
+  await apiFetch(`/history/sessions/${sessionId}/insight`, {
+    method: 'POST',
+    body: JSON.stringify(insight),
+  });
+}
+
+export async function recordEffectiveTool(
+  sessionId: string,
+  tool: string,
+  context?: string
+): Promise<void> {
+  await apiFetch(`/history/sessions/${sessionId}/effective-tool`, {
+    method: 'POST',
+    body: JSON.stringify({ tool, context }),
+  });
+}
+
+export async function saveToGlobalHistory(
+  sessionId: string,
+  fileTypes: string[],
+  successfulTools: string[],
+  toolSequence: string[],
+  keywords: string[] = []
+): Promise<void> {
+  await apiFetch(`/history/sessions/${sessionId}/save-global`, {
+    method: 'POST',
+    body: JSON.stringify({
+      file_types: fileTypes,
+      successful_tools: successfulTools,
+      tool_sequence: toolSequence,
+      keywords,
+    }),
+  });
+}
+
+export async function getToolRecommendations(
+  category: string,
+  fileTypes: string[]
+): Promise<ToolRecommendation[]> {
+  return apiFetch('/history/recommend-tools', {
+    method: 'POST',
+    body: JSON.stringify({ category, file_types: fileTypes }),
+  });
+}
+
+export async function getSimilarSolves(
+  category: string,
+  fileTypes: string[],
+  limit: number = 5
+): Promise<SimilarSolve[]> {
+  return apiFetch(`/history/similar-solves?limit=${limit}`, {
+    method: 'POST',
+    body: JSON.stringify({ category, file_types: fileTypes }),
+  });
+}
