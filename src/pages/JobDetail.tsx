@@ -108,24 +108,29 @@ export default function JobDetail() {
 
   // Auto-start Full Autopilot if ?autostart=true in URL
   useEffect(() => {
-    if (
-      searchParams.get('autostart') === 'true' && 
-      jobDetail && 
-      !hasAutoStarted.current &&
-      !isLoading
-    ) {
+    const shouldAutoStart = searchParams.get('autostart') === 'true';
+    
+    if (shouldAutoStart && jobDetail && !hasAutoStarted.current && !isLoading) {
       hasAutoStarted.current = true;
       // Remove the param so refresh doesn't restart
-      setSearchParams({});
+      setSearchParams({}, { replace: true });
       // Switch to analysis tab
       setActiveTab('analysis');
-      // Trigger autopilot start via ref after a small delay to ensure component is mounted
-      setTimeout(() => {
+      
+      // Keep trying to start autopilot until the ref is available
+      const tryStart = () => {
         if (autopilotStartRef.current) {
+          console.log('[Autostart] Starting Full Autopilot...');
           autopilotStartRef.current();
           toast.info('Full Autopilot started automatically');
+        } else {
+          console.log('[Autostart] Waiting for autopilot ref...');
+          setTimeout(tryStart, 200);
         }
-      }, 500);
+      };
+      
+      // Initial delay to ensure component is mounted
+      setTimeout(tryStart, 300);
     }
   }, [searchParams, setSearchParams, jobDetail, isLoading]);
 
