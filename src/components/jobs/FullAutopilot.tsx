@@ -515,16 +515,17 @@ export function FullAutopilot({
     }
   }, [files, description, addStep, updateStep, addTraceEntry]);
 
-  // PHASE 3: AI Analysis Loop
+  // PHASE 3: AI Analysis Loop - Now with auto script generation and execution
   const runAIAnalysis = useCallback(async (
-    category: string
+    category: string,
+    earlyFlags: string[] = []
   ): Promise<{ flagsFound: string[]; insights: AIInsight | null }> => {
     setCurrentPhase('ai_analysis');
     setPhaseMessage(`🤖 Phase 3: AI-driven analysis (${category})...`);
     setProgress(40);
 
     let attempts = 0;
-    let localFlags: string[] = [];
+    let localFlags: string[] = [...earlyFlags];
     let latestInsight: AIInsight | null = null;
 
     while (!abortRef.current && attempts < maxAttempts && localFlags.length === 0) {
@@ -532,7 +533,8 @@ export function FullAutopilot({
       if (abortRef.current) break;
 
       setTotalAttempts(attempts + 1);
-      setPhaseMessage(`🤖 AI analyzing... (attempt ${attempts + 1}/${maxAttempts})`);
+      const requestScript = attempts >= 2; // Request script after 2 attempts
+      setPhaseMessage(`🤖 AI analyzing... (attempt ${attempts + 1}/${maxAttempts})${requestScript ? ' - generating solve script' : ''}`);
       setProgress(40 + (attempts / maxAttempts) * 30);
 
       const requestPayload = {
@@ -543,6 +545,8 @@ export function FullAutopilot({
         flag_format: expectedFormat,
         current_category: category,
         attempt_number: attempts + 1,
+        request_script: requestScript,
+        early_flags: earlyFlags,
       };
       const startTime = Date.now();
 
@@ -560,7 +564,9 @@ export function FullAutopilot({
           description,
           expectedFormat,
           category,
-          attempts + 1
+          attempts + 1,
+          requestScript,
+          earlyFlags
         );
 
         addTraceEntry({
@@ -586,6 +592,46 @@ export function FullAutopilot({
           localFlags.push(...aiResponse.flag_candidates);
           setFoundFlags(prev => [...new Set([...prev, ...aiResponse.flag_candidates])]);
           aiResponse.flag_candidates.forEach(flag => onFlagFound?.(flag));
+        }
+
+        // Execute AI-generated solve script if provided
+        if (aiResponse.solve_script && aiResponse.solve_script.code) {
+          setPhaseMessage(`🚀 Executing AI-generated solve script...`);
+          
+          const scriptStepId = addStep({
+            phase: 'ai_analysis',
+            command: `python3 solve.py (AI-generated)`,
+            status: 'running',
+            aiAnalysis: aiResponse.solve_script.description,
+            isScriptStep: true,
+            scriptCode: aiResponse.solve_script.code,
+          });
+
+          try {
+            const scriptResult = await api.executePythonInSandbox(jobId, aiResponse.solve_script.code);
+            const scriptFlags = detectFlags(scriptResult.stdout);
+
+            if (scriptFlags.length > 0) {
+              localFlags.push(...scriptFlags);
+              setFoundFlags(prev => [...new Set([...prev, ...scriptFlags])]);
+              scriptFlags.forEach(flag => onFlagFound?.(flag));
+            }
+
+            setGeneratedScript(aiResponse.solve_script.code);
+            updateStep(scriptStepId, {
+              status: scriptResult.exit_code === 0 ? 'success' : 'failed',
+              output: scriptResult.stdout,
+              error: scriptResult.stderr,
+              flagsFound: scriptFlags,
+            });
+
+            if (scriptFlags.length > 0) break;
+          } catch (scriptErr) {
+            updateStep(scriptStepId, {
+              status: 'failed',
+              error: scriptErr instanceof Error ? scriptErr.message : 'Script failed',
+            });
+          }
         }
 
         if (!aiResponse.should_continue || aiResponse.next_commands.length === 0) {
@@ -635,13 +681,12 @@ export function FullAutopilot({
           duration: Date.now() - startTime,
         });
 
-        // Show toast for rate-limit / payment errors
         if (err instanceof api.RateLimitError) {
           toast.error('Rate limit exceeded', { description: 'Please wait a moment and try again.' });
-          break; // stop loop on rate limit
+          break;
         } else if (err instanceof api.PaymentRequiredError) {
           toast.error('AI credits exhausted', { description: 'Please add funds to your Lovable workspace.' });
-          break; // stop loop on payment error
+          break;
         }
 
         console.error('AI analysis error:', err);
@@ -805,8 +850,8 @@ ${insight ? `# AI Analysis: ${insight.analysis.slice(0, 200)}` : ''}
         return;
       }
 
-      // Phase 3: AI Analysis
-      const aiResult = await runAIAnalysis(category);
+      // Phase 3: AI Analysis (pass early flags for context)
+      const aiResult = await runAIAnalysis(category, earlyFlags);
       if (abortRef.current) {
         setCurrentPhase('cancelled');
         setIsRunning(false);

@@ -317,6 +317,105 @@ vulnerable_function`,
   }
 };
 
+// Mock Python script execution based on job type
+const executePythonScript = (jobId: string, script: string): { stdout: string; stderr: string; exit_code: number } => {
+  console.log(`[sandbox-terminal] Executing Python script for ${jobId}, length: ${script.length}`);
+  
+  // Simulate script execution based on job type
+  const lowerScript = script.toLowerCase();
+  
+  // Job 001 - Crypto RSA
+  if (jobId === 'job-001' || lowerScript.includes('pow(') && lowerScript.includes('inverse')) {
+    return {
+      stdout: `[*] RSA Solver Script
+[*] n = 323, e = 5, c = 245
+[*] Factoring n...
+[*] Found factors: p = 17, q = 19
+[*] Computing phi = (p-1)*(q-1) = 288
+[*] Computing d = inverse(e, phi) = 173
+[*] Decrypting: m = pow(c, d, n)
+[*] Decrypted value: 67, 84, 70
+FLAG: CTF{sm4ll_pr1m3s_br34k_rs4}`,
+      stderr: "",
+      exit_code: 0
+    };
+  }
+  
+  // Job 002 - Forensics
+  if (jobId === 'job-002' || lowerScript.includes('exif') || lowerScript.includes('steg')) {
+    return {
+      stdout: `[*] Forensics Analysis Script
+[*] Checking EXIF metadata...
+[*] Found hidden comment in metadata!
+FLAG: FLAG{h1dd3n_1n_pl41n_s1ght}`,
+      stderr: "",
+      exit_code: 0
+    };
+  }
+  
+  // Job 003 - Reverse Engineering
+  if (jobId === 'job-003' || lowerScript.includes('xor') || lowerScript.includes('strings')) {
+    return {
+      stdout: `[*] Binary Analysis Script
+[*] Searching for hardcoded strings...
+[*] Found password check: "s3cr3t_p4ss"
+[*] Found flag in binary:
+FLAG: CTF{str1ngs_r3v34l_s3cr3ts}`,
+      stderr: "",
+      exit_code: 0
+    };
+  }
+  
+  // Job 004 - Web SQLi
+  if (jobId === 'job-004' || lowerScript.includes('sql') || lowerScript.includes('injection')) {
+    return {
+      stdout: `[*] SQL Injection Solver
+[*] Testing payload: ' OR '1'='1' --
+[*] Bypass successful!
+FLAG: CTF{sql1_1nj3ct10n_w1ns}`,
+      stderr: "",
+      exit_code: 0
+    };
+  }
+  
+  // Job 005 - PWN
+  if (jobId === 'job-005' || lowerScript.includes('pwn') || lowerScript.includes('overflow')) {
+    return {
+      stdout: `[*] PWN Exploit Script
+[*] win_function at: 0x401156
+[*] Buffer size: 64 bytes
+[*] Building payload: 'A' * 72 + p64(0x401156)
+[*] Sending payload...
+FLAG: CTF{buff3r_0v3rfl0w_m4st3r}`,
+      stderr: "",
+      exit_code: 0
+    };
+  }
+  
+  // Job 006 - Misc Base64
+  if (jobId === 'job-006' || lowerScript.includes('base64') || lowerScript.includes('decode')) {
+    return {
+      stdout: `[*] Encoding Solver Script
+[*] Reading encoded data: Q1RGe20xeHQzdXJfM25jMGQxbmdfbTRzdDNyfQ==
+[*] Detected: Base64 encoding
+[*] Decoding...
+FLAG: CTF{m1xt3ur_3nc0d1ng_m4st3r}`,
+      stderr: "",
+      exit_code: 0
+    };
+  }
+  
+  // Generic script execution
+  return {
+    stdout: `[*] Script executed
+[*] Processing challenge files...
+[*] Analysis complete
+${script.includes('print') ? '[*] Script output captured' : '[!] No output generated'}`,
+    stderr: "",
+    exit_code: 0
+  };
+};
+
 // Default mock outputs when job not found
 const defaultMockOutputs: Record<string, { stdout: string; stderr: string; exit_code: number }> = {
   file: {
@@ -357,9 +456,32 @@ serve(async (req) => {
     }
 
     const body = await req.json();
-    const { job_id, tool, args } = body;
+    const { job_id, tool, args, script, script_type } = body;
 
-    console.log('[sandbox-terminal] Executing:', { job_id, tool, args });
+    console.log('[sandbox-terminal] Request:', { job_id, tool, args: args?.slice(0, 2), has_script: !!script });
+
+    // Handle Python script execution
+    if (script && (script_type === 'python' || tool === 'python3')) {
+      console.log('[sandbox-terminal] Executing Python script for job:', job_id);
+      
+      const result = executePythonScript(job_id, script);
+      
+      console.log('[sandbox-terminal] Script result:', {
+        job_id,
+        stdout_length: result.stdout.length,
+        exit_code: result.exit_code
+      });
+
+      return new Response(JSON.stringify({
+        stdout: result.stdout,
+        stderr: result.stderr,
+        exit_code: result.exit_code,
+        command_id: `script-${Date.now()}`,
+        executed_at: new Date().toISOString()
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
 
     if (!tool) {
       return new Response(JSON.stringify({ error: 'Missing tool parameter' }), {
@@ -367,6 +489,8 @@ serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
+
+    console.log('[sandbox-terminal] Executing:', { job_id, tool, args });
 
     // Get job-specific mock output first, then fallback to default
     const jobOutputs = jobMockOutputs[job_id] || {};

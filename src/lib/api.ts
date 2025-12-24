@@ -447,6 +447,13 @@ export interface NextCommand {
   reason: string;
 }
 
+export interface SolveScript {
+  language: 'python' | 'bash';
+  code: string;
+  description: string;
+  expected_output: string;
+}
+
 export interface AIAnalysisResponse {
   analysis: string;
   category: string;
@@ -459,6 +466,7 @@ export interface AIAnalysisResponse {
   strategy?: string;
   alternative_approaches?: string[];
   playbook?: string;
+  solve_script?: SolveScript;
 }
 
 export async function analyzeWithAI(
@@ -468,7 +476,9 @@ export async function analyzeWithAI(
   description: string = "",
   flagFormat: string = "CTF{...}",
   currentCategory: string = "unknown",
-  attemptNumber: number = 1
+  attemptNumber: number = 1,
+  requestScript: boolean = false,
+  earlyFlags: string[] = []
 ): Promise<AIAnalysisResponse> {
   try {
     return await apiFetch('/ai/analyze', {
@@ -481,6 +491,8 @@ export async function analyzeWithAI(
         flag_format: flagFormat,
         current_category: currentCategory,
         attempt_number: attemptNumber,
+        request_script: requestScript,
+        early_flags: earlyFlags,
       }),
     });
   } catch (err) {
@@ -499,8 +511,43 @@ export async function analyzeWithAI(
         flag_format: flagFormat,
         current_category: currentCategory,
         attempt_number: attemptNumber,
+        request_script: requestScript,
+        early_flags: earlyFlags,
       });
     }
+    throw err;
+  }
+}
+
+// Execute Python script in sandbox
+export async function executePythonInSandbox(
+  jobId: string,
+  script: string
+): Promise<TerminalCommandResult> {
+  try {
+    return await apiFetch(`/jobs/${jobId}/terminal`, {
+      method: 'POST',
+      body: JSON.stringify({ 
+        tool: 'python3', 
+        arguments: ['-c', script],
+        script,
+        script_type: 'python'
+      }),
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : '';
+    
+    // Fallback to edge function
+    if (message.includes('Backend API not available') || message.includes('HTTP 404')) {
+      console.log('[API] Using Lovable Cloud for script execution');
+      return invokeEdgeFunction<TerminalCommandResult>('sandbox-terminal', {
+        job_id: jobId,
+        tool: 'python3',
+        script,
+        script_type: 'python',
+      });
+    }
+    
     throw err;
   }
 }
