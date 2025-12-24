@@ -64,6 +64,19 @@ export const mockJobs: Job[] = [
   },
 ];
 
+// Function to update job status globally
+export function updateMockJobStatus(jobId: string, status: 'queued' | 'running' | 'done' | 'failed', progress?: number) {
+  const idx = mockJobs.findIndex(j => j.id === jobId);
+  if (idx !== -1) {
+    mockJobs[idx] = { 
+      ...mockJobs[idx], 
+      status, 
+      progress: progress ?? (status === 'done' ? 100 : mockJobs[idx].progress),
+      completedAt: status === 'done' ? new Date().toISOString() : mockJobs[idx].completedAt
+    };
+  }
+}
+
 // Mock data for job-003 after analysis completes
 export const mockJob003Commands: Command[] = [
   {
