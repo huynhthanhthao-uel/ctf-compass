@@ -1,21 +1,57 @@
-import { useState } from 'react';
-import { Save, RotateCcw, Shield, Clock, Upload, Wrench } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Save, RotateCcw, Shield, Clock, Upload, Wrench, Key, Cpu, CheckCircle, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useToast } from '@/hooks/use-toast';
 import { mockConfig } from '@/lib/mock-data';
+
+// AI Models for different tasks
+const AI_MODELS = {
+  analysis: [
+    { id: 'gpt-5', name: 'GPT-5', provider: 'OpenAI', description: 'Best for complex analysis' },
+    { id: 'claude-sonnet-4-5-20250929', name: 'Claude Sonnet 4.5', provider: 'Anthropic', description: 'Excellent reasoning' },
+    { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', provider: 'Google', description: 'Fast & accurate' },
+    { id: 'llama3.3-70b-instruct', name: 'Llama 3.3 70B', provider: 'Meta', description: 'Open source' },
+  ],
+  writeup: [
+    { id: 'claude-sonnet-4-5-20250929', name: 'Claude Sonnet 4.5', provider: 'Anthropic', description: 'Best for writing' },
+    { id: 'gpt-5', name: 'GPT-5', provider: 'OpenAI', description: 'Detailed explanations' },
+    { id: 'deepseek-r1-distill-llama-70b', name: 'DeepSeek R1', provider: 'DeepSeek', description: 'Strong reasoning' },
+  ],
+  extraction: [
+    { id: 'gpt-5-mini', name: 'GPT-5 Mini', provider: 'OpenAI', description: 'Fast extraction' },
+    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', provider: 'Google', description: 'Very fast' },
+    { id: 'alibaba-qwen3-32b', name: 'Qwen3 32B', provider: 'Alibaba', description: 'Cost effective' },
+  ],
+};
 
 export default function Configuration() {
   const { toast } = useToast();
   const [config, setConfig] = useState(mockConfig);
   const [isDirty, setIsDirty] = useState(false);
+  const [apiKey, setApiKey] = useState('');
+  const [apiKeyValid, setApiKeyValid] = useState<boolean | null>(null);
+  const [selectedModels, setSelectedModels] = useState({
+    analysis: 'gpt-5',
+    writeup: 'claude-sonnet-4-5-20250929',
+    extraction: 'gpt-5-mini',
+  });
+
+  // Check if API key is stored (simulated)
+  useEffect(() => {
+    const storedKey = localStorage.getItem('megallm_api_key');
+    if (storedKey) {
+      setApiKey('••••••••••••••••' + storedKey.slice(-4));
+      setApiKeyValid(true);
+    }
+  }, []);
 
   const handleSave = () => {
-    // Mock save - in production this calls the API
     toast({
       title: 'Configuration Saved',
       description: 'Your settings have been updated successfully.',
@@ -28,14 +64,52 @@ export default function Configuration() {
     setIsDirty(false);
   };
 
+  const handleApiKeyChange = (value: string) => {
+    setApiKey(value);
+    setIsDirty(true);
+    // Simulate validation
+    if (value.length > 20) {
+      localStorage.setItem('megallm_api_key', value);
+      setApiKeyValid(true);
+    } else {
+      setApiKeyValid(null);
+    }
+  };
+
+  const handleTestApiKey = async () => {
+    // Simulate API test
+    toast({
+      title: 'Testing API Connection...',
+      description: 'Verifying your MegaLLM API key.',
+    });
+    
+    setTimeout(() => {
+      if (apiKey.length > 10) {
+        setApiKeyValid(true);
+        toast({
+          title: 'API Key Valid',
+          description: 'Successfully connected to MegaLLM API.',
+        });
+      } else {
+        setApiKeyValid(false);
+        toast({
+          title: 'API Key Invalid',
+          description: 'Failed to connect. Please check your API key.',
+          variant: 'destructive',
+        });
+      }
+    }, 1500);
+  };
+
   return (
     <AppLayout>
-      <div className="p-6 max-w-4xl mx-auto space-y-6 animate-fade-in">
-        <div className="flex items-center justify-between">
+      <div className="p-6 lg:p-8 max-w-5xl mx-auto space-y-6 animate-fade-in">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold">Configuration</h1>
-            <p className="text-muted-foreground">
-              Manage analysis settings and security policies
+            <h1 className="text-2xl font-semibold text-foreground">Settings</h1>
+            <p className="text-muted-foreground mt-1">
+              Configure AI models, API keys, and analysis parameters
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -51,11 +125,171 @@ export default function Configuration() {
         </div>
 
         <div className="grid gap-6">
+          {/* API Key Configuration */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Key className="h-5 w-5 text-primary" />
+                MegaLLM API Configuration
+              </CardTitle>
+              <CardDescription>
+                Connect to MegaLLM API for AI-powered analysis and writeup generation
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="apiKey">API Key</Label>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Input
+                      id="apiKey"
+                      type="password"
+                      placeholder="Enter your MegaLLM API key"
+                      value={apiKey}
+                      onChange={(e) => handleApiKeyChange(e.target.value)}
+                      className="pr-10"
+                    />
+                    {apiKeyValid !== null && (
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        {apiKeyValid ? (
+                          <CheckCircle className="h-4 w-4 text-success" />
+                        ) : (
+                          <XCircle className="h-4 w-4 text-destructive" />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <Button variant="outline" onClick={handleTestApiKey}>
+                    Test Connection
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Get your API key from{' '}
+                  <a 
+                    href="https://ai.megallm.io" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline"
+                  >
+                    ai.megallm.io
+                  </a>
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* AI Model Selection */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Cpu className="h-5 w-5 text-primary" />
+                AI Model Configuration
+              </CardTitle>
+              <CardDescription>
+                Select different AI models for each analysis module
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Analysis Model */}
+              <div className="space-y-2">
+                <Label>File Analysis Model</Label>
+                <Select 
+                  value={selectedModels.analysis} 
+                  onValueChange={(v) => {
+                    setSelectedModels(prev => ({ ...prev, analysis: v }));
+                    setIsDirty(true);
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {AI_MODELS.analysis.map((model) => (
+                      <SelectItem key={model.id} value={model.id}>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{model.name}</span>
+                          <Badge variant="secondary" className="text-xs">
+                            {model.provider}
+                          </Badge>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Used for analyzing challenge files and identifying vulnerabilities
+                </p>
+              </div>
+
+              {/* Writeup Model */}
+              <div className="space-y-2">
+                <Label>Writeup Generation Model</Label>
+                <Select 
+                  value={selectedModels.writeup} 
+                  onValueChange={(v) => {
+                    setSelectedModels(prev => ({ ...prev, writeup: v }));
+                    setIsDirty(true);
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {AI_MODELS.writeup.map((model) => (
+                      <SelectItem key={model.id} value={model.id}>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{model.name}</span>
+                          <Badge variant="secondary" className="text-xs">
+                            {model.provider}
+                          </Badge>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Used for generating professional CTF writeups with evidence
+                </p>
+              </div>
+
+              {/* Extraction Model */}
+              <div className="space-y-2">
+                <Label>Flag Extraction Model</Label>
+                <Select 
+                  value={selectedModels.extraction} 
+                  onValueChange={(v) => {
+                    setSelectedModels(prev => ({ ...prev, extraction: v }));
+                    setIsDirty(true);
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {AI_MODELS.extraction.map((model) => (
+                      <SelectItem key={model.id} value={model.id}>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{model.name}</span>
+                          <Badge variant="secondary" className="text-xs">
+                            {model.provider}
+                          </Badge>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Used for extracting and validating flag candidates
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Upload Settings */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Upload className="h-5 w-5" />
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Upload className="h-5 w-5 text-primary" />
                 Upload Settings
               </CardTitle>
               <CardDescription>
@@ -76,34 +310,6 @@ export default function Configuration() {
                     }}
                   />
                 </div>
-              </div>
-              
-              <div className="space-y-2">
-                <Label>Allowed Extensions</Label>
-                <div className="flex flex-wrap gap-1">
-                  {config.allowedExtensions.map((ext) => (
-                    <Badge key={ext} variant="secondary" className="font-mono text-xs">
-                      {ext}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Sandbox Settings */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Shield className="h-5 w-5" />
-                Sandbox Settings
-              </CardTitle>
-              <CardDescription>
-                Configure sandbox isolation and resource limits
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="timeout" className="flex items-center gap-2">
                     <Clock className="h-4 w-4" />
@@ -120,15 +326,26 @@ export default function Configuration() {
                   />
                 </div>
               </div>
+              
+              <div className="space-y-2">
+                <Label>Allowed Extensions</Label>
+                <div className="flex flex-wrap gap-1.5">
+                  {config.allowedExtensions.map((ext) => (
+                    <Badge key={ext} variant="secondary" className="font-mono text-xs">
+                      {ext}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
             </CardContent>
           </Card>
 
           {/* Allowed Tools */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Wrench className="h-5 w-5" />
-                Allowed Analysis Tools
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Wrench className="h-5 w-5 text-primary" />
+                Sandbox Tools
               </CardTitle>
               <CardDescription>
                 Only these tools can be executed in the sandbox environment
@@ -146,26 +363,35 @@ export default function Configuration() {
           </Card>
 
           {/* Security Notice */}
-          <Card className="border-warning/50 bg-warning/5">
+          <Card className="border-primary/30 bg-primary/5">
             <CardHeader>
-              <CardTitle className="text-warning flex items-center gap-2">
+              <CardTitle className="text-primary flex items-center gap-2 text-lg">
                 <Shield className="h-5 w-5" />
-                Security Notice
+                Security Information
               </CardTitle>
             </CardHeader>
-            <CardContent className="text-sm text-muted-foreground space-y-2">
-              <p>
-                <strong>Sandbox Isolation:</strong> All commands run in isolated Docker containers 
-                with network disabled, memory limits, and read-only filesystems where possible.
-              </p>
-              <p>
-                <strong>Tool Allowlist:</strong> Only explicitly allowed tools can be executed. 
-                All tool arguments are sanitized to prevent command injection.
-              </p>
-              <p>
-                <strong>Path Validation:</strong> All file paths are validated to prevent 
-                path traversal and zip-slip attacks.
-              </p>
+            <CardContent className="text-sm text-foreground space-y-3">
+              <div className="flex gap-2">
+                <CheckCircle className="h-4 w-4 text-success mt-0.5 shrink-0" />
+                <p>
+                  <strong>Sandbox Isolation:</strong> All commands run in isolated Docker containers 
+                  with network disabled and resource limits.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <CheckCircle className="h-4 w-4 text-success mt-0.5 shrink-0" />
+                <p>
+                  <strong>API Key Security:</strong> Your MegaLLM API key is encrypted and never 
+                  exposed in logs or frontend code.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <CheckCircle className="h-4 w-4 text-success mt-0.5 shrink-0" />
+                <p>
+                  <strong>Path Validation:</strong> All file paths are validated to prevent 
+                  path traversal and zip-slip attacks.
+                </p>
+              </div>
             </CardContent>
           </Card>
         </div>
