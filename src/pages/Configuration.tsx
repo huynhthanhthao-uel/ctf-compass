@@ -10,23 +10,31 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { useToast } from '@/hooks/use-toast';
 import { mockConfig } from '@/lib/mock-data';
 
-// AI Models for different tasks
+// AI Models for different tasks with MegaLLM pricing
 const AI_MODELS = {
   analysis: [
-    { id: 'gpt-5', name: 'GPT-5', provider: 'OpenAI', description: 'Best for complex analysis' },
-    { id: 'claude-sonnet-4-5-20250929', name: 'Claude Sonnet 4.5', provider: 'Anthropic', description: 'Excellent reasoning' },
-    { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', provider: 'Google', description: 'Fast & accurate' },
-    { id: 'llama3.3-70b-instruct', name: 'Llama 3.3 70B', provider: 'Meta', description: 'Open source' },
+    { id: 'gpt-5', name: 'GPT-5', provider: 'OpenAI', price: '$1.25/$10.00/M', description: 'Most powerful, best for complex analysis' },
+    { id: 'claude-opus-4-1-20250805', name: 'Claude Opus 4.1', provider: 'Anthropic', price: '$15.00/$75.00/M', description: 'Premium reasoning & analysis' },
+    { id: 'claude-sonnet-4-5-20250929', name: 'Claude Sonnet 4.5', provider: 'Anthropic', price: '$3.00/$15.00/M', description: 'Excellent reasoning, 200K context' },
+    { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4', provider: 'Anthropic', price: '$3.00/$15.00/M', description: 'Great balance of speed & quality' },
+    { id: 'gpt-4.1', name: 'GPT-4.1', provider: 'OpenAI', price: '$2.00/$8.00/M', description: 'Strong performance, 128K context' },
+    { id: 'gpt-4o', name: 'GPT-4o', provider: 'OpenAI', price: '$2.50/$10.00/M', description: 'Multimodal capabilities' },
+    { id: 'llama3.3-70b-instruct', name: 'Llama 3.3 70B', provider: 'Meta', price: 'Free tier', description: 'Open source, free to use' },
   ],
   writeup: [
-    { id: 'claude-sonnet-4-5-20250929', name: 'Claude Sonnet 4.5', provider: 'Anthropic', description: 'Best for writing' },
-    { id: 'gpt-5', name: 'GPT-5', provider: 'OpenAI', description: 'Detailed explanations' },
-    { id: 'deepseek-r1-distill-llama-70b', name: 'DeepSeek R1', provider: 'DeepSeek', description: 'Strong reasoning' },
+    { id: 'claude-sonnet-4-5-20250929', name: 'Claude Sonnet 4.5', provider: 'Anthropic', price: '$3.00/$15.00/M', description: 'Best for detailed writeups' },
+    { id: 'claude-opus-4-1-20250805', name: 'Claude Opus 4.1', provider: 'Anthropic', price: '$15.00/$75.00/M', description: 'Premium quality writing' },
+    { id: 'gpt-5', name: 'GPT-5', provider: 'OpenAI', price: '$1.25/$10.00/M', description: 'Detailed technical explanations' },
+    { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4', provider: 'Anthropic', price: '$3.00/$15.00/M', description: 'Quality & speed balance' },
+    { id: 'gpt-4.1', name: 'GPT-4.1', provider: 'OpenAI', price: '$2.00/$8.00/M', description: 'Solid writeup generation' },
+    { id: 'llama3.3-70b-instruct', name: 'Llama 3.3 70B', provider: 'Meta', price: 'Free tier', description: 'Free, good quality' },
   ],
   extraction: [
-    { id: 'gpt-5-mini', name: 'GPT-5 Mini', provider: 'OpenAI', description: 'Fast extraction' },
-    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', provider: 'Google', description: 'Very fast' },
-    { id: 'alibaba-qwen3-32b', name: 'Qwen3 32B', provider: 'Alibaba', description: 'Cost effective' },
+    { id: 'gpt-5-mini', name: 'GPT-5 Mini', provider: 'OpenAI', price: '$0.25/$2.00/M', description: 'Fast & cheap, great for extraction' },
+    { id: 'gpt-4o-mini', name: 'GPT-4o Mini', provider: 'OpenAI', price: '$0.15/$0.60/M', description: 'Cheapest option, very fast' },
+    { id: 'openai-gpt-oss-20b', name: 'GPT-OSS 20B', provider: 'OpenAI', price: '$0.07/$0.30/M', description: 'Ultra cheap, basic tasks' },
+    { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo', provider: 'OpenAI', price: '$0.50/$1.50/M', description: 'Legacy model, reliable' },
+    { id: 'llama3.3-70b-instruct', name: 'Llama 3.3 70B', provider: 'Meta', price: 'Free tier', description: 'Free, good accuracy' },
   ],
 };
 
@@ -312,11 +320,14 @@ export default function Configuration() {
                   <SelectContent>
                     {AI_MODELS.analysis.map((model) => (
                       <SelectItem key={model.id} value={model.id}>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 w-full">
                           <span className="font-medium">{model.name}</span>
                           <Badge variant="secondary" className="text-xs">
                             {model.provider}
                           </Badge>
+                          <span className="text-xs text-muted-foreground ml-auto">
+                            {model.price}
+                          </span>
                         </div>
                       </SelectItem>
                     ))}
@@ -343,11 +354,14 @@ export default function Configuration() {
                   <SelectContent>
                     {AI_MODELS.writeup.map((model) => (
                       <SelectItem key={model.id} value={model.id}>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 w-full">
                           <span className="font-medium">{model.name}</span>
                           <Badge variant="secondary" className="text-xs">
                             {model.provider}
                           </Badge>
+                          <span className="text-xs text-muted-foreground ml-auto">
+                            {model.price}
+                          </span>
                         </div>
                       </SelectItem>
                     ))}
@@ -374,11 +388,14 @@ export default function Configuration() {
                   <SelectContent>
                     {AI_MODELS.extraction.map((model) => (
                       <SelectItem key={model.id} value={model.id}>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 w-full">
                           <span className="font-medium">{model.name}</span>
                           <Badge variant="secondary" className="text-xs">
                             {model.provider}
                           </Badge>
+                          <span className="text-xs text-muted-foreground ml-auto">
+                            {model.price}
+                          </span>
                         </div>
                       </SelectItem>
                     ))}
