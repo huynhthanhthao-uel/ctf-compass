@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { Job, JobDetail } from '@/lib/types';
 import { mockJobs, mockJobDetail, mockCommands, mockArtifacts, mockFlagCandidates } from '@/lib/mock-data';
 import * as api from '@/lib/api';
+import { useNotifications } from './use-notifications';
 
 // Check if we're connected to a real backend
 async function isBackendAvailable(): Promise<boolean> {
@@ -36,6 +37,8 @@ function runMockAnalysis(
   jobId: string,
   setJobs: React.Dispatch<React.SetStateAction<Job[]>>,
   mockIntervalsRef: React.MutableRefObject<Map<string, number>>,
+  onComplete?: (job: Job) => void,
+  onStart?: (job: Job) => void,
 ): void {
   // Ensure only one runner per job
   const existing = mockIntervalsRef.current.get(jobId);
@@ -45,13 +48,19 @@ function runMockAnalysis(
   }
 
   // Start running
-  setJobs(prev =>
-    prev.map(job =>
+  setJobs(prev => {
+    const updated = prev.map(job =>
       job.id === jobId
         ? { ...job, status: 'running' as const, startedAt: new Date().toISOString(), progress: 0, errorMessage: undefined }
         : job,
-    ),
-  );
+    );
+    // Notify about start
+    const startedJob = updated.find(j => j.id === jobId);
+    if (startedJob && onStart) {
+      onStart(startedJob);
+    }
+    return updated;
+  });
 
   let progress = 0;
   const intervalId = window.setInterval(() => {
@@ -62,13 +71,19 @@ function runMockAnalysis(
       window.clearInterval(intervalId);
       mockIntervalsRef.current.delete(jobId);
 
-      setJobs(prev =>
-        prev.map(job =>
+      setJobs(prev => {
+        const updated = prev.map(job =>
           job.id === jobId
             ? { ...job, status: 'done' as const, completedAt: new Date().toISOString(), progress: 100 }
             : job,
-        ),
-      );
+        );
+        // Notify about completion
+        const completedJob = updated.find(j => j.id === jobId);
+        if (completedJob && onComplete) {
+          onComplete(completedJob);
+        }
+        return updated;
+      });
 
       // Also update mockJobs array
       const idx = mockJobs.findIndex(j => j.id === jobId);
@@ -92,6 +107,36 @@ export function useJobs() {
 
   const mockIntervalsRef = useRef<Map<string, number>>(new Map());
   const mockStartTimeoutRef = useRef<Map<string, number>>(new Map());
+
+  // Get notification functions - will be null if not wrapped in provider
+  let addNotification: ((notification: { type: 'success' | 'error' | 'info' | 'warning'; title: string; message: string }) => void) | null = null;
+  try {
+    const notifications = useNotifications();
+    addNotification = notifications.addNotification;
+  } catch {
+    // Not wrapped in NotificationProvider
+  }
+
+  // Callbacks for mock job notifications
+  const handleMockJobComplete = useCallback((job: Job) => {
+    if (addNotification) {
+      addNotification({
+        type: 'success',
+        title: 'Analysis Complete',
+        message: `${job.title} finished successfully`,
+      });
+    }
+  }, [addNotification]);
+
+  const handleMockJobStart = useCallback((job: Job) => {
+    if (addNotification) {
+      addNotification({
+        type: 'info',
+        title: 'Analysis Started',
+        message: `${job.title} is now running`,
+      });
+    }
+  }, [addNotification]);
 
   // Check backend availability on mount
   useEffect(() => {
@@ -200,12 +245,12 @@ export function useJobs() {
     // Auto-run analysis in mock mode after creation
     const timeoutId = window.setTimeout(() => {
       mockStartTimeoutRef.current.delete(newJob.id);
-      runMockAnalysis(newJob.id, setJobs, mockIntervalsRef);
+      runMockAnalysis(newJob.id, setJobs, mockIntervalsRef, handleMockJobComplete, handleMockJobStart);
     }, 500);
     mockStartTimeoutRef.current.set(newJob.id, timeoutId);
 
     return newJob;
-  }, [useApi]);
+  }, [useApi, handleMockJobComplete, handleMockJobStart]);
 
   const runJob = useCallback(async (jobId: string) => {
     if (useApi) {
@@ -255,8 +300,8 @@ export function useJobs() {
       mockStartTimeoutRef.current.delete(jobId);
     }
 
-    runMockAnalysis(jobId, setJobs, mockIntervalsRef);
-  }, [useApi]);
+    runMockAnalysis(jobId, setJobs, mockIntervalsRef, handleMockJobComplete, handleMockJobStart);
+  }, [useApi, handleMockJobComplete, handleMockJobStart]);
 
   const stopJob = useCallback((jobId: string) => {
     const pendingStart = mockStartTimeoutRef.current.get(jobId);

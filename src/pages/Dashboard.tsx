@@ -28,7 +28,7 @@ export default function Dashboard() {
   const { toast } = useToast();
   const { jobs, isLoading, fetchJobs, runJob, stopJob, deleteJob, isBackendConnected } = useJobs();
   const { retryBackendConnection } = useAuth();
-  const { isConnected: wsConnected, getJobUpdate, clearJobUpdate } = useJobsWithWebSocket();
+  const { isConnected: wsConnected, getJobUpdate, clearJobUpdate } = useJobsWithWebSocket(true); // Enable notifications
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [isRetrying, setIsRetrying] = useState(false);
