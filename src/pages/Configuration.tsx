@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Save, RotateCcw, Shield, Clock, Upload, Wrench, Key, Cpu, CheckCircle, Eye, EyeOff, Loader2, RefreshCw, Download, Trash2, AlertTriangle, Github, Play } from 'lucide-react';
+import { Save, RotateCcw, Shield, Clock, Upload, Wrench, Key, Cpu, CheckCircle, Eye, EyeOff, Loader2, RefreshCw, Download, Trash2, AlertTriangle, Github, Play, Terminal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,6 +12,7 @@ import { mockConfig } from '@/lib/mock-data';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { ToolChecker } from '@/components/jobs/ToolChecker';
 import * as api from '@/lib/api';
 
 // Complete list of MegaLLM models with accurate pricing

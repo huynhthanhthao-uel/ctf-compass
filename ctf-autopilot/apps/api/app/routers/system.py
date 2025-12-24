@@ -429,6 +429,105 @@ async def set_model_config(
     )
 
 
+# ============ Tool Availability API ============
+
+class ToolAvailabilityResponse(BaseModel):
+    """Response for tool availability check."""
+    tools: dict
+    cached: bool
+    checked_at: str
+    summary: Optional[dict] = None
+
+
+class PythonPackagesResponse(BaseModel):
+    """Response for pre-installed Python packages."""
+    packages: list
+    can_install_more: bool
+    venv_supported: bool
+
+
+class RunScriptRequest(BaseModel):
+    """Request to run a Python script."""
+    script: str
+    pip_packages: Optional[list] = None
+    timeout: int = 300
+
+
+class RunScriptResponse(BaseModel):
+    """Response from running a Python script."""
+    exit_code: int
+    stdout: str
+    stderr: str
+    script: str
+    packages: list
+
+
+@router.get("/sandbox/tools", response_model=ToolAvailabilityResponse)
+async def check_tool_availability(
+    refresh: bool = False,
+    _session=Depends(get_current_session),
+):
+    """Check which tools are installed in the sandbox."""
+    from app.services.sandbox_service import SandboxService
+    
+    sandbox = SandboxService()
+    result = await sandbox.check_tool_availability(force_refresh=refresh)
+    
+    return ToolAvailabilityResponse(**result)
+
+
+@router.get("/sandbox/python-packages", response_model=PythonPackagesResponse)
+async def get_python_packages(
+    _session=Depends(get_current_session),
+):
+    """Get list of pre-installed Python packages in sandbox."""
+    from app.services.sandbox_service import SandboxService
+    
+    sandbox = SandboxService()
+    packages = sandbox.get_installed_python_packages()
+    
+    return PythonPackagesResponse(
+        packages=packages,
+        can_install_more=True,
+        venv_supported=True,
+    )
+
+
+@router.post("/sandbox/run-script", response_model=RunScriptResponse)
+async def run_python_script(
+    request: RunScriptRequest,
+    _session=Depends(get_current_session),
+    _csrf=Depends(verify_csrf),
+):
+    """Run a Python script in the sandbox."""
+    from app.services.sandbox_service import SandboxService
+    from uuid import uuid4
+    from pathlib import Path
+    import tempfile
+    
+    sandbox = SandboxService()
+    
+    # Create temp working directory
+    with tempfile.TemporaryDirectory() as temp_dir:
+        working_dir = Path(temp_dir)
+        
+        result = await sandbox.run_python_script(
+            job_id=uuid4(),
+            script_content=request.script,
+            working_dir=working_dir,
+            pip_packages=request.pip_packages,
+            timeout=request.timeout,
+        )
+        
+        return RunScriptResponse(
+            exit_code=result.get("exit_code", 1),
+            stdout=result.get("stdout", ""),
+            stderr=result.get("stderr", ""),
+            script=result.get("script", request.script),
+            packages=result.get("packages", []),
+        )
+
+
 def get_megallm_api_key() -> Optional[str]:
     """Get the current MegaLLM API key (runtime or env)."""
     return _runtime_config.get("api_key") or settings.megallm_api_key
