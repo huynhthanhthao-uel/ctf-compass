@@ -1,10 +1,16 @@
 # CTF Autopilot - Development Docker Compose
 # Simplified configuration for local development
+#
+# USAGE:
+#   docker compose -f ctf-autopilot/infra/docker-compose.dev.yml up -d
+#
+# GitHub: https://github.com/huynhtrungcipp/ctf-compass
 
 services:
   # PostgreSQL Database
   postgres:
     image: postgres:16-alpine
+    container_name: ctf_compass_postgres_dev
     ports:
       - "5432:5432"
     environment:
@@ -22,8 +28,11 @@ services:
   # Redis
   redis:
     image: redis:7-alpine
+    container_name: ctf_compass_redis_dev
     ports:
       - "6379:6379"
+    volumes:
+      - redis_dev_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -32,3 +41,6 @@ services:
 
 volumes:
   postgres_dev_data:
+    name: ctf_compass_postgres_dev_data
+  redis_dev_data:
+    name: ctf_compass_redis_dev_data

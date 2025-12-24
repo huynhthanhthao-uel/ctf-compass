@@ -9,29 +9,29 @@
 # USAGE:
 #   curl -fsSL https://raw.githubusercontent.com/huynhtrungcipp/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash
 #
-# OR (local installation):
-#   sudo bash install_ubuntu_24.04.sh
+# OR with cleanup of old installation:
+#   curl -fsSL https://raw.githubusercontent.com/huynhtrungcipp/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --clean
 #
-# PREREQUISITES (Manual Steps Before Running):
-#   1. Fresh Ubuntu 24.04 LTS installation
+# OPTIONS:
+#   --clean   Remove old installation before installing
+#   --force   Skip confirmation prompts
+#
+# PREREQUISITES:
+#   1. Ubuntu 24.04 LTS
 #   2. Root or sudo access
-#   3. Internet connection for package downloads
+#   3. Internet connection
 #   4. MegaLLM API key from https://ai.megallm.io
 #
 # WHAT THIS SCRIPT DOES:
+#   ✓ Removes old installation if --clean flag is used
 #   ✓ Updates system packages
 #   ✓ Installs Docker Engine and Docker Compose
-#   ✓ Configures UFW firewall (opens ports 22, 80, 443)
+#   ✓ Configures UFW firewall
 #   ✓ Configures fail2ban for SSH protection
-#   ✓ Clones/updates CTF Compass repository
+#   ✓ Clones CTF Compass repository
 #   ✓ Generates secure passwords
 #   ✓ Builds sandbox Docker image
 #   ✓ Starts all services
-#
-# POST-INSTALLATION (Manual Steps After Running):
-#   1. Edit /opt/ctf-compass/.env and set MEGALLM_API_KEY
-#   2. (Optional) Configure TLS certificates
-#   3. (Optional) Change default ports
 #
 #===============================================================================
 
@@ -46,6 +46,16 @@ GITHUB_REPO="https://github.com/huynhtrungcipp/ctf-compass.git"
 GITHUB_BRANCH="main"
 MIN_MEMORY_MB=3072
 MIN_DISK_GB=15
+CLEAN_MODE=false
+FORCE_MODE=false
+
+# Parse arguments
+for arg in "$@"; do
+    case $arg in
+        --clean) CLEAN_MODE=true ;;
+        --force) FORCE_MODE=true ;;
+    esac
+done
 
 #-------------------------------------------------------------------------------
 # Colors and Logging
@@ -97,6 +107,38 @@ preflight_checks() {
     # Check if running as root
     if [[ $EUID -ne 0 ]]; then
         log_error "This script must be run as root (use sudo)"
+    fi
+    
+    # Cleanup old installation if requested
+    if [[ "$CLEAN_MODE" == "true" ]] && [[ -d "$INSTALL_DIR" ]]; then
+        log_info "Cleaning up old installation..."
+        
+        # Stop old services
+        if [[ -f "$INSTALL_DIR/ctf-autopilot/infra/docker-compose.yml" ]]; then
+            docker compose -f "$INSTALL_DIR/ctf-autopilot/infra/docker-compose.yml" down -v 2>/dev/null || true
+        fi
+        
+        # Remove old Docker images
+        docker rmi $(docker images | grep -E 'ctf-compass|ctf-autopilot' | awk '{print $3}') 2>/dev/null || true
+        
+        # Cleanup Docker resources
+        docker system prune -af 2>/dev/null || true
+        
+        # Remove old files (preserve backups)
+        rm -rf "$INSTALL_DIR"
+        rm -f /var/log/ctf-compass-*.log
+        
+        log_success "Old installation cleaned up"
+    elif [[ -d "$INSTALL_DIR" ]]; then
+        log_warn "Existing installation found at $INSTALL_DIR"
+        if [[ "$FORCE_MODE" != "true" ]]; then
+            read -p "Remove and reinstall? (y/N) " -n 1 -r
+            echo
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                docker compose -f "$INSTALL_DIR/ctf-autopilot/infra/docker-compose.yml" down -v 2>/dev/null || true
+                rm -rf "$INSTALL_DIR"
+            fi
+        fi
     fi
     log_debug "Running as root: OK"
     

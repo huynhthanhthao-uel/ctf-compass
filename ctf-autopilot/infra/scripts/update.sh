@@ -1,7 +1,7 @@
 #!/bin/bash
 #===============================================================================
 # CTF Compass - System Update Script
-# Automatically pulls latest changes from GitHub, updates, and restarts
+# Automatically pulls latest changes from GitHub, cleans up, and restarts
 #===============================================================================
 #
 # GitHub Repository: https://github.com/huynhtrungcipp/ctf-compass.git
@@ -11,7 +11,9 @@
 #
 # OPTIONS:
 #   --check   Check for updates without installing
+#   --clean   Force cleanup of all Docker resources before update
 #   --json    Output in JSON format (for API use)
+#   --ci      CI mode - non-interactive
 #   --help    Show help message
 #
 # WHAT THIS SCRIPT DOES:
@@ -46,8 +48,10 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-# JSON output mode for API
+# Modes
 JSON_MODE="${JSON_MODE:-false}"
+CI_MODE="${CI_MODE:-false}"
+CLEAN_MODE=false
 
 log_info()    { 
     if [[ "$JSON_MODE" == "true" ]]; then
@@ -207,6 +211,12 @@ cleanup_docker() {
     fi
     
     if [[ -n "$COMPOSE_FILE" ]]; then
+        # Copy .env to compose directory
+        COMPOSE_DIR=$(dirname "$COMPOSE_FILE")
+        if [[ "$COMPOSE_DIR" != "." ]] && [[ -f ".env" ]]; then
+            cp .env "$COMPOSE_DIR/.env" 2>/dev/null || true
+        fi
+        
         # Export environment variables
         set -a
         source .env 2>/dev/null || true
@@ -225,13 +235,16 @@ cleanup_docker() {
     log_info "Removing dangling images..."
     docker image prune -f 2>&1 | tee -a "$LOG_FILE" || true
     
-    # Remove unused volumes (careful - not all, just dangling)
-    log_info "Removing dangling volumes..."
-    docker volume prune -f 2>&1 | tee -a "$LOG_FILE" || true
-    
-    # Remove old build cache
-    log_info "Removing old build cache..."
-    docker builder prune -f --keep-storage=2GB 2>&1 | tee -a "$LOG_FILE" || true
+    # Clean mode - more aggressive cleanup
+    if [[ "$CLEAN_MODE" == "true" ]]; then
+        log_info "Performing deep cleanup..."
+        docker image prune -af 2>&1 | tee -a "$LOG_FILE" || true
+        docker builder prune -af 2>&1 | tee -a "$LOG_FILE" || true
+    else
+        # Remove old build cache (keep 2GB)
+        log_info "Removing old build cache..."
+        docker builder prune -f --keep-storage=2GB 2>&1 | tee -a "$LOG_FILE" || true
+    fi
     
     log_success "Docker cleanup completed"
 }
@@ -246,10 +259,10 @@ rebuild_sandbox() {
     
     # Find Dockerfile location
     SANDBOX_PATH=""
-    if [[ -f "sandbox/image/Dockerfile" ]]; then
-        SANDBOX_PATH="sandbox/image"
-    elif [[ -f "ctf-autopilot/sandbox/image/Dockerfile" ]]; then
+    if [[ -f "ctf-autopilot/sandbox/image/Dockerfile" ]]; then
         SANDBOX_PATH="ctf-autopilot/sandbox/image"
+    elif [[ -f "sandbox/image/Dockerfile" ]]; then
+        SANDBOX_PATH="sandbox/image"
     fi
     
     if [[ -z "$SANDBOX_PATH" ]]; then
@@ -257,13 +270,11 @@ rebuild_sandbox() {
         return 0
     fi
     
-    # Check if Dockerfile changed
+    # Check if Dockerfile changed or clean mode
     DOCKERFILE_HASH=$(md5sum "$SANDBOX_PATH/Dockerfile" | cut -d' ' -f1)
     HASH_FILE="/tmp/ctf_compass_sandbox_hash"
     
-    if [[ -f "$HASH_FILE" ]] && [[ "$(cat $HASH_FILE)" == "$DOCKERFILE_HASH" ]]; then
-        log_info "Sandbox Dockerfile unchanged, skipping rebuild"
-    else
+    if [[ "$CLEAN_MODE" == "true" ]] || [[ ! -f "$HASH_FILE" ]] || [[ "$(cat $HASH_FILE)" != "$DOCKERFILE_HASH" ]]; then
         log_info "Building sandbox image..."
         docker build \
             --no-cache \
@@ -274,6 +285,8 @@ rebuild_sandbox() {
         
         echo "$DOCKERFILE_HASH" > "$HASH_FILE"
         log_success "Sandbox image rebuilt"
+    else
+        log_info "Sandbox Dockerfile unchanged, skipping rebuild"
     fi
 }
 
@@ -286,8 +299,7 @@ restart_services() {
     cd "$INSTALL_DIR"
     
     # Create data directories if not exist
-    mkdir -p data/runs ctf-autopilot/data/runs ctf-autopilot/infra/data/runs
-    chmod -R 755 data ctf-autopilot/data 2>/dev/null || true
+    mkdir -p data/runs ctf-autopilot/data/runs 2>/dev/null || true
     
     # Find docker-compose location
     COMPOSE_FILE=""
@@ -304,7 +316,7 @@ restart_services() {
         return 0
     fi
     
-    # Copy .env to compose directory if needed
+    # Copy .env to compose directory
     COMPOSE_DIR=$(dirname "$COMPOSE_FILE")
     if [[ "$COMPOSE_DIR" != "." ]] && [[ -f ".env" ]]; then
         cp .env "$COMPOSE_DIR/.env" 2>/dev/null || true
@@ -315,13 +327,19 @@ restart_services() {
     source .env 2>/dev/null || true
     set +a
     
+    # Build options
+    BUILD_OPTS="--build"
+    if [[ "$CLEAN_MODE" == "true" ]]; then
+        BUILD_OPTS="--build --no-cache"
+    fi
+    
     # Start services with rebuild
     log_info "Starting services..."
-    docker compose -f "$COMPOSE_FILE" up -d --build 2>&1 | tee -a "$LOG_FILE"
+    docker compose -f "$COMPOSE_FILE" up -d $BUILD_OPTS 2>&1 | tee -a "$LOG_FILE"
     
     # Wait for services
-    log_info "Waiting for services to start (20 seconds)..."
-    sleep 20
+    log_info "Waiting for services to start (25 seconds)..."
+    sleep 25
     
     log_success "Services restarted"
 }
@@ -354,7 +372,7 @@ health_check() {
         log_success "All health checks passed"
     else
         log_warn "Some services may still be starting."
-        log_warn "Check logs: docker compose logs -f"
+        log_warn "Check logs: docker compose -f $INSTALL_DIR/ctf-autopilot/infra/docker-compose.yml logs -f"
     fi
 }
 
@@ -432,28 +450,38 @@ check_updates() {
 #-------------------------------------------------------------------------------
 main() {
     # Parse arguments
-    case "${1:-}" in
-        --check)
-            check_updates
-            exit 0
-            ;;
-        --json)
-            JSON_MODE="true"
-            ;;
-        --help|-h)
-            echo "CTF Compass Update Script"
-            echo ""
-            echo "Usage: $0 [OPTIONS]"
-            echo ""
-            echo "Options:"
-            echo "  --check   Check for updates without installing"
-            echo "  --json    Output in JSON format (for API use)"
-            echo "  --help    Show this help message"
-            echo ""
-            echo "GitHub: https://github.com/huynhtrungcipp/ctf-compass"
-            exit 0
-            ;;
-    esac
+    for arg in "$@"; do
+        case $arg in
+            --check)
+                check_updates
+                exit 0
+                ;;
+            --clean)
+                CLEAN_MODE=true
+                ;;
+            --json)
+                JSON_MODE="true"
+                ;;
+            --ci)
+                CI_MODE="true"
+                ;;
+            --help|-h)
+                echo "CTF Compass Update Script"
+                echo ""
+                echo "Usage: $0 [OPTIONS]"
+                echo ""
+                echo "Options:"
+                echo "  --check   Check for updates without installing"
+                echo "  --clean   Force cleanup of all Docker resources"
+                echo "  --json    Output in JSON format (for API use)"
+                echo "  --ci      CI mode - non-interactive"
+                echo "  --help    Show this help message"
+                echo ""
+                echo "GitHub: https://github.com/huynhtrungcipp/ctf-compass"
+                exit 0
+                ;;
+        esac
+    done
     
     # Create log file
     touch "$LOG_FILE"
@@ -469,6 +497,9 @@ main() {
     fi
     
     log_info "Update started at $(date)"
+    if [[ "$CLEAN_MODE" == "true" ]]; then
+        log_info "Running in CLEAN mode - will remove all old Docker resources"
+    fi
     
     preflight_checks
     backup_config
