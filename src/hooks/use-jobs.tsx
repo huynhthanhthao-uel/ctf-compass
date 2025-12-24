@@ -251,12 +251,36 @@ export function useJobs() {
     }, 500);
   }, [useApi]);
 
+  const stopJob = useCallback((jobId: string) => {
+    setJobs(prev => prev.map(job =>
+      job.id === jobId
+        ? { ...job, status: 'failed' as const, errorMessage: 'Analysis cancelled by user', progress: job.progress }
+        : job
+    ));
+    // Update mock data too
+    const idx = mockJobs.findIndex(j => j.id === jobId);
+    if (idx !== -1) {
+      mockJobs[idx] = { ...mockJobs[idx], status: 'failed', errorMessage: 'Analysis cancelled by user' };
+    }
+  }, []);
+
+  const deleteJob = useCallback((jobId: string) => {
+    setJobs(prev => prev.filter(job => job.id !== jobId));
+    // Remove from mock data too
+    const idx = mockJobs.findIndex(j => j.id === jobId);
+    if (idx !== -1) {
+      mockJobs.splice(idx, 1);
+    }
+  }, []);
+
   return {
     jobs,
     isLoading,
     fetchJobs,
     createJob,
     runJob,
+    stopJob,
+    deleteJob,
     isBackendConnected: useApi,
   };
 }
