@@ -193,6 +193,7 @@ export const mockJobDetail: JobDetail = {
   artifacts: mockArtifacts,
   flagCandidates: mockFlagCandidates,
   writeup: mockWriteup,
+  inputFiles: ['challenge.py', 'output.bin'],
 };
 
 export const mockConfig: Config = {

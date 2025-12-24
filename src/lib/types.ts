@@ -52,6 +52,7 @@ export interface JobDetail extends Job {
   artifacts: Artifact[];
   flagCandidates: FlagCandidate[];
   writeup?: string;
+  inputFiles?: string[];
 }
 
 export interface User {
