@@ -7,7 +7,7 @@ services:
   # =============================================================================
   web:
     build:
-      context: ./apps/web
+      context: ../apps/web
       dockerfile: Dockerfile
     ports:
       - "${WEB_PORT:-3000}:3000"
@@ -24,7 +24,7 @@ services:
   # =============================================================================
   api:
     build:
-      context: ./apps/api
+      context: ../apps/api
       dockerfile: Dockerfile
     ports:
       - "${API_PORT:-8000}:8000"
@@ -66,7 +66,7 @@ services:
   # =============================================================================
   worker:
     build:
-      context: ./apps/api
+      context: ../apps/api
       dockerfile: Dockerfile
     command: celery -A app.tasks worker --loglevel=info --concurrency=2
     environment:
