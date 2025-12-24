@@ -35,6 +35,7 @@ import { ArtifactList } from '@/components/jobs/ArtifactList';
 import { FlagValidator } from '@/components/jobs/FlagValidator';
 import { WriteupView } from '@/components/jobs/WriteupView';
 import { SandboxTerminal } from '@/components/jobs/SandboxTerminal';
+import { FullAutopilot } from '@/components/jobs/FullAutopilot';
 import { AutopilotPanel } from '@/components/jobs/AutopilotPanel';
 import { AnalysisHistory } from '@/components/jobs/AnalysisHistory';
 import { SolveScriptGenerator } from '@/components/jobs/SolveScriptGenerator';
@@ -875,31 +876,54 @@ if __name__ == "__main__":
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="analysis" className="space-y-4">
-            <AutopilotPanel 
-              jobId={jobDetail.id} 
+          <TabsContent value="analysis" className="space-y-6">
+            {/* Full Autopilot - One-click solve */}
+            <FullAutopilot
+              jobId={jobDetail.id}
               files={jobDetail.inputFiles || []}
               description={jobDetail.description}
               expectedFormat={jobDetail.flagFormat}
               onFlagFound={handleFlagFound}
-            />
-            
-            {/* Solve Script Generator */}
-            <SolveScriptGenerator
-              jobId={jobDetail.id}
-              category={detectCategory()}
-              files={jobDetail.inputFiles || []}
-              flagFormat={jobDetail.flagFormat}
-              analysisContext={analysisContext}
-              onScriptExecuted={(result) => {
-                if (result.stdout) {
-                  const flagMatch = result.stdout.match(new RegExp(jobDetail.flagFormat || 'CTF{.*}', 'g'));
-                  if (flagMatch) {
-                    flagMatch.forEach(handleFlagFound);
-                  }
+              onComplete={(success, flags) => {
+                if (success && flags.length > 0) {
+                  toast.success(`🎉 Autopilot found ${flags.length} flag(s)!`);
                 }
               }}
             />
+            
+            {/* Legacy Autopilot Panel - For manual control */}
+            <details className="group">
+              <summary className="cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground flex items-center gap-2 py-2">
+                <span className="transition-transform group-open:rotate-90">▶</span>
+                Advanced Controls (Manual AI Analysis)
+              </summary>
+              <div className="mt-4 space-y-4">
+                <AutopilotPanel 
+                  jobId={jobDetail.id} 
+                  files={jobDetail.inputFiles || []}
+                  description={jobDetail.description}
+                  expectedFormat={jobDetail.flagFormat}
+                  onFlagFound={handleFlagFound}
+                />
+                
+                {/* Solve Script Generator */}
+                <SolveScriptGenerator
+                  jobId={jobDetail.id}
+                  category={detectCategory()}
+                  files={jobDetail.inputFiles || []}
+                  flagFormat={jobDetail.flagFormat}
+                  analysisContext={analysisContext}
+                  onScriptExecuted={(result) => {
+                    if (result.stdout) {
+                      const flagMatch = result.stdout.match(new RegExp(jobDetail.flagFormat || 'CTF{.*}', 'g'));
+                      if (flagMatch) {
+                        flagMatch.forEach(handleFlagFound);
+                      }
+                    }
+                  }}
+                />
+              </div>
+            </details>
           </TabsContent>
 
           <TabsContent value="history">
