@@ -44,10 +44,7 @@ export function JobForm({ onSubmit, isLoading }: JobFormProps) {
       return;
     }
 
-    if (files.length === 0) {
-      setError('At least one file is required');
-      return;
-    }
+    // Files are optional - some CTF challenges don't require file uploads
 
     try {
       new RegExp(flagFormat);
@@ -121,8 +118,8 @@ export function JobForm({ onSubmit, isLoading }: JobFormProps) {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Challenge Files *</CardTitle>
-          <CardDescription>Upload the challenge files for analysis</CardDescription>
+          <CardTitle className="text-base">Challenge Files (Optional)</CardTitle>
+          <CardDescription>Upload challenge files if available</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div
