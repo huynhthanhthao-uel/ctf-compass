@@ -215,7 +215,9 @@ export interface UpdateCheckResponse {
   updates_available: boolean;
   current_version: string;
   latest_version: string;
+  commits_behind?: number;
   changelog?: string;
+  error?: string;
 }
 
 export async function checkForUpdates(): Promise<UpdateCheckResponse> {

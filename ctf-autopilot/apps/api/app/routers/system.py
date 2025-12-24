@@ -7,6 +7,7 @@ import subprocess
 import os
 import json
 import asyncio
+import shutil
 
 from app.routers.auth import get_current_session, verify_csrf
 from app.config import settings
@@ -20,7 +21,9 @@ class UpdateCheckResponse(BaseModel):
     updates_available: bool
     current_version: str
     latest_version: str
+    commits_behind: int = 0
     changelog: Optional[str] = None
+    error: Optional[str] = None
 
 
 class UpdateResponse(BaseModel):
@@ -63,15 +66,52 @@ _runtime_config = {
 }
 
 
+def _find_install_dir() -> str:
+    """Find the installation directory."""
+    candidates = [
+        "/opt/ctf-compass",
+        "/app",
+        os.environ.get("INSTALL_DIR", ""),
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))),
+    ]
+    for path in candidates:
+        if path and os.path.exists(path) and (
+            os.path.exists(os.path.join(path, ".git")) or
+            os.path.exists(os.path.join(path, "ctf-autopilot"))
+        ):
+            return path
+    return "/opt/ctf-compass"
+
+
+def _find_update_script() -> Optional[str]:
+    """Find the update script path."""
+    install_dir = _find_install_dir()
+    candidates = [
+        os.path.join(install_dir, "ctf-autopilot/infra/scripts/update.sh"),
+        os.path.join(install_dir, "infra/scripts/update.sh"),
+        "/opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh",
+        "/app/ctf-autopilot/infra/scripts/update.sh",
+    ]
+    for path in candidates:
+        if os.path.exists(path) and os.access(path, os.X_OK):
+            return path
+        if os.path.exists(path):
+            return path
+    return None
+
+
 def _get_current_version() -> str:
     """Get current installed version from git or VERSION file."""
+    install_dir = _find_install_dir()
+    
     try:
         # Try git first
         result = subprocess.run(
-            ["git", "describe", "--tags", "--always"],
+            ["git", "rev-parse", "--short", "HEAD"],
             capture_output=True,
             text=True,
-            cwd="/opt/ctf-compass"
+            cwd=install_dir,
+            timeout=10
         )
         if result.returncode == 0:
             return result.stdout.strip()
@@ -79,36 +119,79 @@ def _get_current_version() -> str:
         pass
     
     # Fallback to VERSION file
-    version_file = "/opt/ctf-compass/VERSION"
+    version_file = os.path.join(install_dir, "VERSION")
     if os.path.exists(version_file):
         with open(version_file) as f:
             return f.read().strip()
     
-    return "1.0.0"
+    return "local-dev"
 
 
-def _get_latest_version() -> tuple[str, str]:
-    """Get latest version from GitHub."""
+def _check_for_updates() -> dict:
+    """Check for updates from GitHub."""
+    install_dir = _find_install_dir()
+    result = {
+        "updates_available": False,
+        "current_version": "local-dev",
+        "latest_version": "local-dev",
+        "commits_behind": 0,
+        "error": None,
+    }
+    
+    # Check if git is available
+    if not shutil.which("git"):
+        result["error"] = "Git not installed"
+        return result
+    
+    # Check if it's a git repo
+    git_dir = os.path.join(install_dir, ".git")
+    if not os.path.exists(git_dir):
+        result["error"] = "Not a git repository"
+        return result
+    
     try:
-        result = subprocess.run(
-            ["git", "fetch", "--tags"],
-            capture_output=True,
-            text=True,
-            cwd="/opt/ctf-compass"
+        # Get current commit
+        proc = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True,
+            cwd=install_dir, timeout=10
+        )
+        if proc.returncode == 0:
+            result["current_version"] = proc.stdout.strip()
+        
+        # Fetch from origin
+        subprocess.run(
+            ["git", "fetch", "origin", "main"],
+            capture_output=True, text=True,
+            cwd=install_dir, timeout=30
         )
         
-        result = subprocess.run(
-            ["git", "describe", "--tags", "--abbrev=0", "origin/main"],
-            capture_output=True,
-            text=True,
-            cwd="/opt/ctf-compass"
+        # Get remote commit
+        proc = subprocess.run(
+            ["git", "rev-parse", "--short", "origin/main"],
+            capture_output=True, text=True,
+            cwd=install_dir, timeout=10
         )
-        if result.returncode == 0:
-            return result.stdout.strip(), ""
+        if proc.returncode == 0:
+            result["latest_version"] = proc.stdout.strip()
+        
+        # Check if behind
+        proc = subprocess.run(
+            ["git", "rev-list", "--count", "HEAD..origin/main"],
+            capture_output=True, text=True,
+            cwd=install_dir, timeout=10
+        )
+        if proc.returncode == 0:
+            commits_behind = int(proc.stdout.strip())
+            result["commits_behind"] = commits_behind
+            result["updates_available"] = commits_behind > 0
+        
+    except subprocess.TimeoutExpired:
+        result["error"] = "Git operation timed out"
     except Exception as e:
-        return _get_current_version(), str(e)
+        result["error"] = str(e)
     
-    return _get_current_version(), ""
+    return result
 
 
 @router.get("/check-update", response_model=UpdateCheckResponse)
@@ -116,53 +199,86 @@ async def check_update(
     _session=Depends(get_current_session),
 ):
     """Check if updates are available."""
-    current = _get_current_version()
-    latest, _ = _get_latest_version()
-    
-    # Simple version comparison
-    updates_available = current != latest and latest > current
+    result = _check_for_updates()
     
     return UpdateCheckResponse(
-        updates_available=updates_available,
-        current_version=current,
-        latest_version=latest,
-        changelog=None,
+        updates_available=result["updates_available"],
+        current_version=result["current_version"],
+        latest_version=result["latest_version"],
+        commits_behind=result["commits_behind"],
+        error=result["error"],
     )
 
 
 async def _run_update_stream():
     """Generator that streams update progress."""
-    steps = [
-        ("Backing up configuration...", "backup"),
-        ("Pulling latest from GitHub...", "git pull"),
-        ("Updating dependencies...", "deps"),
-        ("Rebuilding containers...", "docker build"),
-        ("Restarting services...", "docker restart"),
-        ("Running health checks...", "health"),
-    ]
+    script_path = _find_update_script()
+    install_dir = _find_install_dir()
     
-    for i, (message, _step) in enumerate(steps, 1):
+    # Initial status
+    yield json.dumps({
+        "level": "info",
+        "message": f"Starting update from {install_dir}...",
+        "step": 0,
+        "total": 6,
+    }) + "\n"
+    
+    if not script_path:
         yield json.dumps({
-            "level": "step",
-            "step": i,
-            "total": len(steps),
-            "message": f"Step {i}/{len(steps)}: {message}",
+            "level": "error",
+            "success": False,
+            "message": "Update script not found. Please run manually:\nsudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh",
         }) + "\n"
-        await asyncio.sleep(1)
+        return
     
-    # Actually run update script
+    yield json.dumps({
+        "level": "info",
+        "message": f"Using script: {script_path}",
+    }) + "\n"
+    
+    # Check if we can execute the script
+    # In Docker, we typically need to run the update outside the container
+    in_docker = os.path.exists("/.dockerenv") or os.environ.get("DOCKER", "")
+    
+    if in_docker:
+        yield json.dumps({
+            "level": "warn",
+            "message": "Running inside Docker container. Update will affect container only.",
+        }) + "\n"
+    
     try:
+        # Run the update script with JSON output
+        env = os.environ.copy()
+        env["INSTALL_DIR"] = install_dir
+        
         process = await asyncio.create_subprocess_exec(
-            "bash", "/opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh",
+            "bash", script_path, "--json",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
+            cwd=install_dir,
+            env=env,
         )
         
+        step_count = 0
         async for line in process.stdout:
-            yield json.dumps({
-                "level": "log",
-                "message": line.decode().strip(),
-            }) + "\n"
+            decoded = line.decode().strip()
+            if not decoded:
+                continue
+            
+            # Try to parse as JSON
+            try:
+                data = json.loads(decoded)
+                if data.get("level") == "step":
+                    step_count += 1
+                    data["step"] = step_count
+                    data["total"] = 6
+                yield json.dumps(data) + "\n"
+            except json.JSONDecodeError:
+                # Plain text log
+                yield json.dumps({
+                    "level": "log",
+                    "message": decoded,
+                }) + "\n"
         
         await process.wait()
         
@@ -170,7 +286,7 @@ async def _run_update_stream():
             yield json.dumps({
                 "level": "complete",
                 "success": True,
-                "message": "Update completed successfully!",
+                "message": "Update completed successfully! Services will restart.",
             }) + "\n"
         else:
             yield json.dumps({
@@ -178,11 +294,23 @@ async def _run_update_stream():
                 "success": False,
                 "message": f"Update failed with exit code {process.returncode}",
             }) + "\n"
+            
+    except asyncio.CancelledError:
+        yield json.dumps({
+            "level": "warn",
+            "message": "Update cancelled",
+        }) + "\n"
+    except PermissionError:
+        yield json.dumps({
+            "level": "error",
+            "success": False,
+            "message": "Permission denied. Run update manually with sudo:\nsudo bash " + (script_path or "update.sh"),
+        }) + "\n"
     except Exception as e:
         yield json.dumps({
             "level": "error",
             "success": False,
-            "message": str(e),
+            "message": f"Update error: {str(e)}",
         }) + "\n"
 
 
@@ -195,6 +323,11 @@ async def perform_update(
     return StreamingResponse(
         _run_update_stream(),
         media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Disable nginx buffering
+        }
     )
 
 
@@ -232,8 +365,10 @@ async def set_api_key(
     _runtime_config["api_key"] = request.api_key
     
     # Try to persist to .env file
+    install_dir = _find_install_dir()
+    env_file = os.path.join(install_dir, ".env")
+    
     try:
-        env_file = "/opt/ctf-compass/.env"
         if os.path.exists(env_file):
             with open(env_file, "r") as f:
                 lines = f.readlines()

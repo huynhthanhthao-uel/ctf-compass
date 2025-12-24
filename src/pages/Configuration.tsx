@@ -87,7 +87,9 @@ interface UpdateStatus {
   hasUpdate: boolean;
   currentVersion: string;
   latestVersion: string;
+  commitsBehind: number;
   error: string | null;
+  success: boolean | null;
 }
 
 // Check if backend is available (must return JSON, not HTML)
@@ -139,7 +141,9 @@ export default function Configuration() {
     hasUpdate: false,
     currentVersion: 'unknown',
     latestVersion: 'unknown',
+    commitsBehind: 0,
     error: null,
+    success: null,
   });
 
   // Check backend and load config on mount
@@ -221,10 +225,17 @@ export default function Configuration() {
           hasUpdate: data.updates_available,
           currentVersion: data.current_version,
           latestVersion: data.latest_version,
+          commitsBehind: data.commits_behind || 0,
+          error: data.error || null,
         }));
         return;
-      } catch {
-        // Fall through to fallback
+      } catch (err) {
+        setUpdateStatus(prev => ({
+          ...prev,
+          isChecking: false,
+          error: err instanceof Error ? err.message : 'Failed to check for updates',
+        }));
+        return;
       }
     }
     
@@ -236,7 +247,8 @@ export default function Configuration() {
       currentVersion: 'local-dev',
       latestVersion: 'local-dev',
       hasUpdate: false,
-      error: isBackendConnected ? null : 'Backend not connected. API key and settings stored locally.',
+      commitsBehind: 0,
+      error: 'Backend not connected. Run update script manually on server.',
     }));
   };
   
@@ -246,9 +258,10 @@ export default function Configuration() {
       ...prev, 
       isUpdating: true, 
       progress: 0, 
-      step: 'Initializing...', 
+      step: 'Initializing update...', 
       logs: [],
-      error: null 
+      error: null,
+      success: null,
     }));
     
     const addLog = (message: string) => {
@@ -260,58 +273,129 @@ export default function Configuration() {
     
     if (isBackendConnected) {
       try {
+        addLog('Connecting to update service...');
         const response = await api.performUpdate();
         
-        if (response.ok && response.body) {
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(errorText || `HTTP ${response.status}`);
+        }
+        
+        if (response.body) {
           const reader = response.body.getReader();
           const decoder = new TextDecoder();
+          let buffer = '';
+          let stepCount = 0;
+          let hasError = false;
+          let updateSuccess = false;
           
           while (true) {
             const { done, value } = await reader.read();
             if (done) break;
             
-            const text = decoder.decode(value);
-            const lines = text.split('\n').filter(Boolean);
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || ''; // Keep incomplete line in buffer
             
             for (const line of lines) {
+              if (!line.trim()) continue;
+              
               try {
                 const data = JSON.parse(line);
+                const message = data.message || line;
+                
+                // Update progress based on level
                 if (data.level === 'step') {
+                  stepCount++;
+                  const total = data.total || 6;
+                  const progress = Math.min(95, Math.round((stepCount / total) * 100));
                   setUpdateStatus(prev => ({
                     ...prev,
-                    step: data.message,
-                    progress: prev.progress + 15,
+                    step: message,
+                    progress,
                   }));
+                } else if (data.level === 'complete') {
+                  updateSuccess = data.success !== false;
+                  setUpdateStatus(prev => ({
+                    ...prev,
+                    progress: 100,
+                    step: message,
+                    success: updateSuccess,
+                  }));
+                } else if (data.level === 'error') {
+                  hasError = true;
+                  setUpdateStatus(prev => ({
+                    ...prev,
+                    error: message,
+                    success: false,
+                  }));
+                } else if (data.level === 'warn') {
+                  addLog(`⚠️ ${message}`);
+                  continue; // Don't add again below
                 }
-                addLog(data.message);
+                
+                addLog(message);
               } catch {
+                // Plain text line
                 addLog(line);
               }
+            }
+          }
+          
+          // Process remaining buffer
+          if (buffer.trim()) {
+            try {
+              const data = JSON.parse(buffer);
+              addLog(data.message || buffer);
+            } catch {
+              addLog(buffer);
             }
           }
           
           setUpdateStatus(prev => ({
             ...prev,
             isUpdating: false,
-            progress: 100,
-            step: 'Update complete!',
             hasUpdate: false,
           }));
           
-          toast({
-            title: 'Update Complete',
-            description: 'System has been updated successfully. Refreshing...',
-          });
-          
-          setTimeout(() => window.location.reload(), 2000);
+          if (updateSuccess && !hasError) {
+            toast({
+              title: 'Update Complete',
+              description: 'System updated successfully. Page will reload...',
+            });
+            
+            // Wait longer for services to restart
+            setTimeout(() => window.location.reload(), 5000);
+          } else if (hasError) {
+            toast({
+              title: 'Update Failed',
+              description: 'Check the logs for details.',
+              variant: 'destructive',
+            });
+          }
           return;
         }
-      } catch {
-        // Fall through to demo mode
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'Connection failed';
+        addLog(`❌ Error: ${errorMsg}`);
+        setUpdateStatus(prev => ({
+          ...prev,
+          isUpdating: false,
+          error: errorMsg,
+          success: false,
+        }));
+        
+        toast({
+          title: 'Update Failed',
+          description: errorMsg,
+          variant: 'destructive',
+        });
+        return;
       }
     }
     
     // Demo mode simulation
+    addLog('Backend not connected - running demo simulation...');
     const steps = [
       { step: 'Step 1/6: Backing up configuration...', progress: 10 },
       { step: 'Step 2/6: Pulling latest from GitHub...', progress: 25 },
@@ -331,13 +415,14 @@ export default function Configuration() {
       ...prev,
       isUpdating: false,
       progress: 100,
-      step: 'Demo complete - Run script manually on server',
-      error: 'Backend API not available. Run update script manually:\n\nsudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh',
+      step: 'Demo complete',
+      error: 'This is a demo. To update the real system, run:\n\nsudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh',
+      success: false,
     }));
     
     toast({
       title: 'Manual Update Required',
-      description: 'Run update.sh script on your server',
+      description: 'Run the update script on your server.',
       variant: 'destructive',
     });
   };
