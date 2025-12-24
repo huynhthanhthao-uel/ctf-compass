@@ -12,7 +12,10 @@ import {
   ChevronDown,
   ChevronRight,
   Sparkles,
-  Zap
+  Zap,
+  Cpu,
+  Lightbulb,
+  Target
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -21,7 +24,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
-import { getMultiFileSuggestions, detectFlags, getFileCategory } from '@/lib/ctf-tools';
+import { detectFlags } from '@/lib/ctf-tools';
 import * as api from '@/lib/api';
 
 interface AnalysisStep {
@@ -36,9 +39,18 @@ interface AnalysisStep {
   nextSteps?: string[];
 }
 
+interface AIInsight {
+  analysis: string;
+  category: string;
+  confidence: number;
+  findings: string[];
+  isRuleBased: boolean;
+}
+
 interface AutopilotPanelProps {
   jobId: string;
   files: string[];
+  description?: string;
   expectedFormat?: string;
   onFlagFound?: (flag: string) => void;
 }
@@ -46,21 +58,24 @@ interface AutopilotPanelProps {
 export function AutopilotPanel({ 
   jobId, 
   files, 
-  expectedFormat,
+  description = "",
+  expectedFormat = "CTF{...}",
   onFlagFound 
 }: AutopilotPanelProps) {
   const [isRunning, setIsRunning] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [steps, setSteps] = useState<AnalysisStep[]>([]);
-  const [currentStep, setCurrentStep] = useState(0);
   const [foundFlags, setFoundFlags] = useState<string[]>([]);
   const [analysisPhase, setAnalysisPhase] = useState<string>('idle');
   const [expandedSteps, setExpandedSteps] = useState<Set<string>>(new Set());
   const [totalAttempts, setTotalAttempts] = useState(0);
-  const [maxAttempts] = useState(50); // Safety limit
+  const [maxAttempts] = useState(100); // Increased for AI-driven analysis
+  const [aiInsight, setAiInsight] = useState<AIInsight | null>(null);
+  const [detectedCategory, setDetectedCategory] = useState<string>('unknown');
   
   const abortRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const commandHistoryRef = useRef<api.CommandOutput[]>([]);
 
   // Auto-scroll to latest step
   useEffect(() => {
@@ -83,12 +98,11 @@ export function AutopilotPanel({
     setSteps(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
   }, []);
 
-  // Execute a command and analyze results
-  const executeAndAnalyze = useCallback(async (
-    command: string,
+  // Execute a command in sandbox
+  const executeCommand = useCallback(async (
     tool: string,
     args: string[]
-  ): Promise<{ output: string; flags: string[]; error?: string }> => {
+  ): Promise<{ output: string; flags: string[]; error?: string; exitCode: number }> => {
     try {
       const result = await api.executeTerminalCommand(jobId, tool, args);
       const output = result.stdout || '';
@@ -97,157 +111,222 @@ export function AutopilotPanel({
       // Detect flags in output
       const flags = detectFlags(output);
       
-      return { output, flags, error };
+      // Store in history for AI context
+      commandHistoryRef.current.push({
+        tool,
+        args,
+        stdout: output,
+        stderr: error || '',
+        exit_code: result.exit_code,
+      });
+      
+      // Keep last 20 commands for context
+      if (commandHistoryRef.current.length > 20) {
+        commandHistoryRef.current = commandHistoryRef.current.slice(-20);
+      }
+      
+      return { output, flags, error, exitCode: result.exit_code };
     } catch (err) {
       return { 
         output: '', 
         flags: [], 
-        error: err instanceof Error ? err.message : 'Command failed' 
+        error: err instanceof Error ? err.message : 'Command failed',
+        exitCode: -1,
       };
     }
   }, [jobId]);
 
-  // Generate next commands based on file analysis and previous results
-  const generateNextCommands = useCallback((
-    fileCategories: Record<string, string[]>,
-    previousOutputs: string[],
-    attemptCount: number
-  ): { tool: string; args: string[]; reason: string }[] => {
-    const commands: { tool: string; args: string[]; reason: string }[] = [];
+  // Initial reconnaissance to detect category
+  const runReconnaissance = useCallback(async (): Promise<{
+    category: string;
+    confidence: number;
+    fileOutputs: Record<string, string>;
+    stringsOutputs: Record<string, string>;
+  }> => {
+    const fileOutputs: Record<string, string> = {};
+    const stringsOutputs: Record<string, string> = {};
     
-    // Phase 1: Initial reconnaissance (attempts 0-5)
-    if (attemptCount < 5) {
-      // Basic file analysis
-      files.forEach(file => {
-        if (attemptCount === 0) {
-          commands.push({ tool: 'file', args: [file], reason: 'Identify file type' });
-        }
+    setAnalysisPhase('🔍 Running initial reconnaissance...');
+    
+    for (const file of files.slice(0, 5)) { // Limit to first 5 files
+      if (abortRef.current) break;
+      
+      // Run file command
+      const stepId = addStep({
+        command: `file ${file}`,
+        status: 'running',
+        aiAnalysis: 'Identifying file type',
       });
       
-      // Strings extraction
-      if (attemptCount === 1) {
-        files.forEach(file => {
-          commands.push({ tool: 'strings', args: ['-n', '8', file], reason: 'Extract readable strings' });
-        });
+      const fileResult = await executeCommand('file', [file]);
+      fileOutputs[file] = fileResult.output;
+      
+      updateStep(stepId, {
+        status: fileResult.error && !fileResult.output ? 'failed' : 'success',
+        output: fileResult.output,
+        error: fileResult.error,
+      });
+      
+      // Run strings command
+      const stringsStepId = addStep({
+        command: `strings -n 8 ${file}`,
+        status: 'running',
+        aiAnalysis: 'Extracting readable strings',
+      });
+      
+      const stringsResult = await executeCommand('strings', ['-n', '8', file]);
+      stringsOutputs[file] = stringsResult.output;
+      
+      // Check for flags in strings
+      if (stringsResult.flags.length > 0) {
+        setFoundFlags(prev => [...new Set([...prev, ...stringsResult.flags])]);
+        stringsResult.flags.forEach(flag => onFlagFound?.(flag));
       }
       
-      // Hex dump
-      if (attemptCount === 2) {
-        files.forEach(file => {
-          commands.push({ tool: 'xxd', args: ['-l', '512', file], reason: 'Check file header and structure' });
-        });
-      }
-      
-      // Metadata
-      if (attemptCount === 3) {
-        files.forEach(file => {
-          commands.push({ tool: 'exiftool', args: ['-a', '-u', file], reason: 'Extract metadata' });
-        });
-      }
-      
-      // Binwalk scan
-      if (attemptCount === 4) {
-        files.forEach(file => {
-          commands.push({ tool: 'binwalk', args: [file], reason: 'Scan for embedded files' });
-        });
-      }
+      updateStep(stringsStepId, {
+        status: stringsResult.error && !stringsResult.output ? 'failed' : 'success',
+        output: stringsResult.output,
+        error: stringsResult.error,
+        flagsFound: stringsResult.flags,
+      });
     }
     
-    // Phase 2: Category-specific analysis (attempts 5-20)
-    else if (attemptCount < 20) {
-      for (const [category, categoryFiles] of Object.entries(fileCategories)) {
-        const suggestions = getMultiFileSuggestions(categoryFiles);
-        const stepIndex = attemptCount - 5;
-        
-        if (stepIndex < suggestions.length) {
-          const suggestion = suggestions[stepIndex];
-          commands.push({
-            tool: suggestion.tool,
-            args: suggestion.args,
-            reason: suggestion.description,
-          });
-        }
-      }
+    // Detect category using AI
+    setAnalysisPhase('🧠 AI analyzing file types...');
+    try {
+      const categoryResult = await api.detectCategory(files, fileOutputs, stringsOutputs);
+      return {
+        category: categoryResult.category,
+        confidence: categoryResult.confidence,
+        fileOutputs,
+        stringsOutputs,
+      };
+    } catch {
+      // Fallback detection
+      return {
+        category: 'misc',
+        confidence: 0.3,
+        fileOutputs,
+        stringsOutputs,
+      };
     }
-    
-    // Phase 3: Deep analysis and extraction (attempts 20-35)
-    else if (attemptCount < 35) {
-      // Try extraction tools
-      const extractionCommands = [
-        { tool: 'binwalk', args: ['-e', '-M', files[0]], reason: 'Deep recursive extraction' },
-        { tool: 'foremost', args: ['-v', '-i', files[0]], reason: 'File carving' },
-        { tool: 'steghide', args: ['extract', '-sf', files[0], '-p', ''], reason: 'Steghide with empty password' },
-        { tool: 'zsteg', args: ['-a', files[0]], reason: 'LSB analysis' },
-        { tool: 'strings', args: ['-e', 'l', files[0]], reason: 'Unicode strings (little-endian)' },
-        { tool: 'strings', args: ['-e', 'b', files[0]], reason: 'Unicode strings (big-endian)' },
-      ];
-      
-      const idx = attemptCount - 20;
-      if (idx < extractionCommands.length) {
-        commands.push(extractionCommands[idx]);
-      }
-    }
-    
-    // Phase 4: Encoding/Decoding attempts (attempts 35-50)
-    else {
-      const decodingCommands = [
-        { tool: 'base64', args: ['-d', files[0]], reason: 'Base64 decode' },
-        { tool: 'base32', args: ['-d', files[0]], reason: 'Base32 decode' },
-        { tool: 'xxd', args: ['-r', '-p', files[0]], reason: 'Hex decode' },
-        { tool: 'grep', args: ['-aoE', '[A-Z]+\\{[^}]+\\}', files[0]], reason: 'Grep for flag pattern' },
-      ];
-      
-      const idx = attemptCount - 35;
-      if (idx < decodingCommands.length) {
-        commands.push(decodingCommands[idx]);
-      }
-    }
-    
-    return commands;
-  }, [files]);
+  }, [files, addStep, updateStep, executeCommand, onFlagFound]);
 
-  // Main autopilot loop
+  // Get AI suggestions for next commands
+  const getAISuggestions = useCallback(async (
+    attemptNumber: number,
+    currentCategory: string
+  ): Promise<api.AIAnalysisResponse | null> => {
+    try {
+      const response = await api.analyzeWithAI(
+        jobId,
+        files,
+        commandHistoryRef.current,
+        description,
+        expectedFormat,
+        currentCategory,
+        attemptNumber
+      );
+      
+      // Update AI insight display
+      setAiInsight({
+        analysis: response.analysis,
+        category: response.category,
+        confidence: response.confidence,
+        findings: response.findings,
+        isRuleBased: response.rule_based,
+      });
+      
+      // Check for AI-found flag candidates
+      if (response.flag_candidates.length > 0) {
+        setFoundFlags(prev => [...new Set([...prev, ...response.flag_candidates])]);
+        response.flag_candidates.forEach(flag => onFlagFound?.(flag));
+      }
+      
+      return response;
+    } catch (err) {
+      console.error('AI analysis failed:', err);
+      return null;
+    }
+  }, [jobId, files, description, expectedFormat, onFlagFound]);
+
+  // Main autopilot loop with AI integration
   const runAutopilot = useCallback(async () => {
     setIsRunning(true);
     setIsPaused(false);
     abortRef.current = false;
-    setAnalysisPhase('Starting analysis...');
+    commandHistoryRef.current = [];
     
-    // Group files by category
-    const fileCategories: Record<string, string[]> = {};
-    files.forEach(file => {
-      const cat = getFileCategory(file);
-      if (!fileCategories[cat]) fileCategories[cat] = [];
-      fileCategories[cat].push(file);
-    });
+    // Phase 1: Reconnaissance
+    setAnalysisPhase('Phase 1: Reconnaissance');
+    const recon = await runReconnaissance();
     
-    const previousOutputs: string[] = [];
-    let localFoundFlags: string[] = [];
+    if (abortRef.current) {
+      setIsRunning(false);
+      return;
+    }
+    
+    setDetectedCategory(recon.category);
+    
+    // Check if we already found flags
+    if (foundFlags.length > 0) {
+      setAnalysisPhase(`🎉 FLAG FOUND during reconnaissance!`);
+      setIsRunning(false);
+      return;
+    }
+    
+    // Phase 2: AI-Driven Analysis Loop
+    setAnalysisPhase(`Phase 2: AI Analysis (${recon.category} detected)`);
+    
     let attempts = 0;
+    let currentCategory = recon.category;
+    let localFoundFlags: string[] = [];
     
     while (!abortRef.current && attempts < maxAttempts && localFoundFlags.length === 0) {
       // Check if paused
-      if (isPaused) {
+      while (isPaused && !abortRef.current) {
         await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      
+      if (abortRef.current) break;
+      
+      setTotalAttempts(attempts + 1);
+      setAnalysisPhase(`🧠 AI analyzing... (attempt ${attempts + 1})`);
+      
+      // Get AI suggestions
+      const aiResponse = await getAISuggestions(attempts + 1, currentCategory);
+      
+      if (!aiResponse) {
+        setAnalysisPhase('AI unavailable, using fallback strategies');
+        attempts++;
         continue;
       }
       
-      setTotalAttempts(attempts + 1);
+      // Update category if AI detected different
+      if (aiResponse.category !== 'unknown') {
+        currentCategory = aiResponse.category;
+        setDetectedCategory(currentCategory);
+      }
       
-      // Get next commands to try
-      const nextCommands = generateNextCommands(fileCategories, previousOutputs, attempts);
-      
-      if (nextCommands.length === 0) {
-        setAnalysisPhase('No more strategies to try');
+      // Check if AI says to stop
+      if (!aiResponse.should_continue && aiResponse.flag_candidates.length === 0) {
+        setAnalysisPhase('AI recommends stopping - no more strategies');
         break;
       }
       
-      // Execute each command
-      for (const cmd of nextCommands) {
+      // Execute AI-suggested commands
+      const commands = aiResponse.next_commands;
+      
+      if (commands.length === 0) {
+        setAnalysisPhase('No more commands to try');
+        break;
+      }
+      
+      for (const cmd of commands) {
         if (abortRef.current || localFoundFlags.length > 0) break;
         
         const commandStr = `${cmd.tool} ${cmd.args.join(' ')}`;
-        setAnalysisPhase(`Trying: ${cmd.reason}`);
+        setAnalysisPhase(`💻 ${cmd.reason}`);
         
         const stepId = addStep({
           command: commandStr,
@@ -256,7 +335,7 @@ export function AutopilotPanel({
         });
         
         const startTime = Date.now();
-        const result = await executeAndAnalyze(commandStr, cmd.tool, cmd.args);
+        const result = await executeCommand(cmd.tool, cmd.args);
         const duration = Date.now() - startTime;
         
         // Check for flags
@@ -272,15 +351,11 @@ export function AutopilotPanel({
             duration,
           });
           
-          result.flags.forEach(flag => {
-            onFlagFound?.(flag);
-          });
-          
+          result.flags.forEach(flag => onFlagFound?.(flag));
           setAnalysisPhase(`🎉 FLAG FOUND: ${result.flags.join(', ')}`);
           break;
         }
         
-        // Update step
         updateStep(stepId, {
           status: result.error && !result.output ? 'failed' : 'success',
           output: result.output,
@@ -288,33 +363,26 @@ export function AutopilotPanel({
           duration,
         });
         
-        // Store output for context
-        if (result.output) {
-          previousOutputs.push(result.output.slice(0, 1000));
-        }
-        
         // Small delay between commands
-        await new Promise(resolve => setTimeout(resolve, 200));
+        await new Promise(resolve => setTimeout(resolve, 300));
       }
       
       attempts++;
+      
+      // Pause between AI iterations
+      await new Promise(resolve => setTimeout(resolve, 500));
     }
     
     if (localFoundFlags.length === 0 && !abortRef.current) {
-      setAnalysisPhase('Analysis complete - no flags found automatically. Try manual analysis.');
+      setAnalysisPhase('Analysis complete - try manual investigation');
     }
     
     setIsRunning(false);
-  }, [files, isPaused, maxAttempts, addStep, updateStep, executeAndAnalyze, generateNextCommands, onFlagFound]);
+  }, [files, isPaused, maxAttempts, foundFlags.length, addStep, updateStep, executeCommand, onFlagFound, runReconnaissance, getAISuggestions]);
 
-  const handlePause = () => {
-    setIsPaused(true);
-  };
-
-  const handleResume = () => {
-    setIsPaused(false);
-  };
-
+  const handlePause = () => setIsPaused(true);
+  const handleResume = () => setIsPaused(false);
+  
   const handleStop = () => {
     abortRef.current = true;
     setIsRunning(false);
@@ -327,6 +395,9 @@ export function AutopilotPanel({
     setFoundFlags([]);
     setTotalAttempts(0);
     setAnalysisPhase('idle');
+    setAiInsight(null);
+    setDetectedCategory('unknown');
+    commandHistoryRef.current = [];
   };
 
   const toggleStep = (id: string) => {
@@ -356,12 +427,18 @@ export function AutopilotPanel({
                   Running
                 </Badge>
               )}
+              {detectedCategory !== 'unknown' && (
+                <Badge variant="outline" className="capitalize">
+                  <Target className="h-3 w-3 mr-1" />
+                  {detectedCategory}
+                </Badge>
+              )}
             </div>
             <div className="flex items-center gap-2">
               {!isRunning ? (
                 <Button onClick={runAutopilot} disabled={files.length === 0}>
                   <Zap className="h-4 w-4 mr-2" />
-                  Start Autopilot
+                  Start AI Analysis
                 </Button>
               ) : (
                 <>
@@ -396,6 +473,35 @@ export function AutopilotPanel({
             </div>
             <Progress value={(totalAttempts / maxAttempts) * 100} className="h-2" />
           </div>
+          
+          {/* AI Insight Panel */}
+          {aiInsight && (
+            <div className="mt-4 p-3 rounded-lg bg-muted/50 border">
+              <div className="flex items-center gap-2 mb-2">
+                <Cpu className="h-4 w-4 text-primary" />
+                <span className="font-medium text-sm">
+                  AI Analysis {aiInsight.isRuleBased && <Badge variant="outline" className="ml-2 text-xs">Rule-based</Badge>}
+                </span>
+                <Badge variant="secondary" className="ml-auto text-xs">
+                  {Math.round(aiInsight.confidence * 100)}% confident
+                </Badge>
+              </div>
+              <p className="text-sm text-muted-foreground mb-2">{aiInsight.analysis}</p>
+              {aiInsight.findings.length > 0 && (
+                <div className="mt-2">
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
+                    <Lightbulb className="h-3 w-3" />
+                    Findings:
+                  </div>
+                  <ul className="text-xs space-y-1">
+                    {aiInsight.findings.slice(0, 3).map((finding, i) => (
+                      <li key={i} className="text-muted-foreground">• {finding}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
           
           {/* Found Flags */}
           {foundFlags.length > 0 && (
@@ -485,8 +591,9 @@ export function AutopilotPanel({
                     <CollapsibleContent>
                       <div className="ml-10 mr-2 mb-2 space-y-2">
                         {step.aiAnalysis && (
-                          <div className="text-xs text-muted-foreground italic">
-                            💡 {step.aiAnalysis}
+                          <div className="text-xs text-muted-foreground italic flex items-center gap-1">
+                            <Brain className="h-3 w-3" />
+                            {step.aiAnalysis}
                           </div>
                         )}
                         
@@ -500,17 +607,17 @@ export function AutopilotPanel({
                         )}
                         
                         {step.error && (
-                          <div className="text-xs text-warning bg-warning/10 rounded p-2">
+                          <div className="text-xs text-warning bg-warning/10 p-2 rounded">
                             {step.error}
                           </div>
                         )}
                         
                         {step.flagsFound?.length ? (
-                          <div className="space-y-1">
+                          <div className="flex flex-wrap gap-1">
                             {step.flagsFound.map((flag, i) => (
-                              <code key={i} className="block px-2 py-1 bg-success/20 text-success rounded font-mono text-sm">
-                                🚩 {flag}
-                              </code>
+                              <Badge key={i} className="bg-success font-mono text-xs">
+                                {flag}
+                              </Badge>
                             ))}
                           </div>
                         ) : null}

@@ -7,7 +7,7 @@ import asyncio
 from app.config import settings
 from app.middleware.security import SecurityHeadersMiddleware
 from app.middleware.rate_limit import RateLimitMiddleware
-from app.routers import auth, jobs, config, health, system
+from app.routers import auth, jobs, config, health, system, ai
 from app.routers import ws as ws_router
 from app.database import engine
 from app.models import Base
@@ -71,6 +71,7 @@ app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(jobs.router, prefix="/api/jobs", tags=["Jobs"])
 app.include_router(config.router, prefix="/api/config", tags=["Configuration"])
 app.include_router(system.router, prefix="/api/system", tags=["System"])
+app.include_router(ai.router, prefix="/api", tags=["AI Analysis"])
 
 # WebSocket Router
 app.include_router(ws_router.router, prefix="/ws", tags=["WebSocket"])
