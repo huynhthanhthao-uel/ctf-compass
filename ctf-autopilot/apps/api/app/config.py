@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings
-from typing import List
+from pydantic import Field
+from typing import List, Optional
 import secrets
 
 
@@ -7,13 +8,13 @@ class Settings(BaseSettings):
     # Core
     environment: str = "production"
     debug: bool = False
-    secret_key: str = secrets.token_urlsafe(32)
+    secret_key: str = Field(default_factory=lambda: secrets.token_urlsafe(32))
     
-    # Database
+    # Database - defaults allow container to start for health checks
     postgres_host: str = "postgres"
     postgres_port: int = 5432
     postgres_user: str = "ctfautopilot"
-    postgres_password: str
+    postgres_password: str = "ctfautopilot"  # Default for dev, override in production
     postgres_db: str = "ctfautopilot"
     
     @property
@@ -30,14 +31,18 @@ class Settings(BaseSettings):
         auth = f":{self.redis_password}@" if self.redis_password else ""
         return f"redis://{auth}{self.redis_host}:{self.redis_port}/0"
     
-    # Auth
-    admin_password: str
+    # Auth - default for dev, MUST override in production
+    admin_password: str = "changeme"
     session_timeout_seconds: int = 3600
     
-    # MegaLLM - https://ai.megallm.io/v1
-    megallm_api_key: str
+    # MegaLLM - optional, features disabled if not set
+    megallm_api_key: Optional[str] = None
     megallm_api_url: str = "https://ai.megallm.io/v1/chat/completions"
-    megallm_model: str = "llama3.3-70b-instruct"  # Free tier: use open-source models
+    megallm_model: str = "llama3.3-70b-instruct"
+    
+    @property
+    def llm_enabled(self) -> bool:
+        return bool(self.megallm_api_key)
     
     # Upload
     max_upload_size_mb: int = 200
@@ -68,8 +73,8 @@ class Settings(BaseSettings):
     def runs_dir(self) -> str:
         return f"{self.data_dir}/runs"
     
-    # CORS
-    cors_origins: List[str] = ["http://localhost:3000"]
+    # CORS - allow all origins by default for development
+    cors_origins: List[str] = ["*"]
     
     # TLS
     enable_tls: bool = False
@@ -77,6 +82,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
+        extra = "ignore"  # Ignore extra env vars to prevent startup failures
 
 
 settings = Settings()

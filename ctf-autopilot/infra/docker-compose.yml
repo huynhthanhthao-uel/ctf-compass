@@ -64,16 +64,16 @@ services:
     environment:
       - ENVIRONMENT=${ENVIRONMENT:-production}
       - DEBUG=${DEBUG:-false}
-      - SECRET_KEY=${SECRET_KEY}
+      - SECRET_KEY=${SECRET_KEY:-ctf-compass-secret-key-change-in-production}
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
       - POSTGRES_USER=${POSTGRES_USER:-ctfautopilot}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-ctfautopilot}
       - POSTGRES_DB=${POSTGRES_DB:-ctfautopilot}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD:-}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-changeme}
       - MEGALLM_API_KEY=${MEGALLM_API_KEY:-}
       - MEGALLM_MODEL=${MEGALLM_MODEL:-llama3.3-70b-instruct}
       - MAX_UPLOAD_SIZE_MB=${MAX_UPLOAD_SIZE_MB:-200}
@@ -117,15 +117,16 @@ services:
     environment:
       - ENVIRONMENT=${ENVIRONMENT:-production}
       - DEBUG=${DEBUG:-false}
-      - SECRET_KEY=${SECRET_KEY}
+      - SECRET_KEY=${SECRET_KEY:-ctf-compass-secret-key-change-in-production}
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
       - POSTGRES_USER=${POSTGRES_USER:-ctfautopilot}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-ctfautopilot}
       - POSTGRES_DB=${POSTGRES_DB:-ctfautopilot}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-changeme}
       - MEGALLM_API_KEY=${MEGALLM_API_KEY:-}
       - MEGALLM_MODEL=${MEGALLM_MODEL:-llama3.3-70b-instruct}
       - SANDBOX_TIMEOUT_SECONDS=${SANDBOX_TIMEOUT_SECONDS:-60}
