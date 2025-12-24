@@ -198,7 +198,79 @@ export const mockJobDetail: JobDetail = {
 
 export const mockConfig: Config = {
   maxUploadSizeMb: 200,
-  allowedExtensions: ['.txt', '.py', '.c', '.cpp', '.h', '.java', '.js', '.json', '.xml', '.html', '.css', '.md', '.pdf', '.png', '.jpg', '.jpeg', '.gif', '.zip', '.tar', '.gz', '.pcap', '.pcapng', '.elf', '.exe', '.dll', '.so', '.bin'],
-  sandboxTimeout: 60,
-  allowedTools: ['strings', 'file', 'exiftool', 'binwalk', 'pdfinfo', 'pdftotext', 'tshark', 'readelf', 'objdump', 'xxd'],
+  allowedExtensions: ['.txt', '.py', '.c', '.cpp', '.h', '.java', '.js', '.json', '.xml', '.html', '.css', '.md', '.pdf', '.png', '.jpg', '.jpeg', '.gif', '.zip', '.tar', '.gz', '.pcap', '.pcapng', '.elf', '.exe', '.dll', '.so', '.bin', '.wav', '.mp3', '.pem', '.key', '.mem', '.raw'],
+  sandboxTimeout: 300,
+  allowedTools: [
+    // === Core Analysis ===
+    'file', 'strings', 'xxd', 'hexdump', 'od',
+    
+    // === Binary/RE Tools ===
+    'readelf', 'objdump', 'nm', 'ldd', 'checksec',
+    'radare2', 'r2', 'rabin2', 'rahash2', 'rafind2',
+    'gdb', 'ltrace', 'strace',
+    'retdec-decompiler', 'ghidra-headless',
+    'ropper', 'ROPgadget', 'one_gadget',
+    'patchelf', 'upx',
+    
+    // === Crypto Tools ===
+    'openssl', 'gpg', 'hashcat', 'john', 'hash-identifier',
+    'base64', 'base32', 'name-that-hash',
+    'factordb-cli', 'rsatool', 'RsaCtfTool',
+    'xortool', 'ciphey',
+    
+    // === Steganography Tools ===
+    'exiftool', 'binwalk', 'foremost', 'scalpel',
+    'steghide', 'stegseek', 'stegsolve', 'zsteg', 'stegcracker',
+    'pngcheck', 'pngchunks', 'identify', 'convert',
+    'sox', 'ffmpeg', 'ffprobe', 'audacity-cli',
+    
+    // === Network Tools ===
+    'tshark', 'tcpdump', 'nmap', 'masscan',
+    'netcat', 'nc', 'socat', 'curl', 'wget',
+    'dnsrecon', 'dig', 'host', 'whois',
+    'sslyze', 'sslscan',
+    
+    // === Web Tools ===
+    'sqlmap', 'nikto', 'gobuster', 'dirb', 'dirbuster',
+    'wfuzz', 'ffuf', 'hydra',
+    'jwt_tool', 'jwt-cracker',
+    
+    // === Forensics Tools ===
+    'volatility', 'volatility3', 'vol3',
+    'sleuthkit', 'fls', 'icat', 'mmls', 'fsstat',
+    'autopsy', 'photorec', 'testdisk',
+    'bulk_extractor', 'pdf-parser', 'pdftotext', 'pdfinfo', 'pdfimages',
+    
+    // === Archive Tools ===
+    'unzip', 'zip', 'tar', 'gzip', 'gunzip', 'bzip2',
+    '7z', '7za', 'unrar', 'rar',
+    'fcrackzip', 'zip2john', 'rar2john',
+    
+    // === Code Execution (Sandboxed) ===
+    'python3', 'python', 'pip3', 'pip',
+    'node', 'npm', 'npx',
+    'ruby', 'perl', 'php',
+    'gcc', 'g++', 'clang', 'make', 'cmake',
+    'go', 'rustc', 'cargo',
+    'java', 'javac',
+    
+    // === Scripting/Utils ===
+    'bash', 'sh', 'zsh',
+    'grep', 'egrep', 'awk', 'sed', 'cut', 'sort', 'uniq',
+    'find', 'locate', 'xargs', 'tee',
+    'cat', 'head', 'tail', 'less', 'more',
+    'wc', 'diff', 'cmp', 'md5sum', 'sha256sum', 'sha1sum',
+    'tr', 'rev', 'fold', 'column',
+    
+    // === PWN Tools ===
+    'pwntools', 'pwn', 'checksec', 'cyclic', 'shellcraft',
+    'msfvenom', 'msfconsole',
+    'ropgadget', 'ropper',
+    
+    // === Misc CTF Tools ===
+    'qpdf', 'pdftk',
+    'tesseract', 'ocrmypdf',
+    'morse', 'morse2ascii',
+    'figlet', 'toilet',
+  ],
 };
