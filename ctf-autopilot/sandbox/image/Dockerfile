@@ -23,6 +23,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     binwalk \
     file \
     elfutils \
+    patchelf \
     # Hex/Binary viewing
     xxd \
     bsdmainutils \
@@ -39,6 +40,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     imagemagick \
     steghide \
     foremost \
+    pngcheck \
+    pngcrush \
+    optipng \
     # Network analysis
     tshark \
     tcpdump \
@@ -52,10 +56,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tar \
     unrar \
     cabextract \
+    fcrackzip \
     # Scripting runtimes
     python3 \
     python3-pip \
     python3-venv \
+    python3-dev \
+    build-essential \
+    cmake \
+    git \
     # Crypto tools
     openssl \
     john \
@@ -67,12 +76,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Audio/Video analysis
     sox \
     ffmpeg \
+    libsox-fmt-all \
     # Memory/Disk forensics
     testdisk \
     # Reverse engineering
     radare2 \
     # Debugging tools
     gdb \
+    gdb-multiarch \
     ltrace \
     strace \
     # Additional utilities
@@ -83,26 +94,54 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     wget \
     libxml2-utils \
+    # Required for some Python packages
+    libffi-dev \
+    libssl-dev \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
+# Install RetDec decompiler
+RUN mkdir -p /opt/retdec && cd /opt/retdec \
+    && curl -LO https://github.com/avast/retdec/releases/download/v5.0/RetDec-v5.0-Linux-Release.tar.xz \
+    && tar -xf RetDec-v5.0-Linux-Release.tar.xz \
+    && rm RetDec-v5.0-Linux-Release.tar.xz \
+    && ln -s /opt/retdec/retdec/bin/retdec-decompiler /usr/local/bin/retdec-decompiler \
+    && ln -s /opt/retdec/retdec/bin/retdec-fileinfo /usr/local/bin/retdec-fileinfo \
+    && ln -s /opt/retdec/retdec/bin/retdec-unpacker /usr/local/bin/retdec-unpacker
+
+# Install checksec
+RUN curl -Lo /usr/local/bin/checksec https://raw.githubusercontent.com/slimm609/checksec.sh/master/checksec \
+    && chmod +x /usr/local/bin/checksec
+
 # Install Python analysis libraries
 RUN pip3 install --no-cache-dir --break-system-packages \
+    # Core crypto/pwn
     pycryptodome \
-    pillow \
-    pypdf2 \
     pwntools \
-    angr \
+    # Image analysis
+    pillow \
+    # PDF analysis
+    pypdf2 \
+    # Steganography
+    zsteg \
+    stegcracker \
+    # Hash identification
+    name-that-hash \
+    search-that-hash \
+    # ROP tools
+    ropper \
+    ROPgadget \
+    one_gadget \
+    # Symbolic execution (lightweight)
     z3-solver \
+    # Disassembly
     capstone \
     keystone-engine \
     unicorn \
-    ropper \
-    zsteg \
-    stegcracker \
-    name-that-hash \
-    search-that-hash \
-    fcrackzip
+    # Volatility for memory forensics
+    volatility3 \
+    # Radare2 Python bindings
+    r2pipe
 
 # Create non-root user for sandbox execution
 RUN groupadd -r sandbox && useradd -r -g sandbox -d /sandbox -s /bin/bash sandbox
