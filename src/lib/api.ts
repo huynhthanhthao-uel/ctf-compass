@@ -289,3 +289,28 @@ export interface ConfigResponse {
 export async function getConfig(): Promise<ConfigResponse> {
   return apiFetch('/config');
 }
+
+// ============ Terminal API ============
+
+export interface TerminalCommandResult {
+  exit_code: number;
+  stdout: string;
+  stderr: string;
+  error?: string;
+  duration_ms?: number;
+}
+
+export async function executeTerminalCommand(
+  jobId: string,
+  tool: string,
+  args: string[]
+): Promise<TerminalCommandResult> {
+  return apiFetch(`/jobs/${jobId}/terminal`, {
+    method: 'POST',
+    body: JSON.stringify({ tool, arguments: args }),
+  });
+}
+
+export async function getJobFiles(jobId: string): Promise<{ files: string[] }> {
+  return apiFetch(`/jobs/${jobId}/files`);
+}

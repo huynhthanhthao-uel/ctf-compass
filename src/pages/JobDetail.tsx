@@ -14,7 +14,8 @@ import {
   FileText,
   Copy,
   Wifi,
-  WifiOff
+  WifiOff,
+  TerminalSquare
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -24,8 +25,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { CommandLog } from '@/components/jobs/CommandLog';
 import { ArtifactList } from '@/components/jobs/ArtifactList';
-import { FlagCandidates } from '@/components/jobs/FlagCandidates';
+import { FlagValidator } from '@/components/jobs/FlagValidator';
 import { WriteupView } from '@/components/jobs/WriteupView';
+import { SandboxTerminal } from '@/components/jobs/SandboxTerminal';
 import { useJobDetail } from '@/hooks/use-jobs';
 import { useJobWebSocket, JobUpdate } from '@/hooks/use-websocket';
 import { cn } from '@/lib/utils';
@@ -265,6 +267,10 @@ export default function JobDetail() {
               <Terminal className="h-4 w-4" />
               Commands
             </TabsTrigger>
+            <TabsTrigger value="terminal" className="flex items-center gap-2 data-[state=active]:bg-background">
+              <TerminalSquare className="h-4 w-4" />
+              Terminal
+            </TabsTrigger>
             <TabsTrigger value="artifacts" className="flex items-center gap-2 data-[state=active]:bg-background">
               <Folder className="h-4 w-4" />
               Artifacts
@@ -290,6 +296,20 @@ export default function JobDetail() {
             </Card>
           </TabsContent>
 
+          <TabsContent value="terminal">
+            <Card>
+              <CardHeader className="border-b border-border">
+                <CardTitle className="text-base">Interactive Terminal</CardTitle>
+              </CardHeader>
+              <CardContent className="pt-4">
+                <SandboxTerminal 
+                  jobId={jobDetail.id} 
+                  files={jobDetail.inputFiles || []} 
+                />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           <TabsContent value="artifacts">
             <Card>
               <CardHeader className="border-b border-border">
@@ -307,7 +327,10 @@ export default function JobDetail() {
                 <CardTitle className="text-base">Flag Candidates</CardTitle>
               </CardHeader>
               <CardContent className="pt-4">
-                <FlagCandidates candidates={jobDetail.flagCandidates} />
+                <FlagValidator 
+                  candidates={jobDetail.flagCandidates} 
+                  expectedFormat={jobDetail.flagFormat}
+                />
               </CardContent>
             </Card>
           </TabsContent>

@@ -6,8 +6,10 @@ from typing import List, Optional
 from datetime import datetime
 from uuid import UUID
 from pathlib import Path
+from pydantic import BaseModel
 import zipfile
 import io
+import time
 
 from app.database import get_db
 from app.models import Job, Command, FlagCandidate, JobStatus
@@ -19,7 +21,22 @@ from app.schemas import (
 from app.routers.auth import get_current_session, verify_csrf
 from app.services.file_service import FileService
 from app.services.job_service import JobService
+from app.services.sandbox_service import SandboxService
 from app.tasks import run_analysis_task
+
+
+# Request/Response models for terminal
+class TerminalCommandRequest(BaseModel):
+    tool: str
+    arguments: List[str] = []
+
+
+class TerminalCommandResponse(BaseModel):
+    exit_code: int
+    stdout: str
+    stderr: str
+    error: Optional[str] = None
+    duration_ms: Optional[float] = None
 
 
 router = APIRouter()
@@ -244,3 +261,106 @@ async def download_bundle(
             "Content-Disposition": f"attachment; filename=job_{job_id}_bundle.zip"
         },
     )
+
+
+# ============ Terminal API ============
+
+@router.get("/{job_id}/files")
+async def get_job_files(
+    job_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _session = Depends(get_current_session),
+):
+    """List files available in job workspace."""
+    result = await db.execute(select(Job).where(Job.id == job_id))
+    job = result.scalar_one_or_none()
+    
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    file_service = FileService()
+    job_dir = file_service.get_job_dir(job_id)
+    
+    files = []
+    
+    # Get input files
+    input_dir = job_dir / "input"
+    if input_dir.exists():
+        for f in input_dir.iterdir():
+            if f.is_file():
+                files.append(f.name)
+    
+    # Get extracted files
+    extracted_dir = job_dir / "extracted"
+    if extracted_dir.exists():
+        for f in extracted_dir.rglob("*"):
+            if f.is_file():
+                rel_path = f.relative_to(extracted_dir)
+                files.append(f"extracted/{rel_path}")
+    
+    return {"files": files}
+
+
+@router.post("/{job_id}/terminal", response_model=TerminalCommandResponse)
+async def execute_terminal_command(
+    job_id: UUID,
+    request: TerminalCommandRequest,
+    db: AsyncSession = Depends(get_db),
+    _session = Depends(get_current_session),
+    _csrf = Depends(verify_csrf),
+):
+    """Execute a command in the sandbox terminal."""
+    # Verify job exists
+    result = await db.execute(select(Job).where(Job.id == job_id))
+    job = result.scalar_one_or_none()
+    
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    # Get working directory
+    file_service = FileService()
+    job_dir = file_service.get_job_dir(job_id)
+    
+    # Prefer extracted directory if it has files
+    extracted_dir = job_dir / "extracted"
+    input_dir = job_dir / "input"
+    
+    if extracted_dir.exists() and any(extracted_dir.iterdir()):
+        working_dir = extracted_dir
+    elif input_dir.exists():
+        working_dir = input_dir
+    else:
+        raise HTTPException(status_code=400, detail="No files found for this job")
+    
+    # Execute command
+    sandbox_service = SandboxService()
+    
+    start_time = time.time()
+    
+    try:
+        result = await sandbox_service.run_command(
+            job_id=job_id,
+            command_id=f"terminal_{int(time.time())}",
+            tool=request.tool,
+            arguments=request.arguments,
+            working_dir=working_dir,
+        )
+        
+        duration_ms = (time.time() - start_time) * 1000
+        
+        return TerminalCommandResponse(
+            exit_code=result.get("exit_code", 1),
+            stdout=result.get("stdout", ""),
+            stderr=result.get("stderr", ""),
+            error=result.get("stderr") if result.get("error") else None,
+            duration_ms=duration_ms,
+        )
+        
+    except Exception as e:
+        return TerminalCommandResponse(
+            exit_code=1,
+            stdout="",
+            stderr="",
+            error=str(e),
+            duration_ms=(time.time() - start_time) * 1000,
+        )
