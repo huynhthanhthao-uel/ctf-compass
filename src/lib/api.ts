@@ -300,19 +300,72 @@ export interface TerminalCommandResult {
   duration_ms?: number;
 }
 
+// Edge function URL for sandbox terminal (Lovable Cloud fallback)
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+
+async function executeViaEdgeFunction(
+  jobId: string,
+  tool: string,
+  args: string[]
+): Promise<TerminalCommandResult> {
+  if (!SUPABASE_URL) {
+    throw new Error('Supabase URL not configured');
+  }
+  
+  const response = await fetch(`${SUPABASE_URL}/functions/v1/sandbox-terminal`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ job_id: jobId, tool, args }),
+  });
+  
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Edge function error' }));
+    throw new Error(error.error || `HTTP ${response.status}`);
+  }
+  
+  return response.json();
+}
+
 export async function executeTerminalCommand(
   jobId: string,
   tool: string,
   args: string[]
 ): Promise<TerminalCommandResult> {
-  return apiFetch(`/jobs/${jobId}/terminal`, {
-    method: 'POST',
-    body: JSON.stringify({ tool, arguments: args }),
-  });
+  try {
+    // Try Docker backend first
+    return await apiFetch(`/jobs/${jobId}/terminal`, {
+      method: 'POST',
+      body: JSON.stringify({ tool, arguments: args }),
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : '';
+    
+    // If Docker backend not available, fallback to Lovable Cloud edge function
+    if (message.includes('Backend API not available') || message.includes('HTTP 404')) {
+      console.log('[API] Docker backend unavailable, using Lovable Cloud edge function');
+      return executeViaEdgeFunction(jobId, tool, args);
+    }
+    
+    throw err;
+  }
 }
 
 export async function getJobFiles(jobId: string): Promise<{ files: string[] }> {
-  return apiFetch(`/jobs/${jobId}/files`);
+  try {
+    return await apiFetch(`/jobs/${jobId}/files`);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : '';
+    // Return mock files for demo when backend unavailable
+    if (message.includes('Backend API not available') || message.includes('HTTP 404')) {
+      if (jobId === 'job-003') {
+        return { files: ['challenge'] };
+      }
+      return { files: [] };
+    }
+    throw err;
+  }
 }
 
 // ============ AI Analysis API ============
