@@ -546,21 +546,39 @@ start_services() {
     COMPOSE_FILE="ctf-autopilot/infra/docker-compose.yml"
     
     log_info "Building and starting containers..."
+
+    # docker compose can return non-zero if a dependency healthcheck hasn't flipped yet.
+    # We run it, then perform our own bounded wait with diagnostics.
+    set +e
     docker compose -f "$COMPOSE_FILE" up -d --build 2>&1 | tee -a "$LOG_FILE"
-    
-    log_info "Waiting for services to start (30 seconds)..."
-    sleep 30
-    
-    # Health checks
-    log_info "Running health checks..."
-    
-    if curl -sf http://localhost:8000/api/health > /dev/null 2>&1; then
-        log_success "  API: Healthy"
-    else
-        log_warn "  API: Starting..."
+    COMPOSE_EXIT=${PIPESTATUS[0]}
+    set -e
+
+    if [[ $COMPOSE_EXIT -ne 0 ]]; then
+        log_warn "docker compose reported an error (exit code $COMPOSE_EXIT). Continuing with health diagnostics..."
     fi
-    
-    if curl -sf http://localhost:3000 > /dev/null 2>&1; then
+
+    log_info "Waiting for API to become healthy (up to 180 seconds)..."
+    API_OK=false
+    for _ in {1..36}; do
+        if curl -sf --max-time 2 http://localhost:8000/api/health > /dev/null 2>&1; then
+            API_OK=true
+            break
+        fi
+        sleep 5
+    done
+
+    if [[ "$API_OK" != "true" ]]; then
+        log_warn "API did not become healthy in time. Last 200 lines of API logs:"
+        docker compose -f "$COMPOSE_FILE" logs --no-color --tail=200 api 2>&1 | tee -a "$LOG_FILE" || true
+        log_error "API container is unhealthy. Please review logs above."
+    fi
+
+    log_info "Running health checks..."
+
+    log_success "  API: Healthy"
+
+    if curl -sf --max-time 2 http://localhost:3000 > /dev/null 2>&1; then
         log_success "  Web UI: Healthy"
     else
         log_warn "  Web UI: Starting..."
