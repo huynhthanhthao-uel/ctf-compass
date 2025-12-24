@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Save, RotateCcw, Shield, Clock, Upload, Wrench, Key, Cpu, CheckCircle, XCircle } from 'lucide-react';
+import { Save, RotateCcw, Shield, Clock, Upload, Wrench, Key, Cpu, CheckCircle, XCircle, Loader2, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -30,28 +30,85 @@ const AI_MODELS = {
   ],
 };
 
+// Test API key by making a real call to MegaLLM
+async function testMegaLLMApiKey(apiKey: string): Promise<{ valid: boolean; error?: string }> {
+  try {
+    const response = await fetch('https://ai.megallm.io/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini', // Use cheapest model for testing
+        messages: [
+          { role: 'user', content: 'Hello' }
+        ],
+        max_tokens: 5, // Minimal tokens to save cost
+      }),
+    });
+
+    if (response.ok) {
+      return { valid: true };
+    }
+
+    // Handle specific error codes
+    if (response.status === 401) {
+      return { valid: false, error: 'Invalid API key. Please check your key and try again.' };
+    }
+    if (response.status === 403) {
+      return { valid: false, error: 'API key is not authorized. Please check your account permissions.' };
+    }
+    if (response.status === 429) {
+      return { valid: false, error: 'Rate limit exceeded. Please try again later.' };
+    }
+    if (response.status === 402) {
+      return { valid: false, error: 'Insufficient credits. Please top up your account.' };
+    }
+
+    const errorData = await response.json().catch(() => ({}));
+    return { 
+      valid: false, 
+      error: errorData.error?.message || `API error: ${response.status}` 
+    };
+  } catch (error) {
+    console.error('API test error:', error);
+    return { 
+      valid: false, 
+      error: error instanceof Error ? error.message : 'Network error. Please check your connection.' 
+    };
+  }
+}
+
 export default function Configuration() {
   const { toast } = useToast();
   const [config, setConfig] = useState(mockConfig);
   const [isDirty, setIsDirty] = useState(false);
   const [apiKey, setApiKey] = useState('');
+  const [showApiKey, setShowApiKey] = useState(false);
   const [apiKeyValid, setApiKeyValid] = useState<boolean | null>(null);
+  const [isTesting, setIsTesting] = useState(false);
   const [selectedModels, setSelectedModels] = useState({
     analysis: 'gpt-5',
     writeup: 'claude-sonnet-4-5-20250929',
     extraction: 'gpt-5-mini',
   });
 
-  // Check if API key is stored (simulated)
+  // Check if API key is stored
   useEffect(() => {
     const storedKey = localStorage.getItem('megallm_api_key');
     if (storedKey) {
-      setApiKey('••••••••••••••••' + storedKey.slice(-4));
-      setApiKeyValid(true);
+      setApiKey(storedKey);
+      // Don't auto-validate on load, user needs to test manually
     }
   }, []);
 
   const handleSave = () => {
+    // Save API key to localStorage
+    if (apiKey && !apiKey.startsWith('••••')) {
+      localStorage.setItem('megallm_api_key', apiKey);
+    }
+    
     toast({
       title: 'Configuration Saved',
       description: 'Your settings have been updated successfully.',
@@ -61,44 +118,61 @@ export default function Configuration() {
 
   const handleReset = () => {
     setConfig(mockConfig);
+    setApiKey('');
+    setApiKeyValid(null);
+    localStorage.removeItem('megallm_api_key');
     setIsDirty(false);
   };
 
   const handleApiKeyChange = (value: string) => {
     setApiKey(value);
     setIsDirty(true);
-    // Simulate validation
-    if (value.length > 20) {
-      localStorage.setItem('megallm_api_key', value);
-      setApiKeyValid(true);
-    } else {
-      setApiKeyValid(null);
-    }
+    setApiKeyValid(null); // Reset validation status when key changes
   };
 
   const handleTestApiKey = async () => {
-    // Simulate API test
+    if (!apiKey || apiKey.length < 10) {
+      toast({
+        title: 'Invalid API Key',
+        description: 'Please enter a valid API key.',
+        variant: 'destructive',
+      });
+      setApiKeyValid(false);
+      return;
+    }
+
+    setIsTesting(true);
     toast({
       title: 'Testing API Connection...',
       description: 'Verifying your MegaLLM API key.',
     });
+
+    const result = await testMegaLLMApiKey(apiKey);
     
-    setTimeout(() => {
-      if (apiKey.length > 10) {
-        setApiKeyValid(true);
-        toast({
-          title: 'API Key Valid',
-          description: 'Successfully connected to MegaLLM API.',
-        });
-      } else {
-        setApiKeyValid(false);
-        toast({
-          title: 'API Key Invalid',
-          description: 'Failed to connect. Please check your API key.',
-          variant: 'destructive',
-        });
-      }
-    }, 1500);
+    setIsTesting(false);
+    setApiKeyValid(result.valid);
+
+    if (result.valid) {
+      localStorage.setItem('megallm_api_key', apiKey);
+      toast({
+        title: 'API Key Valid',
+        description: 'Successfully connected to MegaLLM API.',
+      });
+    } else {
+      toast({
+        title: 'API Key Invalid',
+        description: result.error || 'Failed to connect. Please check your API key.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  // Mask API key for display
+  const getMaskedApiKey = () => {
+    if (!apiKey) return '';
+    if (showApiKey) return apiKey;
+    if (apiKey.length <= 8) return '••••••••';
+    return '••••••••••••' + apiKey.slice(-4);
   };
 
   return (
@@ -143,24 +217,49 @@ export default function Configuration() {
                   <div className="relative flex-1">
                     <Input
                       id="apiKey"
-                      type="password"
+                      type={showApiKey ? 'text' : 'password'}
                       placeholder="Enter your MegaLLM API key"
-                      value={apiKey}
+                      value={showApiKey ? apiKey : getMaskedApiKey()}
                       onChange={(e) => handleApiKeyChange(e.target.value)}
-                      className="pr-10"
+                      className="pr-20"
+                      disabled={isTesting}
                     />
-                    {apiKeyValid !== null && (
-                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                        {apiKeyValid ? (
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => setShowApiKey(!showApiKey)}
+                      >
+                        {showApiKey ? (
+                          <EyeOff className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <Eye className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </Button>
+                      {apiKeyValid !== null && !isTesting && (
+                        apiKeyValid ? (
                           <CheckCircle className="h-4 w-4 text-success" />
                         ) : (
                           <XCircle className="h-4 w-4 text-destructive" />
-                        )}
-                      </div>
-                    )}
+                        )
+                      )}
+                    </div>
                   </div>
-                  <Button variant="outline" onClick={handleTestApiKey}>
-                    Test Connection
+                  <Button 
+                    variant="outline" 
+                    onClick={handleTestApiKey}
+                    disabled={isTesting || !apiKey}
+                  >
+                    {isTesting ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Testing...
+                      </>
+                    ) : (
+                      'Test Connection'
+                    )}
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground">
@@ -173,6 +272,7 @@ export default function Configuration() {
                   >
                     ai.megallm.io
                   </a>
+                  {' '}• Test makes a minimal API call to verify your key
                 </p>
               </div>
             </CardContent>
@@ -381,8 +481,8 @@ export default function Configuration() {
               <div className="flex gap-2">
                 <CheckCircle className="h-4 w-4 text-success mt-0.5 shrink-0" />
                 <p>
-                  <strong>API Key Security:</strong> Your MegaLLM API key is encrypted and never 
-                  exposed in logs or frontend code.
+                  <strong>API Key Security:</strong> Your MegaLLM API key is stored locally and sent 
+                  directly to MegaLLM API. Never exposed in logs.
                 </p>
               </div>
               <div className="flex gap-2">
