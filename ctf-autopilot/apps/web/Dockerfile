@@ -1,17 +1,25 @@
-# CTF Autopilot Frontend - Next.js
-# Note: This is a placeholder Dockerfile for the React/Vite frontend
-# Replace with Next.js specific configuration if using Next.js
+# CTF Autopilot Frontend - React/Vite
+# Multi-stage build for optimized production image
 
 FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Install dependencies
+# Copy package files from root project
 COPY package*.json ./
-RUN npm ci
+
+# Install dependencies (use npm install if no lock file)
+RUN npm install --legacy-peer-deps
 
 # Copy source files
-COPY . .
+COPY index.html ./
+COPY vite.config.ts ./
+COPY tsconfig*.json ./
+COPY tailwind.config.ts ./
+COPY postcss.config.js ./
+COPY components.json ./
+COPY src ./src
+COPY public ./public
 
 # Build the application
 RUN npm run build
@@ -25,16 +33,15 @@ ENV NODE_ENV=production
 
 # Copy built assets
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/package*.json ./
 
 # Install serve for static file serving
 RUN npm install -g serve
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nextjs -u 1001
+    adduser -S appuser -u 1001
 
-USER nextjs
+USER appuser
 
 EXPOSE 3000
 

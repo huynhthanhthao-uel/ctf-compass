@@ -7,8 +7,8 @@ services:
   # =============================================================================
   web:
     build:
-      context: ../apps/web
-      dockerfile: Dockerfile
+      context: ../../
+      dockerfile: ctf-autopilot/apps/web/Dockerfile
     ports:
       - "${WEB_PORT:-3000}:3000"
     environment:
