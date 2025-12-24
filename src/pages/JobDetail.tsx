@@ -15,7 +15,8 @@ import {
   Copy,
   Wifi,
   WifiOff,
-  TerminalSquare
+  TerminalSquare,
+  Brain
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -28,6 +29,7 @@ import { ArtifactList } from '@/components/jobs/ArtifactList';
 import { FlagValidator } from '@/components/jobs/FlagValidator';
 import { WriteupView } from '@/components/jobs/WriteupView';
 import { SandboxTerminal } from '@/components/jobs/SandboxTerminal';
+import { AutopilotPanel } from '@/components/jobs/AutopilotPanel';
 import { useJobDetail } from '@/hooks/use-jobs';
 import { useJobWebSocket, JobUpdate } from '@/hooks/use-websocket';
 import { cn } from '@/lib/utils';
@@ -271,6 +273,10 @@ export default function JobDetail() {
               <TerminalSquare className="h-4 w-4" />
               Terminal
             </TabsTrigger>
+            <TabsTrigger value="autopilot" className="flex items-center gap-2 data-[state=active]:bg-background">
+              <Brain className="h-4 w-4" />
+              Autopilot
+            </TabsTrigger>
             <TabsTrigger value="artifacts" className="flex items-center gap-2 data-[state=active]:bg-background">
               <Folder className="h-4 w-4" />
               Artifacts
@@ -308,6 +314,14 @@ export default function JobDetail() {
                 />
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="autopilot">
+            <AutopilotPanel 
+              jobId={jobDetail.id} 
+              files={jobDetail.inputFiles || []}
+              expectedFormat={jobDetail.flagFormat}
+            />
           </TabsContent>
 
           <TabsContent value="artifacts">

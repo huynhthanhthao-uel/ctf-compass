@@ -1,16 +1,17 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
-import { Terminal, Play, X, Loader2, ChevronUp, HelpCircle, Trash2 } from 'lucide-react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { Terminal, Play, Loader2, HelpCircle, Trash2, Lightbulb } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
+import { getToolSuggestions, getAutocomplete, detectFlags, ToolSuggestion } from '@/lib/ctf-tools';
 import * as api from '@/lib/api';
 
 interface TerminalLine {
   id: string;
-  type: 'command' | 'stdout' | 'stderr' | 'info' | 'error';
+  type: 'command' | 'stdout' | 'stderr' | 'info' | 'error' | 'flag';
   content: string;
   timestamp: Date;
 }
@@ -19,10 +20,11 @@ interface SandboxTerminalProps {
   jobId: string;
   files: string[];
   allowedTools?: string[];
+  onFlagFound?: (flag: string) => void;
 }
 
 // Common CTF tools grouped by category
-const TOOL_SUGGESTIONS = {
+const TOOL_CATEGORIES = {
   'Binary': ['strings', 'file', 'readelf', 'objdump', 'nm', 'checksec', 'r2', 'retdec-decompiler'],
   'Hex': ['xxd', 'hexdump', 'base64', 'base32'],
   'Stego': ['exiftool', 'binwalk', 'zsteg', 'steghide', 'foremost', 'pngcheck'],
@@ -105,7 +107,7 @@ Quick examples:
     }
 
     if (trimmedCmd === 'tools') {
-      const tools = allowedTools || Object.values(TOOL_SUGGESTIONS).flat();
+      const tools = allowedTools || Object.values(TOOL_CATEGORIES).flat();
       addLine('info', `Allowed sandbox tools:\n${tools.join(', ')}`);
       return;
     }
@@ -220,11 +222,11 @@ Quick examples:
             <PopoverContent className="w-80" align="end">
               <div className="space-y-2">
                 <h4 className="font-medium">Quick Tools</h4>
-                {Object.entries(TOOL_SUGGESTIONS).map(([category, tools]) => (
+                {Object.entries(TOOL_CATEGORIES).map(([category, tools]) => (
                   <div key={category}>
                     <p className="text-xs text-muted-foreground mb-1">{category}</p>
                     <div className="flex flex-wrap gap-1">
-                      {tools.slice(0, 5).map(tool => (
+                      {tools.slice(0, 5).map((tool: string) => (
                         <Badge
                           key={tool}
                           variant="secondary"
