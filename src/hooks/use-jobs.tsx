@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Job, JobDetail } from '@/lib/types';
-import { mockJobs, mockJobDetail } from '@/lib/mock-data';
+import { mockJobs, mockJobDetail, mockCommands, mockArtifacts, mockFlagCandidates } from '@/lib/mock-data';
 import * as api from '@/lib/api';
 
 // Check if we're connected to a real backend
@@ -29,6 +29,42 @@ async function isBackendAvailable(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+// Simulate running a mock analysis with progress updates
+function runMockAnalysis(
+  jobId: string,
+  setJobs: React.Dispatch<React.SetStateAction<Job[]>>
+): void {
+  // Start running
+  setJobs(prev => prev.map(job =>
+    job.id === jobId
+      ? { ...job, status: 'running' as const, startedAt: new Date().toISOString(), progress: 0 }
+      : job
+  ));
+
+  let progress = 0;
+  const interval = setInterval(() => {
+    progress += 15 + Math.random() * 10;
+    if (progress >= 100) {
+      progress = 100;
+      clearInterval(interval);
+      setJobs(prev => prev.map(job =>
+        job.id === jobId
+          ? { ...job, status: 'done' as const, completedAt: new Date().toISOString(), progress: 100 }
+          : job
+      ));
+      // Also update mockJobs array
+      const idx = mockJobs.findIndex(j => j.id === jobId);
+      if (idx !== -1) {
+        mockJobs[idx] = { ...mockJobs[idx], status: 'done', completedAt: new Date().toISOString(), progress: 100 };
+      }
+    } else {
+      setJobs(prev => prev.map(job =>
+        job.id === jobId ? { ...job, progress: Math.floor(progress) } : job
+      ));
+    }
+  }, 600);
 }
 
 export function useJobs() {
@@ -139,6 +175,12 @@ export function useJobs() {
     mockJobs.unshift(newJob);
     setJobs(prev => [newJob, ...prev]);
     setIsLoading(false);
+
+    // Auto-run analysis in mock mode after creation
+    setTimeout(() => {
+      runMockAnalysis(newJob.id, setJobs);
+    }, 500);
+
     return newJob;
   }, [useApi]);
 
