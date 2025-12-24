@@ -82,39 +82,66 @@ interface ModelTestResult {
   error?: string;
 }
 
-// Test a single model
-async function testModel(apiKey: string, modelId: string): Promise<{ available: boolean; error?: string }> {
-  try {
-    const response = await fetch('https://ai.megallm.io/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: modelId,
-        messages: [{ role: 'user', content: 'Hi' }],
-        max_tokens: 1,
-      }),
-    });
+// Test a single model with retry logic
+async function testModel(apiKey: string, modelId: string, retries = 2): Promise<{ available: boolean; error?: string }> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const response = await fetch('https://ai.megallm.io/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: modelId,
+          messages: [{ role: 'user', content: 'test' }],
+          max_tokens: 1,
+        }),
+      });
 
-    const data = await response.json().catch(() => ({}));
+      const data = await response.json().catch(() => ({}));
 
-    if (response.ok) {
-      return { available: true };
+      if (response.ok) {
+        return { available: true };
+      }
+
+      // Don't retry on permission errors - these are definitive
+      if (response.status === 403) {
+        const msg = data.error?.message || 'No access';
+        // Check if it's a tier/permission issue (definitive no access)
+        if (msg.includes('tier') || msg.includes('permission') || msg.includes('access')) {
+          return { available: false, error: msg };
+        }
+      }
+      if (response.status === 401) {
+        return { available: false, error: 'Invalid API key' };
+      }
+      
+      // Rate limit - wait and retry
+      if (response.status === 429) {
+        if (attempt < retries) {
+          await new Promise(resolve => setTimeout(resolve, 2000 * (attempt + 1)));
+          continue;
+        }
+        return { available: false, error: 'Rate limited - try again later' };
+      }
+
+      // Other errors - might be temporary, retry
+      if (attempt < retries) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        continue;
+      }
+
+      return { available: false, error: data.error?.message || `Error ${response.status}` };
+    } catch (error) {
+      if (attempt < retries) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        continue;
+      }
+      return { available: false, error: 'Network error' };
     }
-
-    if (response.status === 403) {
-      return { available: false, error: data.error?.message || 'No access' };
-    }
-    if (response.status === 401) {
-      return { available: false, error: 'Invalid API key' };
-    }
-
-    return { available: false, error: data.error?.message || `Error ${response.status}` };
-  } catch (error) {
-    return { available: false, error: 'Network error' };
   }
+  return { available: false, error: 'Max retries exceeded' };
 }
 
 // Test API key by making a real call to MegaLLM
@@ -187,43 +214,29 @@ export default function Configuration() {
       description: `Testing ${ALL_MODELS.length} models. This may take a few minutes...`,
     });
 
-    // Test models in batches of 3 to avoid rate limiting
-    const batchSize = 3;
-    for (let i = 0; i < ALL_MODELS.length; i += batchSize) {
-      const batch = ALL_MODELS.slice(i, i + batchSize);
+    // Test models one by one to avoid rate limiting
+    for (let i = 0; i < ALL_MODELS.length; i++) {
+      const model = ALL_MODELS[i];
       
-      // Mark batch as testing
-      batch.forEach(model => {
-        results[model.id] = { id: model.id, status: 'testing' };
-      });
+      // Mark as testing
+      results[model.id] = { id: model.id, status: 'testing' };
       setModelResults({ ...results });
       
-      // Test batch in parallel
-      const batchResults = await Promise.all(
-        batch.map(async (model) => {
-          const result = await testModel(apiKey, model.id);
-          return { 
-            id: model.id, 
-            available: result.available, 
-            error: result.error 
-          };
-        })
-      );
+      // Test with retry
+      const result = await testModel(apiKey, model.id, 2);
       
-      // Update results
-      batchResults.forEach(result => {
-        results[result.id] = {
-          id: result.id,
-          status: result.available ? 'available' : 'unavailable',
-          error: result.error,
-        };
-      });
+      // Update result
+      results[model.id] = {
+        id: model.id,
+        status: result.available ? 'available' : 'unavailable',
+        error: result.error,
+      };
       setModelResults({ ...results });
-      setTestProgress({ current: Math.min(i + batchSize, ALL_MODELS.length), total: ALL_MODELS.length });
+      setTestProgress({ current: i + 1, total: ALL_MODELS.length });
       
-      // Small delay between batches to avoid rate limiting
-      if (i + batchSize < ALL_MODELS.length) {
-        await new Promise(resolve => setTimeout(resolve, 500));
+      // Delay between requests to avoid rate limiting
+      if (i < ALL_MODELS.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 800));
       }
     }
 
