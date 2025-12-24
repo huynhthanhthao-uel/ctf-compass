@@ -437,11 +437,18 @@ DEBUG=false
 ENABLE_TLS=false
 EOF
 
+    # Keep secrets readable by the installing user (so they can run docker compose without sudo)
+    if [[ -n "${SUDO_USER:-}" ]]; then
+        chown "$SUDO_USER":"$SUDO_USER" .env
+    fi
     chmod 600 .env
-    
-    # Copy to infra directory for docker-compose
+
+    # Copy to infra directory for docker-compose (compose loads .env from the compose file directory)
     cp .env ctf-autopilot/infra/.env
-    
+    if [[ -n "${SUDO_USER:-}" ]]; then
+        chown "$SUDO_USER":"$SUDO_USER" ctf-autopilot/infra/.env
+    fi
+    chmod 600 ctf-autopilot/infra/.env
     # Save credentials
     cat > CREDENTIALS.txt << EOF
 #===============================================================================
