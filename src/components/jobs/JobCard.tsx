@@ -125,25 +125,25 @@ export function JobCard({ job, onRun, onStop, onDelete }: JobCardProps) {
                 <Button 
                   variant="ghost" 
                   size="icon" 
-                  className="h-8 w-8 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="h-8 w-8 shrink-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <MoreHorizontal className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48 bg-popover z-[100]">
-                <DropdownMenuItem onClick={() => navigate(`/jobs/${job.id}`)}>
+                <DropdownMenuItem onSelect={() => navigate(`/jobs/${job.id}`)}>
                   <ExternalLink className="h-4 w-4 mr-2" />
                   View Details
                 </DropdownMenuItem>
                 {job.status === 'queued' && onRun && (
-                  <DropdownMenuItem onClick={() => onRun(job.id)}>
+                  <DropdownMenuItem onSelect={() => onRun(job.id)}>
                     <PlayCircle className="h-4 w-4 mr-2" />
                     Run Analysis
                   </DropdownMenuItem>
                 )}
                 {job.status === 'running' && onStop && (
-                  <DropdownMenuItem onClick={() => onStop(job.id)} className="text-warning">
+                  <DropdownMenuItem onSelect={() => onStop(job.id)} className="text-warning">
                     <Square className="h-4 w-4 mr-2" />
                     Stop Analysis
                   </DropdownMenuItem>
@@ -151,7 +151,7 @@ export function JobCard({ job, onRun, onStop, onDelete }: JobCardProps) {
                 <DropdownMenuSeparator />
                 {onDelete && (
                   <DropdownMenuItem 
-                    onClick={() => onDelete(job.id)} 
+                    onSelect={() => onDelete(job.id)} 
                     className="text-destructive focus:text-destructive"
                   >
                     <Trash2 className="h-4 w-4 mr-2" />
