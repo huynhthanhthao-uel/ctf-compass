@@ -945,17 +945,7 @@ ${insight ? `# AI Analysis: ${insight.analysis.slice(0, 200)}` : ''}
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {!isRunning ? (
-                <Button 
-                  onClick={runFullAutopilot} 
-                  disabled={files.length === 0}
-                  size="lg"
-                  className="gap-2"
-                >
-                  <Zap className="h-5 w-5" />
-                  Start Full Autopilot
-                </Button>
-              ) : (
+              {isRunning && (
                 <>
                   {isPaused ? (
                     <Button variant="outline" onClick={handleResume}>
