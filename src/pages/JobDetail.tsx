@@ -18,7 +18,8 @@ import {
   Brain,
   History,
   Archive,
-  FileDown
+  FileDown,
+  PlayCircle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -58,6 +59,7 @@ export default function JobDetail() {
   const [realtimeProgress, setRealtimeProgress] = useState<number | null>(null);
   const [realtimeStatus, setRealtimeStatus] = useState<string | null>(null);
   const [realtimeLogs, setRealtimeLogs] = useState<string[]>([]);
+  const [isStartingAnalysis, setIsStartingAnalysis] = useState(false);
   
   // AI Analysis state - managed by AutopilotPanel
   const [foundFlags, setFoundFlags] = useState<string[]>([]);
@@ -92,6 +94,80 @@ export default function JobDetail() {
       fetchJobDetail();
     }
   }, [id, fetchJobDetail]);
+
+  // Poll for updates when job is running (for mock mode without WebSocket)
+  useEffect(() => {
+    const currentStatus = realtimeStatus || jobDetail?.status;
+    if (currentStatus === 'running' && !wsConnected) {
+      const interval = setInterval(() => {
+        fetchJobDetail();
+      }, 2000);
+      return () => clearInterval(interval);
+    }
+  }, [realtimeStatus, jobDetail?.status, wsConnected, fetchJobDetail]);
+
+  // Start analysis for queued jobs
+  const handleStartAnalysis = useCallback(async () => {
+    if (!id || !jobDetail || jobDetail.status !== 'queued') return;
+    
+    setIsStartingAnalysis(true);
+    try {
+      // Try API first
+      const response = await fetch(`/api/jobs/${id}/run`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      
+      if (response.ok) {
+        setRealtimeStatus('running');
+        setRealtimeProgress(0);
+        toast.success('Analysis started');
+      } else {
+        // Mock mode - simulate analysis
+        setRealtimeStatus('running');
+        setRealtimeProgress(0);
+        toast.success('Analysis started (mock mode)');
+        
+        // Simulate progress
+        let progress = 0;
+        const interval = setInterval(() => {
+          progress += 15 + Math.random() * 10;
+          if (progress >= 100) {
+            progress = 100;
+            setRealtimeProgress(100);
+            setRealtimeStatus('done');
+            clearInterval(interval);
+            fetchJobDetail();
+            toast.success('Analysis completed!');
+          } else {
+            setRealtimeProgress(Math.floor(progress));
+          }
+        }, 600);
+      }
+    } catch {
+      // Mock mode fallback
+      setRealtimeStatus('running');
+      setRealtimeProgress(0);
+      toast.success('Analysis started (mock mode)');
+      
+      let progress = 0;
+      const interval = setInterval(() => {
+        progress += 15 + Math.random() * 10;
+        if (progress >= 100) {
+          progress = 100;
+          setRealtimeProgress(100);
+          setRealtimeStatus('done');
+          clearInterval(interval);
+          fetchJobDetail();
+          toast.success('Analysis completed!');
+        } else {
+          setRealtimeProgress(Math.floor(progress));
+        }
+      }, 600);
+    } finally {
+      setIsStartingAnalysis(false);
+    }
+  }, [id, jobDetail, fetchJobDetail]);
 
   // Handle flag found
   const handleFlagFound = useCallback((flag: string) => {
@@ -374,6 +450,45 @@ export default function JobDetail() {
                     ))}
                   </div>
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Queued Job - Start Analysis Prompt */}
+        {currentStatus === 'queued' && (
+          <Card className="border-primary/30 bg-primary/5">
+            <CardContent className="py-6">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="h-12 w-12 rounded-xl bg-primary/20 flex items-center justify-center">
+                    <Clock className="h-6 w-6 text-primary" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-foreground">Job Queued</p>
+                    <p className="text-sm text-muted-foreground">
+                      This job is waiting to be analyzed. Click "Start Analysis" to begin.
+                    </p>
+                  </div>
+                </div>
+                <Button 
+                  onClick={handleStartAnalysis}
+                  disabled={isStartingAnalysis}
+                  size="lg"
+                  className="gap-2"
+                >
+                  {isStartingAnalysis ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Starting...
+                    </>
+                  ) : (
+                    <>
+                      <PlayCircle className="h-4 w-4" />
+                      Start Analysis
+                    </>
+                  )}
+                </Button>
               </div>
             </CardContent>
           </Card>
