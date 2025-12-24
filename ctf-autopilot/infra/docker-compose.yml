@@ -84,8 +84,6 @@ services:
     volumes:
       - app_data:/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      # Mount .env for runtime updates
-      - ${PWD}/.env:/app/.env:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -135,7 +133,6 @@ services:
     volumes:
       - app_data:/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ${PWD}/.env:/app/.env:ro
     depends_on:
       postgres:
         condition: service_healthy

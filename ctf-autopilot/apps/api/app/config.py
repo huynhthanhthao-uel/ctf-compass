@@ -2,6 +2,7 @@ from pydantic_settings import BaseSettings
 from pydantic import Field
 from typing import List, Optional
 import secrets
+import os
 
 
 class Settings(BaseSettings):
@@ -80,9 +81,21 @@ class Settings(BaseSettings):
     enable_tls: bool = False
     
     class Config:
-        env_file = ".env"
+        # Load from OS env by default; optionally load .env if readable (e.g. local dev).
+        # This prevents container crashes when a host-mounted .env has restrictive permissions.
+        env_file = None
         case_sensitive = False
         extra = "ignore"  # Ignore extra env vars to prevent startup failures
 
 
-settings = Settings()
+def _select_env_file() -> Optional[str]:
+    path = ".env"
+    try:
+        if os.path.isfile(path) and os.access(path, os.R_OK):
+            return path
+    except Exception:
+        pass
+    return None
+
+
+settings = Settings(_env_file=_select_env_file())
