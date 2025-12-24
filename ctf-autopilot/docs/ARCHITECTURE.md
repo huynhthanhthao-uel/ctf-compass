@@ -1,10 +1,58 @@
-# Architecture
+# CTF Compass - Architecture
 
 ## Overview
 
-CTF Compass is a monorepo containing a React/Vite frontend, FastAPI backend, and isolated Docker sandbox for secure file analysis.
+CTF Compass is a monorepo containing a React/Vite frontend, FastAPI backend, and isolated Docker sandbox for secure CTF challenge analysis.
 
 **GitHub:** [github.com/huynhtrungcipp/ctf-compass](https://github.com/huynhtrungcipp/ctf-compass)
+
+---
+
+## System Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        User Browser                              │
+└─────────────────────────────┬───────────────────────────────────┘
+                              │ HTTPS/WSS
+┌─────────────────────────────▼───────────────────────────────────┐
+│                    Nginx Reverse Proxy                           │
+│                    (TLS Termination)                             │
+│                    Port: 80/443                                  │
+└─────────────────────────────┬───────────────────────────────────┘
+                              │
+          ┌───────────────────┴───────────────────┐
+          │                                       │
+┌─────────▼─────────┐               ┌─────────────▼─────────────┐
+│   Web Frontend    │               │      Backend API          │
+│   (React/Vite)    │               │      (FastAPI)            │
+│   Port: 3000      │               │      Port: 8000           │
+│                   │               │                           │
+│ • Dashboard       │    REST/WS    │ • Auth Service            │
+│ • Job Create      │◄─────────────►│ • Job Service             │
+│ • Configuration   │               │ • System Service          │
+│ • Job Detail      │               │ • WebSocket Handler       │
+└───────────────────┘               └─────────────┬─────────────┘
+                                                  │
+                                    ┌─────────────┴─────────────┐
+                                    │                           │
+                          ┌─────────▼─────────┐       ┌─────────▼─────────┐
+                          │    PostgreSQL     │       │      Redis        │
+                          │    Database       │       │   Message Broker  │
+                          │    Port: 5432     │       │   Port: 6379      │
+                          └───────────────────┘       └─────────┬─────────┘
+                                                                │
+                                                      ┌─────────▼─────────┐
+                                                      │   Celery Worker   │
+                                                      │ (Background Jobs) │
+                                                      └─────────┬─────────┘
+                                                                │ Docker API
+                                                      ┌─────────▼─────────┐
+                                                      │  Sandbox Container │
+                                                      │  --network=none   │
+                                                      │  Analysis Tools   │
+                                                      └───────────────────┘
+```
 
 ---
 
@@ -12,56 +60,94 @@ CTF Compass is a monorepo containing a React/Vite frontend, FastAPI backend, and
 
 ### Frontend (React + Vite)
 
-- **Framework**: React 18 with Vite
-- **Styling**: Tailwind CSS + shadcn/ui
-- **State Management**: React Query for server state
-- **Features**:
-  - Job creation wizard with drag-and-drop file upload
-  - Real-time job status updates via polling
-  - Settings page for API key and model configuration
-  - System update management from UI
-  - Evidence viewer with syntax highlighting
-  - Markdown writeup renderer
+**Location:** `src/`
 
-### Backend (apps/api)
+- **Framework:** React 18 with Vite
+- **Language:** TypeScript
+- **Styling:** Tailwind CSS + shadcn/ui
+- **State Management:** React Query for server state, Context for auth
+- **Real-time:** WebSocket for live job updates
 
-- **Framework**: FastAPI with Python 3.12
-- **Validation**: Pydantic v2
-- **Background Jobs**: Celery with Redis broker
-- **Database**: PostgreSQL with SQLAlchemy ORM
-- **Authentication**: Session-based with Argon2 password hashing
+**Key Features:**
+- Job creation wizard with drag-and-drop file upload
+- Real-time job status updates via WebSocket
+- Configuration page for API key and model settings
+- System update management from UI
+- Connection status indicator (Live/Demo Mode)
+- Auto-retry backend connection
 
-#### Core Services
+**Pages:**
+| Route | Component | Description |
+|-------|-----------|-------------|
+| `/login` | Login.tsx | Authentication |
+| `/dashboard` | Dashboard.tsx | Job list and stats |
+| `/jobs/new` | JobCreate.tsx | Create new analysis |
+| `/jobs/:id` | JobDetail.tsx | Job details and results |
+| `/config` | Configuration.tsx | Settings management |
 
-1. **AuthService**: Handles login, session management, CSRF protection
-2. **JobService**: Manages job lifecycle (create, run, status, artifacts)
-3. **SandboxService**: Orchestrates Docker container execution
-4. **EvidenceService**: Extracts and scores flag candidates
-5. **WriteupService**: Generates reports via MegaLLM API
-6. **SystemService**: Handles updates, API key management, model config
+### Backend API (FastAPI)
 
-#### API Endpoints
+**Location:** `ctf-autopilot/apps/api/`
 
-| Prefix | Description |
-|--------|-------------|
-| `/api/health` | Health check |
-| `/api/auth/*` | Authentication (login, logout, session) |
-| `/api/jobs/*` | Job management |
-| `/api/config` | System configuration |
-| `/api/system/*` | Updates, API key, models |
+- **Framework:** FastAPI with Python 3.12
+- **Validation:** Pydantic v2
+- **ORM:** SQLAlchemy with async support
+- **Background Jobs:** Celery with Redis broker
+- **Authentication:** Session-based with HttpOnly cookies
 
-### Sandbox (sandbox/)
+**Routers:**
+| Router | Prefix | Description |
+|--------|--------|-------------|
+| `health` | `/api/health` | Health check endpoint |
+| `auth` | `/api/auth` | Login, logout, session |
+| `jobs` | `/api/jobs` | Job CRUD and execution |
+| `config` | `/api/config` | System configuration |
+| `system` | `/api/system` | Updates, API key, models |
+| `ws` | `/ws` | WebSocket connections |
 
-- **Base Image**: Ubuntu 24.04 with analysis tools
-- **Isolation**:
-  - Network disabled (`--network=none`)
-  - Read-only root filesystem
-  - Non-root user execution
-  - Resource limits (CPU, memory, time)
-  - Seccomp/AppArmor profiles
+**Services:**
+| Service | Description |
+|---------|-------------|
+| `AuthService` | Password verification, session management |
+| `JobService` | Job lifecycle management |
+| `SandboxService` | Docker container orchestration |
+| `EvidenceService` | Flag extraction and scoring |
+| `WriteupService` | Report generation via MegaLLM |
+| `FileService` | File upload and validation |
 
-#### Allowed Tools
+### Celery Workers
 
+**Location:** `ctf-autopilot/apps/api/app/tasks.py`
+
+- **Broker:** Redis
+- **Result Backend:** Redis
+- **Concurrency:** 2 workers per instance
+
+**Tasks:**
+- `analyze_job` - Main analysis pipeline
+- `run_sandbox_command` - Execute single command
+- `generate_writeup` - Create report
+
+### Sandbox Container
+
+**Location:** `ctf-autopilot/sandbox/image/`
+
+- **Base Image:** Ubuntu 24.04
+- **User:** Non-root (uid 1000)
+- **Network:** Disabled (`--network=none`)
+- **Filesystem:** Read-only where possible
+
+**Security Controls:**
+| Control | Implementation |
+|---------|----------------|
+| Network | `--network=none` |
+| User | Non-root (uid 1000) |
+| Resources | CPU, memory, time limits |
+| Capabilities | All dropped |
+| Seccomp | Restrictive profile |
+| AppArmor | Custom profile |
+
+**Allowed Tools:**
 | Tool | Purpose |
 |------|---------|
 | `strings` | Extract printable strings |
@@ -81,47 +167,84 @@ CTF Compass is a monorepo containing a React/Vite frontend, FastAPI backend, and
 
 ## Data Flow
 
+### Job Creation Flow
+
 ```
-1. User uploads challenge files via Web UI
+1. User uploads files via Web UI
    │
    ▼
-2. Frontend calls POST /api/jobs with files
+2. Frontend sends POST /api/jobs with multipart form
    │
    ▼
-3. Backend validates files and stores them
+3. Backend validates files:
+   • Size limits (200MB default)
+   • Extension allowlist
+   • MIME type verification
+   • Path sanitization
    │
    ▼
-4. Job queued in Celery (Redis broker)
+4. Files stored in job directory
    │
    ▼
-5. Worker selects playbook based on file types
+5. Job record created in PostgreSQL
    │
    ▼
-6. Sandbox container executes tools
+6. Task queued in Celery (Redis)
    │
    ▼
-7. Output captured and stored
-   │
-   ▼
-8. Evidence extractor finds flag candidates
-   │
-   ▼
-9. MegaLLM generates writeup from evidence
-   │
-   ▼
-10. Report available in UI and for download
+7. WebSocket notification sent to clients
 ```
 
----
+### Job Execution Flow
 
-## Configuration Flow
+```
+1. Celery worker picks up task
+   │
+   ▼
+2. Worker selects playbook based on file types
+   │
+   ▼
+3. For each command in playbook:
+   │
+   ├─► Create sandbox container
+   │   • Mount input files read-only
+   │   • Set resource limits
+   │   • Disable network
+   │
+   ├─► Execute command
+   │   • Capture stdout/stderr
+   │   • Enforce timeout
+   │
+   ├─► Store output
+   │   • Save to job directory
+   │   • Update database
+   │
+   └─► Send WebSocket progress update
+   │
+   ▼
+4. Evidence extractor analyzes outputs
+   │
+   ▼
+5. Flag candidates scored and ranked
+   │
+   ▼
+6. MegaLLM generates writeup
+   │
+   ▼
+7. Job marked complete
+   │
+   ▼
+8. Final WebSocket notification
+```
+
+### Configuration Flow
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │ Web UI Settings Page                                         │
-│ - API Key input                                              │
-│ - Model selection                                            │
-│ - Update button                                              │
+│ • API Key input                                              │
+│ • Model selection                                            │
+│ • Update button                                              │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -130,14 +253,15 @@ CTF Compass is a monorepo containing a React/Vite frontend, FastAPI backend, and
 │ POST /api/system/api-key    → Save to runtime + .env        │
 │ POST /api/system/models     → Save model preferences         │
 │ POST /api/system/update     → Stream update progress         │
+│ GET  /api/system/update     → Check for updates              │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │ Backend Services                                             │
-│ - Runtime config (in-memory)                                 │
-│ - .env file (persistent)                                     │
-│ - update.sh script execution                                 │
+│ • Runtime config (in-memory)                                 │
+│ • .env file (persistent)                                     │
+│ • update.sh script execution                                 │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -149,70 +273,75 @@ CTF Compass is a monorepo containing a React/Vite frontend, FastAPI backend, and
 /opt/ctf-compass/
 ├── ctf-autopilot/
 │   ├── apps/
-│   │   ├── api/              # Backend source
-│   │   └── web/              # Frontend Dockerfile
-│   ├── docs/                 # Documentation
+│   │   ├── api/                    # Backend source
+│   │   │   └── app/
+│   │   │       ├── routers/        # API endpoints
+│   │   │       ├── services/       # Business logic
+│   │   │       ├── models.py       # Database models
+│   │   │       ├── schemas.py      # Pydantic schemas
+│   │   │       ├── tasks.py        # Celery tasks
+│   │   │       └── websocket.py    # WebSocket manager
+│   │   └── web/                    # Frontend Dockerfile
+│   ├── docs/                       # Documentation
 │   ├── infra/
-│   │   ├── docker-compose.yml
-│   │   ├── nginx/
-│   │   └── scripts/          # Install, update scripts
+│   │   ├── docker-compose.yml      # Production compose
+│   │   ├── docker-compose.dev.yml  # Development compose
+│   │   ├── nginx/                  # Reverse proxy config
+│   │   └── scripts/
+│   │       ├── install_ubuntu_24.04.sh
+│   │       ├── update.sh
+│   │       ├── uninstall.sh
+│   │       ├── prod_up.sh
+│   │       └── dev_up.sh
 │   └── sandbox/
-│       └── image/            # Sandbox Dockerfile
+│       ├── image/                  # Sandbox Dockerfile
+│       └── profiles/               # Seccomp/AppArmor
+├── src/                            # React frontend source
+│   ├── components/                 # UI components
+│   ├── hooks/                      # React hooks
+│   ├── pages/                      # Page components
+│   └── lib/                        # Utilities
 ├── data/
 │   └── runs/
 │       └── <job_id>/
-│           ├── input/        # Uploaded files
-│           ├── extracted/    # Extracted archives
-│           ├── output/       # Tool outputs
-│           ├── logs/         # Execution logs
-│           ├── evidence.json # Extracted evidence
-│           ├── flags.json    # Flag candidates
-│           └── report.md     # Generated writeup
-├── .env                      # Configuration
-└── CREDENTIALS.txt           # Default credentials
+│           ├── input/              # Uploaded files
+│           ├── extracted/          # Extracted archives
+│           ├── output/             # Tool outputs
+│           ├── logs/               # Execution logs
+│           ├── evidence.json       # Extracted evidence
+│           ├── flags.json          # Flag candidates
+│           └── report.md           # Generated writeup
+├── .env                            # Configuration
+└── CREDENTIALS.txt                 # Generated credentials
 ```
 
 ---
 
-## Security Boundaries
+## Docker Containers
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│ UNTRUSTED: User uploads, challenge files                     │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│ VALIDATION LAYER                                             │
-│ - File type validation                                       │
-│ - Size limits (200MB default)                               │
-│ - Path sanitization                                          │
-│ - Zip-slip prevention                                        │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│ SANDBOX (Isolated Docker Container)                          │
-│ - No network access                                          │
-│ - Resource limits                                            │
-│ - Allowlisted tools only                                     │
-│ - Non-root execution                                         │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│ TRUSTED: Backend services, database, MegaLLM API             │
-└─────────────────────────────────────────────────────────────┘
-```
+| Container | Image | Purpose | Network |
+|-----------|-------|---------|---------|
+| `ctf_compass_web` | Custom (Vite) | Frontend | frontend |
+| `ctf_compass_api` | Custom (FastAPI) | Backend API | frontend, backend |
+| `ctf_compass_worker` | Custom (Celery) | Job processing | backend |
+| `ctf_compass_postgres` | postgres:16-alpine | Database | backend |
+| `ctf_compass_redis` | redis:7-alpine | Message broker | backend |
+| `ctf_compass_nginx` | nginx:alpine | Reverse proxy | frontend |
 
----
+### Networks
 
-## Scalability Considerations
+| Network | Type | Purpose |
+|---------|------|---------|
+| `ctf_compass_frontend` | bridge | Web and API access |
+| `ctf_compass_backend` | bridge (internal) | Database and cache |
 
-- **Horizontal Scaling**: Multiple Celery workers can process jobs in parallel
-- **Queue Priority**: Urgent jobs can use priority queues
-- **Storage**: Artifacts can be moved to object storage for large deployments
-- **Caching**: Redis caches frequently accessed job metadata
+### Volumes
+
+| Volume | Purpose | Persistent |
+|--------|---------|------------|
+| `ctf_compass_postgres_data` | Database storage | Yes |
+| `ctf_compass_redis_data` | Cache and queues | Yes |
+| `ctf_compass_app_data` | Job files | Yes |
 
 ---
 
@@ -220,11 +349,35 @@ CTF Compass is a monorepo containing a React/Vite frontend, FastAPI backend, and
 
 | Layer | Technology |
 |-------|------------|
-| Frontend | React 18, Vite, TypeScript, Tailwind CSS, shadcn/ui |
-| Backend | Python 3.12, FastAPI, SQLAlchemy, Pydantic |
-| Database | PostgreSQL 16 |
-| Cache/Queue | Redis 7 |
-| Task Queue | Celery |
-| Container | Docker, Docker Compose |
-| Reverse Proxy | Nginx |
-| AI Integration | MegaLLM API |
+| **Frontend** | React 18, Vite, TypeScript, Tailwind CSS, shadcn/ui |
+| **Backend** | Python 3.12, FastAPI, SQLAlchemy, Pydantic v2 |
+| **Database** | PostgreSQL 16 |
+| **Cache/Queue** | Redis 7 |
+| **Task Queue** | Celery |
+| **Container** | Docker, Docker Compose |
+| **Reverse Proxy** | Nginx |
+| **AI Integration** | MegaLLM API |
+
+---
+
+## Scalability Considerations
+
+### Horizontal Scaling
+
+- **Workers:** Add more Celery workers for parallel job processing
+- **API:** Run multiple API instances behind load balancer
+- **Database:** Use PostgreSQL replicas for read scaling
+
+### Performance Optimizations
+
+- **Caching:** Redis caches job metadata and session data
+- **Connection Pooling:** SQLAlchemy connection pool
+- **Async I/O:** FastAPI with async database operations
+- **Lazy Loading:** Frontend uses React Query for data fetching
+
+### Future Considerations
+
+- **Object Storage:** Move artifacts to S3-compatible storage
+- **Queue Priority:** Implement priority queues for urgent jobs
+- **Metrics:** Add Prometheus metrics endpoint
+- **Tracing:** Integrate OpenTelemetry for distributed tracing
