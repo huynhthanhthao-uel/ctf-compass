@@ -1,0 +1,203 @@
+// Mock data for development/demo purposes
+import { Job, JobDetail, Command, Artifact, FlagCandidate, Config } from './types';
+
+export const mockJobs: Job[] = [
+  {
+    id: 'job-001',
+    title: 'Crypto Challenge - RSA Basics',
+    description: 'A basic RSA encryption challenge with weak parameters',
+    flagFormat: 'CTF{[a-zA-Z0-9_]+}',
+    status: 'done',
+    createdAt: '2024-01-15T10:30:00Z',
+    startedAt: '2024-01-15T10:30:05Z',
+    completedAt: '2024-01-15T10:32:15Z',
+    progress: 100,
+  },
+  {
+    id: 'job-002',
+    title: 'Forensics - Hidden Message',
+    description: 'Extract hidden data from image files using steganography analysis',
+    flagFormat: 'FLAG{[a-zA-Z0-9]+}',
+    status: 'running',
+    createdAt: '2024-01-15T11:00:00Z',
+    startedAt: '2024-01-15T11:00:02Z',
+    progress: 65,
+  },
+  {
+    id: 'job-003',
+    title: 'Reverse Engineering - Binary Analysis',
+    description: 'Analyze a stripped ELF binary to find the flag',
+    flagFormat: 'CTF{.*}',
+    status: 'queued',
+    createdAt: '2024-01-15T11:15:00Z',
+    progress: 0,
+  },
+  {
+    id: 'job-004',
+    title: 'Network - PCAP Analysis',
+    description: 'Find credentials in network capture file',
+    flagFormat: 'CTF{[a-zA-Z0-9_]+}',
+    status: 'failed',
+    createdAt: '2024-01-15T09:00:00Z',
+    startedAt: '2024-01-15T09:00:03Z',
+    completedAt: '2024-01-15T09:01:45Z',
+    errorMessage: 'Sandbox timeout exceeded',
+    progress: 45,
+  },
+];
+
+export const mockCommands: Command[] = [
+  {
+    id: 'cmd-001',
+    jobId: 'job-001',
+    tool: 'file',
+    args: ['challenge.py'],
+    exitCode: 0,
+    stdout: 'challenge.py: Python script, ASCII text executable',
+    stderr: '',
+    executedAt: '2024-01-15T10:30:10Z',
+    duration: 0.05,
+  },
+  {
+    id: 'cmd-002',
+    jobId: 'job-001',
+    tool: 'strings',
+    args: ['-n', '8', 'output.bin'],
+    exitCode: 0,
+    stdout: 'BEGIN RSA PRIVATE KEY\nn = 0x...\ne = 65537\nCTF{w34k_pr1m3s_4r3_b4d}\nEND RSA PRIVATE KEY',
+    stderr: '',
+    executedAt: '2024-01-15T10:30:15Z',
+    duration: 0.12,
+  },
+  {
+    id: 'cmd-003',
+    jobId: 'job-001',
+    tool: 'xxd',
+    args: ['-l', '64', 'output.bin'],
+    exitCode: 0,
+    stdout: '00000000: 4354 467b 7733 346b 5f70 7231 6d33 735f  CTF{w34k_pr1m3s_\n00000010: 3472 335f 6234 647d 0a00 0000 0000 0000  4r3_b4d}........',
+    stderr: '',
+    executedAt: '2024-01-15T10:30:20Z',
+    duration: 0.08,
+  },
+];
+
+export const mockArtifacts: Artifact[] = [
+  {
+    name: 'challenge.py',
+    path: '/data/runs/job-001/input/challenge.py',
+    size: 2048,
+    type: 'text/x-python',
+    createdAt: '2024-01-15T10:30:00Z',
+  },
+  {
+    name: 'output.bin',
+    path: '/data/runs/job-001/input/output.bin',
+    size: 1024,
+    type: 'application/octet-stream',
+    createdAt: '2024-01-15T10:30:00Z',
+  },
+  {
+    name: 'commands.log',
+    path: '/data/runs/job-001/logs/commands.log',
+    size: 4096,
+    type: 'text/plain',
+    createdAt: '2024-01-15T10:32:15Z',
+  },
+];
+
+export const mockFlagCandidates: FlagCandidate[] = [
+  {
+    id: 'flag-001',
+    value: 'CTF{w34k_pr1m3s_4r3_b4d}',
+    confidence: 0.95,
+    source: 'strings output',
+    commandId: 'cmd-002',
+    context: '...BEGIN RSA PRIVATE KEY\nn = 0x...\ne = 65537\n>>> CTF{w34k_pr1m3s_4r3_b4d} <<<\nEND RSA PRIVATE KEY...',
+  },
+  {
+    id: 'flag-002',
+    value: 'CTF{w34k_pr1m3s_4r3_b4d}',
+    confidence: 0.92,
+    source: 'xxd hex dump',
+    commandId: 'cmd-003',
+    context: '00000000: 4354 467b 7733 346b 5f70 7231 6d33 735f  >>> CTF{w34k_pr1m3s_ <<<',
+  },
+];
+
+export const mockWriteup = `# RSA Basics - Challenge Writeup
+
+## Overview
+This challenge presents a basic RSA encryption scenario with intentionally weak parameters, making it vulnerable to factorization attacks.
+
+## Reconnaissance
+
+### File Analysis
+\`\`\`bash
+$ file challenge.py
+challenge.py: Python script, ASCII text executable
+
+$ file output.bin
+output.bin: data
+\`\`\`
+
+The challenge provides a Python script and an encrypted binary output file.
+
+## Analysis Steps
+
+### Step 1: Extract Strings
+Using the \`strings\` command on the binary output revealed readable content:
+
+\`\`\`bash
+$ strings -n 8 output.bin
+BEGIN RSA PRIVATE KEY
+n = 0x...
+e = 65537
+CTF{w34k_pr1m3s_4r3_b4d}
+END RSA PRIVATE KEY
+\`\`\`
+
+**Evidence ID:** cmd-002
+
+### Step 2: Hex Dump Verification
+Confirmed the flag presence using xxd:
+
+\`\`\`bash
+$ xxd -l 64 output.bin
+00000000: 4354 467b 7733 346b 5f70 7231 6d33 735f  CTF{w34k_pr1m3s_
+00000010: 3472 335f 6234 647d 0a00 0000 0000 0000  4r3_b4d}........
+\`\`\`
+
+**Evidence ID:** cmd-003
+
+## Flag Candidates
+
+| Candidate | Confidence | Source |
+|-----------|------------|--------|
+| \`CTF{w34k_pr1m3s_4r3_b4d}\` | 95% | strings output |
+| \`CTF{w34k_pr1m3s_4r3_b4d}\` | 92% | xxd hex dump |
+
+## Conclusion
+
+The flag was embedded directly in the output binary file, likely as a result of weak RSA parameters allowing for easy decryption.
+
+**Flag:** \`CTF{w34k_pr1m3s_4r3_b4d}\`
+
+---
+*Generated by CTF Autopilot Analyzer*
+`;
+
+export const mockJobDetail: JobDetail = {
+  ...mockJobs[0],
+  commands: mockCommands,
+  artifacts: mockArtifacts,
+  flagCandidates: mockFlagCandidates,
+  writeup: mockWriteup,
+};
+
+export const mockConfig: Config = {
+  maxUploadSizeMb: 200,
+  allowedExtensions: ['.txt', '.py', '.c', '.cpp', '.h', '.java', '.js', '.json', '.xml', '.html', '.css', '.md', '.pdf', '.png', '.jpg', '.jpeg', '.gif', '.zip', '.tar', '.gz', '.pcap', '.pcapng', '.elf', '.exe', '.dll', '.so', '.bin'],
+  sandboxTimeout: 60,
+  allowedTools: ['strings', 'file', 'exiftool', 'binwalk', 'pdfinfo', 'pdftotext', 'tshark', 'readelf', 'objdump', 'xxd'],
+};
