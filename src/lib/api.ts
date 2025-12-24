@@ -10,6 +10,11 @@ function getCsrfToken(): string | null {
   return match ? match[1] : null;
 }
 
+// Check if response is HTML (backend not available, Vite serving index.html)
+function isHtmlResponse(text: string): boolean {
+  return text.trimStart().startsWith('<!') || text.trimStart().startsWith('<html');
+}
+
 // Generic fetch wrapper with error handling
 async function apiFetch<T>(
   endpoint: string,
@@ -36,13 +41,20 @@ async function apiFetch<T>(
     credentials: 'include',
   });
   
+  // Handle response text first to check for HTML
+  const text = await response.text();
+  
+  // Check if we got HTML instead of JSON (backend not running)
+  if (isHtmlResponse(text)) {
+    throw new Error('Backend API not available. Please deploy the backend first.');
+  }
+  
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+    const error = text ? JSON.parse(text) : { detail: 'Unknown error' };
     throw new Error(error.detail || `HTTP ${response.status}`);
   }
   
   // Handle empty responses
-  const text = await response.text();
   if (!text) return {} as T;
   
   return JSON.parse(text);

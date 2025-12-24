@@ -90,11 +90,25 @@ interface UpdateStatus {
   error: string | null;
 }
 
-// Check if backend is available
+// Check if backend is available (must return JSON, not HTML)
 async function isBackendAvailable(): Promise<boolean> {
   try {
     const response = await fetch('/api/health', { method: 'GET' });
-    return response.ok;
+    if (!response.ok) return false;
+    
+    const text = await response.text();
+    // If response is HTML (Vite serving index.html), backend is not available
+    if (text.trimStart().startsWith('<!') || text.trimStart().startsWith('<html')) {
+      return false;
+    }
+    
+    // Try to parse as JSON to confirm it's a valid API response
+    try {
+      JSON.parse(text);
+      return true;
+    } catch {
+      return false;
+    }
   } catch {
     return false;
   }
