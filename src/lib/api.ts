@@ -314,3 +314,73 @@ export async function executeTerminalCommand(
 export async function getJobFiles(jobId: string): Promise<{ files: string[] }> {
   return apiFetch(`/jobs/${jobId}/files`);
 }
+
+// ============ AI Analysis API ============
+
+export interface CommandOutput {
+  tool: string;
+  args: string[];
+  stdout: string;
+  stderr: string;
+  exit_code: number;
+}
+
+export interface NextCommand {
+  tool: string;
+  args: string[];
+  reason: string;
+}
+
+export interface AIAnalysisResponse {
+  analysis: string;
+  category: string;
+  confidence: number;
+  findings: string[];
+  next_commands: NextCommand[];
+  flag_candidates: string[];
+  should_continue: boolean;
+  rule_based: boolean;
+}
+
+export async function analyzeWithAI(
+  jobId: string,
+  files: string[],
+  commandHistory: CommandOutput[],
+  description: string = "",
+  flagFormat: string = "CTF{...}",
+  currentCategory: string = "unknown",
+  attemptNumber: number = 1
+): Promise<AIAnalysisResponse> {
+  return apiFetch('/ai/analyze', {
+    method: 'POST',
+    body: JSON.stringify({
+      job_id: jobId,
+      files,
+      command_history: commandHistory,
+      description,
+      flag_format: flagFormat,
+      current_category: currentCategory,
+      attempt_number: attemptNumber,
+    }),
+  });
+}
+
+export interface DetectCategoryResponse {
+  category: string;
+  confidence: number;
+}
+
+export async function detectCategory(
+  files: string[],
+  fileOutputs: Record<string, string> = {},
+  stringsOutputs: Record<string, string> = {}
+): Promise<DetectCategoryResponse> {
+  return apiFetch('/ai/detect-category', {
+    method: 'POST',
+    body: JSON.stringify({
+      files,
+      file_outputs: fileOutputs,
+      strings_outputs: stringsOutputs,
+    }),
+  });
+}
