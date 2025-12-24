@@ -7,31 +7,23 @@
 # GitHub Repository: https://github.com/huynhtrungcipp/ctf-compass.git
 #
 # USAGE:
+#   # Fresh install
 #   curl -fsSL https://raw.githubusercontent.com/huynhtrungcipp/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash
 #
-# OR with cleanup of old installation:
+#   # Clean install (remove old first)
 #   curl -fsSL https://raw.githubusercontent.com/huynhtrungcipp/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --clean
 #
 # OPTIONS:
-#   --clean   Remove old installation before installing
-#   --force   Skip confirmation prompts
+#   --clean     Remove old installation completely before installing
+#   --force     Skip confirmation prompts
+#   --no-start  Don't start services after install
+#   --help      Show help message
 #
 # PREREQUISITES:
 #   1. Ubuntu 24.04 LTS
 #   2. Root or sudo access
 #   3. Internet connection
-#   4. MegaLLM API key from https://ai.megallm.io
-#
-# WHAT THIS SCRIPT DOES:
-#   ✓ Removes old installation if --clean flag is used
-#   ✓ Updates system packages
-#   ✓ Installs Docker Engine and Docker Compose
-#   ✓ Configures UFW firewall
-#   ✓ Configures fail2ban for SSH protection
-#   ✓ Clones CTF Compass repository
-#   ✓ Generates secure passwords
-#   ✓ Builds sandbox Docker image
-#   ✓ Starts all services
+#   4. Minimum 4GB RAM, 15GB disk
 #
 #===============================================================================
 
@@ -41,19 +33,36 @@ set -euo pipefail
 # Configuration
 #-------------------------------------------------------------------------------
 INSTALL_DIR="/opt/ctf-compass"
+BACKUP_DIR="/opt/ctf-compass-backups"
 LOG_FILE="/var/log/ctf-compass-install.log"
 GITHUB_REPO="https://github.com/huynhtrungcipp/ctf-compass.git"
 GITHUB_BRANCH="main"
 MIN_MEMORY_MB=3072
 MIN_DISK_GB=15
+
+# Flags
 CLEAN_MODE=false
 FORCE_MODE=false
+NO_START=false
 
 # Parse arguments
 for arg in "$@"; do
     case $arg in
         --clean) CLEAN_MODE=true ;;
         --force) FORCE_MODE=true ;;
+        --no-start) NO_START=true ;;
+        --help|-h)
+            echo "CTF Compass Installation Script"
+            echo ""
+            echo "Usage: $0 [OPTIONS]"
+            echo ""
+            echo "Options:"
+            echo "  --clean     Remove old installation before installing"
+            echo "  --force     Skip confirmation prompts"
+            echo "  --no-start  Don't start services after install"
+            echo "  --help      Show this help message"
+            exit 0
+            ;;
     esac
 done
 
@@ -99,6 +108,61 @@ print_banner() {
 }
 
 #-------------------------------------------------------------------------------
+# Cleanup Old Installation
+#-------------------------------------------------------------------------------
+cleanup_old_installation() {
+    log_step "Cleaning up old installation..."
+    
+    # Stop and remove old containers
+    if [[ -f "$INSTALL_DIR/ctf-autopilot/infra/docker-compose.yml" ]]; then
+        log_info "Stopping old services..."
+        cd "$INSTALL_DIR" 2>/dev/null || true
+        
+        # Export env if exists
+        if [[ -f ".env" ]]; then
+            set -a
+            source .env 2>/dev/null || true
+            set +a
+        fi
+        
+        docker compose -f "$INSTALL_DIR/ctf-autopilot/infra/docker-compose.yml" down -v --remove-orphans 2>/dev/null || true
+    fi
+    
+    # Stop containers by label/name
+    log_info "Removing old containers..."
+    docker ps -aq --filter "label=com.ctf-compass.service" | xargs -r docker rm -f 2>/dev/null || true
+    docker ps -aq --filter "name=ctf_compass" | xargs -r docker rm -f 2>/dev/null || true
+    docker ps -aq --filter "name=ctf-compass" | xargs -r docker rm -f 2>/dev/null || true
+    
+    # Remove old images
+    log_info "Removing old images..."
+    docker images --format "{{.Repository}}:{{.Tag}} {{.ID}}" | grep -E "ctf[-_]compass|ctf[-_]autopilot" | awk '{print $2}' | xargs -r docker rmi -f 2>/dev/null || true
+    
+    # Remove old volumes
+    log_info "Removing old volumes..."
+    docker volume rm ctf_compass_postgres_data 2>/dev/null || true
+    docker volume rm ctf_compass_redis_data 2>/dev/null || true
+    docker volume rm ctf_compass_app_data 2>/dev/null || true
+    
+    # Remove old networks
+    docker network rm ctf_compass_frontend 2>/dev/null || true
+    docker network rm ctf_compass_backend 2>/dev/null || true
+    
+    # Cleanup dangling resources
+    log_info "Pruning Docker resources..."
+    docker system prune -af 2>/dev/null || true
+    docker volume prune -f 2>/dev/null || true
+    
+    # Remove old files
+    log_info "Removing old files..."
+    rm -rf "$INSTALL_DIR"
+    rm -f /var/log/ctf-compass-*.log
+    rm -f /tmp/ctf_compass_sandbox_hash
+    
+    log_success "Old installation cleaned up"
+}
+
+#-------------------------------------------------------------------------------
 # Pre-flight Checks
 #-------------------------------------------------------------------------------
 preflight_checks() {
@@ -108,39 +172,25 @@ preflight_checks() {
     if [[ $EUID -ne 0 ]]; then
         log_error "This script must be run as root (use sudo)"
     fi
+    log_debug "Running as root: OK"
     
-    # Cleanup old installation if requested
-    if [[ "$CLEAN_MODE" == "true" ]] && [[ -d "$INSTALL_DIR" ]]; then
-        log_info "Cleaning up old installation..."
-        
-        # Stop old services
-        if [[ -f "$INSTALL_DIR/ctf-autopilot/infra/docker-compose.yml" ]]; then
-            docker compose -f "$INSTALL_DIR/ctf-autopilot/infra/docker-compose.yml" down -v 2>/dev/null || true
-        fi
-        
-        # Remove old Docker images
-        docker rmi $(docker images | grep -E 'ctf-compass|ctf-autopilot' | awk '{print $3}') 2>/dev/null || true
-        
-        # Cleanup Docker resources
-        docker system prune -af 2>/dev/null || true
-        
-        # Remove old files (preserve backups)
-        rm -rf "$INSTALL_DIR"
-        rm -f /var/log/ctf-compass-*.log
-        
-        log_success "Old installation cleaned up"
-    elif [[ -d "$INSTALL_DIR" ]]; then
-        log_warn "Existing installation found at $INSTALL_DIR"
-        if [[ "$FORCE_MODE" != "true" ]]; then
+    # Handle existing installation
+    if [[ -d "$INSTALL_DIR" ]]; then
+        if [[ "$CLEAN_MODE" == "true" ]]; then
+            cleanup_old_installation
+        elif [[ "$FORCE_MODE" == "true" ]]; then
+            cleanup_old_installation
+        else
+            log_warn "Existing installation found at $INSTALL_DIR"
             read -p "Remove and reinstall? (y/N) " -n 1 -r
             echo
             if [[ $REPLY =~ ^[Yy]$ ]]; then
-                docker compose -f "$INSTALL_DIR/ctf-autopilot/infra/docker-compose.yml" down -v 2>/dev/null || true
-                rm -rf "$INSTALL_DIR"
+                cleanup_old_installation
+            else
+                log_error "Installation cancelled. Use --clean to force reinstall."
             fi
         fi
     fi
-    log_debug "Running as root: OK"
     
     # Check Ubuntu version
     if [[ -f /etc/os-release ]]; then
@@ -151,10 +201,12 @@ preflight_checks() {
         if [[ ! "$VERSION_ID" =~ ^24\. ]]; then
             log_warn "This script is designed for Ubuntu 24.04 LTS"
             log_warn "Detected version: $VERSION_ID"
-            read -p "Continue anyway? (y/N) " -n 1 -r
-            echo
-            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-                exit 1
+            if [[ "$FORCE_MODE" != "true" ]]; then
+                read -p "Continue anyway? (y/N) " -n 1 -r
+                echo
+                if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                    exit 1
+                fi
             fi
         fi
         log_debug "Ubuntu version: $VERSION_ID - OK"
@@ -163,14 +215,11 @@ preflight_checks() {
     fi
     
     # Check available memory
-    AVAILABLE_MEMORY_MB=$(free -m | awk '/^Mem:/{print $7}')
     TOTAL_MEMORY_MB=$(free -m | awk '/^Mem:/{print $2}')
     if [[ $TOTAL_MEMORY_MB -lt $MIN_MEMORY_MB ]]; then
         log_warn "Low memory detected: ${TOTAL_MEMORY_MB}MB (recommended: ${MIN_MEMORY_MB}MB+)"
-        log_warn "The system may run slowly or fail to start all services."
-    else
-        log_debug "Memory: ${TOTAL_MEMORY_MB}MB total, ${AVAILABLE_MEMORY_MB}MB available - OK"
     fi
+    log_debug "Memory: ${TOTAL_MEMORY_MB}MB total - OK"
     
     # Check available disk space
     AVAILABLE_DISK_GB=$(df -BG / | awk 'NR==2 {print $4}' | sed 's/G//')
@@ -180,7 +229,7 @@ preflight_checks() {
     log_debug "Disk space: ${AVAILABLE_DISK_GB}GB available - OK"
     
     # Check internet connectivity
-    if ! ping -c 1 -W 5 google.com > /dev/null 2>&1; then
+    if ! ping -c 1 -W 5 github.com > /dev/null 2>&1; then
         if ! ping -c 1 -W 5 8.8.8.8 > /dev/null 2>&1; then
             log_error "No internet connection. Please check your network."
         fi
@@ -196,13 +245,9 @@ preflight_checks() {
 update_system() {
     log_step "Step 1/8: Updating system packages..."
     
-    # Update package lists
     apt-get update -qq 2>&1 | tee -a "$LOG_FILE"
-    
-    # Upgrade existing packages
     DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq 2>&1 | tee -a "$LOG_FILE"
     
-    # Install prerequisites
     log_info "Installing prerequisites..."
     DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
         apt-transport-https \
@@ -227,17 +272,13 @@ update_system() {
 install_docker() {
     log_step "Step 2/8: Installing Docker..."
     
-    if command -v docker &> /dev/null; then
+    if command -v docker &> /dev/null && docker compose version &> /dev/null; then
         DOCKER_VERSION=$(docker --version | awk '{print $3}' | tr -d ',')
+        COMPOSE_VERSION=$(docker compose version --short)
         log_info "Docker already installed: v${DOCKER_VERSION}"
-        
-        # Check Docker Compose
-        if docker compose version &> /dev/null; then
-            COMPOSE_VERSION=$(docker compose version --short)
-            log_info "Docker Compose already installed: v${COMPOSE_VERSION}"
-            log_success "Docker installation verified"
-            return 0
-        fi
+        log_info "Docker Compose: v${COMPOSE_VERSION}"
+        log_success "Docker installation verified"
+        return 0
     fi
     
     log_info "Installing Docker Engine..."
@@ -282,34 +323,17 @@ install_docker() {
 configure_firewall() {
     log_step "Step 3/8: Configuring firewall..."
     
-    # Reset UFW
     ufw --force reset > /dev/null 2>&1
-    
-    # Set default policies
     ufw default deny incoming > /dev/null
     ufw default allow outgoing > /dev/null
     
-    # Allow SSH (important - do this first!)
     ufw allow ssh comment 'SSH access' > /dev/null
-    
-    # Allow HTTP and HTTPS
     ufw allow 80/tcp comment 'HTTP' > /dev/null
     ufw allow 443/tcp comment 'HTTPS' > /dev/null
-    
-    # Allow app ports (optional, for direct access)
     ufw allow 3000/tcp comment 'CTF Compass Web' > /dev/null
     ufw allow 8000/tcp comment 'CTF Compass API' > /dev/null
     
-    # Enable UFW
     ufw --force enable > /dev/null
-    
-    log_info "Firewall rules configured:"
-    log_info "  - Port 22 (SSH): ALLOWED"
-    log_info "  - Port 80 (HTTP): ALLOWED"
-    log_info "  - Port 443 (HTTPS): ALLOWED"
-    log_info "  - Port 3000 (Web UI): ALLOWED"
-    log_info "  - Port 8000 (API): ALLOWED"
-    log_info "  - All other incoming: DENIED"
     
     log_success "Firewall configured"
 }
@@ -322,13 +346,9 @@ configure_fail2ban() {
     
     cat > /etc/fail2ban/jail.local << 'EOF'
 [DEFAULT]
-# Ban duration: 1 hour
 bantime = 1h
-# Time window for counting failures
 findtime = 10m
-# Number of failures before ban
 maxretry = 5
-# Ignore localhost
 ignoreip = 127.0.0.1/8 ::1
 
 [sshd]
@@ -343,7 +363,7 @@ EOF
     systemctl restart fail2ban
     systemctl enable fail2ban
     
-    log_success "fail2ban configured (SSH protection enabled)"
+    log_success "fail2ban configured"
 }
 
 #-------------------------------------------------------------------------------
@@ -352,32 +372,12 @@ EOF
 setup_repository() {
     log_step "Step 5/8: Setting up repository..."
     
-    if [[ -d "$INSTALL_DIR" ]]; then
-        log_info "Installation directory exists, updating..."
-        cd "$INSTALL_DIR"
-        
-        # Check if it's a git repo
-        if [[ -d ".git" ]]; then
-            git fetch origin 2>&1 | tee -a "$LOG_FILE" || true
-            git reset --hard origin/$GITHUB_BRANCH 2>&1 | tee -a "$LOG_FILE" || true
-            log_info "Repository updated from GitHub"
-        else
-            log_warn "Directory exists but is not a git repository"
-            log_info "Backing up and re-cloning..."
-            cd /
-            mv "$INSTALL_DIR" "${INSTALL_DIR}.backup.$(date +%Y%m%d%H%M%S)"
-            git clone "$GITHUB_REPO" "$INSTALL_DIR" 2>&1 | tee -a "$LOG_FILE"
-        fi
-    else
-        log_info "Cloning repository from GitHub..."
-        git clone "$GITHUB_REPO" "$INSTALL_DIR" 2>&1 | tee -a "$LOG_FILE"
-    fi
+    log_info "Cloning from GitHub..."
+    git clone --depth 1 --branch "$GITHUB_BRANCH" "$GITHUB_REPO" "$INSTALL_DIR" 2>&1 | tee -a "$LOG_FILE"
     
     cd "$INSTALL_DIR"
-    
-    # Show current version
     CURRENT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-    log_info "Current version: $CURRENT_COMMIT"
+    log_info "Version: $CURRENT_COMMIT"
     
     log_success "Repository ready at $INSTALL_DIR"
 }
@@ -390,94 +390,97 @@ configure_environment() {
     
     cd "$INSTALL_DIR"
     
-    # Find the correct path for .env.example
-    ENV_EXAMPLE=""
-    if [[ -f ".env.example" ]]; then
-        ENV_EXAMPLE=".env.example"
-    elif [[ -f "ctf-autopilot/.env.example" ]]; then
-        ENV_EXAMPLE="ctf-autopilot/.env.example"
-    fi
+    # Generate secure credentials
+    SECRET_KEY=$(openssl rand -base64 48 | tr -d '\n')
+    POSTGRES_PASSWORD=$(openssl rand -base64 32 | tr -dc 'a-zA-Z0-9' | head -c 32)
+    ADMIN_PASSWORD=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 16)
+    REDIS_PASSWORD=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 24)
     
-    if [[ -f ".env" ]]; then
-        log_info ".env file already exists"
-        
-        # Check if MEGALLM_API_KEY is set
-        if grep -q "^MEGALLM_API_KEY=.\+$" .env; then
-            log_info "MEGALLM_API_KEY is configured"
-        else
-            log_warn "MEGALLM_API_KEY is not set in .env"
-        fi
-    else
-        if [[ -z "$ENV_EXAMPLE" ]]; then
-            log_warn ".env.example not found, creating default .env"
-            cat > .env << 'EOF'
+    # Create .env file
+    cat > .env << EOF
+#===============================================================================
 # CTF Compass Configuration
+# Generated: $(date)
+#===============================================================================
+
+# AI Configuration (REQUIRED)
+# Get your API key from: https://ai.megallm.io
 MEGALLM_API_KEY=
 MEGALLM_MODEL=llama3.3-70b-instruct
-ADMIN_PASSWORD=
-POSTGRES_PASSWORD=
-SECRET_KEY=
+
+# Authentication
+ADMIN_PASSWORD=$ADMIN_PASSWORD
+
+# Database
+POSTGRES_USER=ctfautopilot
+POSTGRES_PASSWORD=$POSTGRES_PASSWORD
+POSTGRES_DB=ctfautopilot
+
+# Security
+SECRET_KEY=$SECRET_KEY
+REDIS_PASSWORD=$REDIS_PASSWORD
+
+# Application Settings
 MAX_UPLOAD_SIZE_MB=200
 SANDBOX_TIMEOUT_SECONDS=60
 SANDBOX_MEMORY_LIMIT=512m
 SANDBOX_CPU_LIMIT=1
 ENVIRONMENT=production
 DEBUG=false
+
+# TLS (set to true for HTTPS)
+ENABLE_TLS=false
 EOF
-        else
-            log_info "Creating .env from template..."
-            cp "$ENV_EXAMPLE" .env
-        fi
-        
-        # Generate secure values
-        SECRET_KEY=$(openssl rand -base64 48 | tr -d '\n')
-        POSTGRES_PASSWORD=$(openssl rand -base64 32 | tr -dc 'a-zA-Z0-9' | head -c 32)
-        ADMIN_PASSWORD=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 16)
-        REDIS_PASSWORD=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 24)
-        
-        # Update .env with generated values
-        sed -i "s|^SECRET_KEY=.*|SECRET_KEY=$SECRET_KEY|" .env
-        sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$POSTGRES_PASSWORD|" .env
-        sed -i "s|^ADMIN_PASSWORD=.*|ADMIN_PASSWORD=$ADMIN_PASSWORD|" .env
-        sed -i "s|^# REDIS_PASSWORD=.*|REDIS_PASSWORD=$REDIS_PASSWORD|" .env 2>/dev/null || true
-        
-        # Secure .env file permissions
-        chmod 600 .env
-        
-        log_info "Generated secure credentials:"
-        echo ""
-        echo -e "${YELLOW}╔═══════════════════════════════════════════════════════════════════╗${NC}"
-        echo -e "${YELLOW}║${NC}  ${BOLD}IMPORTANT: Save these credentials securely!${NC}                      ${YELLOW}║${NC}"
-        echo -e "${YELLOW}╠═══════════════════════════════════════════════════════════════════╣${NC}"
-        echo -e "${YELLOW}║${NC}                                                                   ${YELLOW}║${NC}"
-        echo -e "${YELLOW}║${NC}  Admin Password: ${GREEN}${ADMIN_PASSWORD}${NC}                                 ${YELLOW}║${NC}"
-        echo -e "${YELLOW}║${NC}                                                                   ${YELLOW}║${NC}"
-        echo -e "${YELLOW}║${NC}  ${RED}ACTION REQUIRED:${NC}                                               ${YELLOW}║${NC}"
-        echo -e "${YELLOW}║${NC}  Edit ${CYAN}$INSTALL_DIR/.env${NC} and set MEGALLM_API_KEY                ${YELLOW}║${NC}"
-        echo -e "${YELLOW}║${NC}  Get your API key from: ${CYAN}https://ai.megallm.io${NC}                  ${YELLOW}║${NC}"
-        echo -e "${YELLOW}║${NC}                                                                   ${YELLOW}║${NC}"
-        echo -e "${YELLOW}╚═══════════════════════════════════════════════════════════════════╝${NC}"
-        echo ""
-        
-        # Save credentials to file
-        cat > "$INSTALL_DIR/CREDENTIALS.txt" << EOF
-CTF Compass - Generated Credentials
-================================================
-Generated: $(date)
+
+    chmod 600 .env
+    
+    # Copy to infra directory for docker-compose
+    cp .env ctf-autopilot/infra/.env
+    
+    # Save credentials
+    cat > CREDENTIALS.txt << EOF
+#===============================================================================
+# CTF Compass Credentials
+# Generated: $(date)
+# KEEP THIS FILE SECURE!
+#===============================================================================
 
 Admin Password: $ADMIN_PASSWORD
-PostgreSQL Password: $POSTGRES_PASSWORD
+
+Database:
+  User: ctfautopilot
+  Password: $POSTGRES_PASSWORD
+  Database: ctfautopilot
+
 Redis Password: $REDIS_PASSWORD
 
-IMPORTANT: 
-- Keep this file secure and delete after saving credentials elsewhere
-- Set MEGALLM_API_KEY in .env before starting services
-- Get API key from: https://ai.megallm.io
-
+#===============================================================================
+# IMPORTANT: Set your MegaLLM API key!
+# 
+# Option 1: Edit via Web UI
+#   Go to Configuration page after login
+#
+# Option 2: Edit .env file
+#   sudo nano $INSTALL_DIR/.env
+#   Add: MEGALLM_API_KEY=your-key-here
+#   Then restart: docker compose restart
+#===============================================================================
 EOF
-        chmod 600 "$INSTALL_DIR/CREDENTIALS.txt"
-        log_info "Credentials saved to $INSTALL_DIR/CREDENTIALS.txt"
-    fi
+
+    chmod 600 CREDENTIALS.txt
+    
+    # Display credentials
+    echo ""
+    echo -e "${YELLOW}╔═══════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${YELLOW}║${NC}  ${BOLD}IMPORTANT: Save these credentials securely!${NC}                      ${YELLOW}║${NC}"
+    echo -e "${YELLOW}╠═══════════════════════════════════════════════════════════════════╣${NC}"
+    echo -e "${YELLOW}║${NC}                                                                   ${YELLOW}║${NC}"
+    echo -e "${YELLOW}║${NC}  Admin Password: ${CYAN}${ADMIN_PASSWORD}${NC}                                  ${YELLOW}║${NC}"
+    echo -e "${YELLOW}║${NC}                                                                   ${YELLOW}║${NC}"
+    echo -e "${YELLOW}║${NC}  Credentials saved to: ${CYAN}$INSTALL_DIR/CREDENTIALS.txt${NC}  ${YELLOW}║${NC}"
+    echo -e "${YELLOW}║${NC}                                                                   ${YELLOW}║${NC}"
+    echo -e "${YELLOW}╚═══════════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
     
     log_success "Environment configured"
 }
@@ -490,12 +493,11 @@ build_sandbox() {
     
     cd "$INSTALL_DIR"
     
-    # Find Dockerfile location
     SANDBOX_PATH=""
-    if [[ -f "sandbox/image/Dockerfile" ]]; then
-        SANDBOX_PATH="sandbox/image"
-    elif [[ -f "ctf-autopilot/sandbox/image/Dockerfile" ]]; then
+    if [[ -f "ctf-autopilot/sandbox/image/Dockerfile" ]]; then
         SANDBOX_PATH="ctf-autopilot/sandbox/image"
+    elif [[ -f "sandbox/image/Dockerfile" ]]; then
+        SANDBOX_PATH="sandbox/image"
     fi
     
     if [[ -z "$SANDBOX_PATH" ]]; then
@@ -503,112 +505,60 @@ build_sandbox() {
         return 0
     fi
     
-    log_info "Building sandbox Docker image (this may take a few minutes)..."
     docker build \
         -t ctf-compass-sandbox:latest \
+        -t ctf-autopilot-sandbox:latest \
         -f "$SANDBOX_PATH/Dockerfile" \
         "$SANDBOX_PATH/" 2>&1 | tee -a "$LOG_FILE"
     
-    # Verify image was built
-    if ! docker images | grep -q "ctf-compass-sandbox"; then
-        log_warn "Sandbox image build failed, trying alternative name..."
-        docker build \
-            -t ctf-autopilot-sandbox:latest \
-            -f "$SANDBOX_PATH/Dockerfile" \
-            "$SANDBOX_PATH/" 2>&1 | tee -a "$LOG_FILE"
-    fi
+    # Save hash for future comparisons
+    md5sum "$SANDBOX_PATH/Dockerfile" | cut -d' ' -f1 > /tmp/ctf_compass_sandbox_hash
     
-    log_success "Sandbox image built successfully"
+    log_success "Sandbox image built"
 }
 
 #-------------------------------------------------------------------------------
 # Start Services
 #-------------------------------------------------------------------------------
 start_services() {
+    if [[ "$NO_START" == "true" ]]; then
+        log_info "Skipping service start (--no-start flag set)"
+        return 0
+    fi
+    
     log_step "Step 8/8: Starting services..."
     
     cd "$INSTALL_DIR"
     
     # Create data directories
-    mkdir -p data/runs ctf-autopilot/data/runs ctf-autopilot/infra/data/runs
-    chmod -R 755 data ctf-autopilot/data 2>/dev/null || true
+    mkdir -p data/runs ctf-autopilot/data/runs
     
-    # Find docker-compose.yml location
-    COMPOSE_FILE=""
-    if [[ -f "ctf-autopilot/infra/docker-compose.yml" ]]; then
-        COMPOSE_FILE="ctf-autopilot/infra/docker-compose.yml"
-    elif [[ -f "infra/docker-compose.yml" ]]; then
-        COMPOSE_FILE="infra/docker-compose.yml"
-    elif [[ -f "docker-compose.yml" ]]; then
-        COMPOSE_FILE="docker-compose.yml"
-    fi
-    
-    if [[ -z "$COMPOSE_FILE" ]]; then
-        log_warn "docker-compose.yml not found, skipping service start..."
-        log_info "You can start services manually later"
-        return 0
-    fi
-    
-    # Copy .env to compose directory if needed
-    COMPOSE_DIR=$(dirname "$COMPOSE_FILE")
-    if [[ "$COMPOSE_DIR" != "." ]] && [[ -f ".env" ]]; then
-        cp .env "$COMPOSE_DIR/.env" 2>/dev/null || true
-    fi
-    
-    log_info "Using compose file: $COMPOSE_FILE"
-    
-    # Export environment variables for docker compose
+    # Export environment
     set -a
-    source .env 2>/dev/null || true
+    source .env
     set +a
     
-    log_info "Starting Docker containers..."
+    COMPOSE_FILE="ctf-autopilot/infra/docker-compose.yml"
+    
+    log_info "Building and starting containers..."
     docker compose -f "$COMPOSE_FILE" up -d --build 2>&1 | tee -a "$LOG_FILE"
     
-    # Wait for services to be ready
     log_info "Waiting for services to start (30 seconds)..."
     sleep 30
     
     # Health checks
     log_info "Running health checks..."
     
-    HEALTH_OK=true
-    
-    # Check API
     if curl -sf http://localhost:8000/api/health > /dev/null 2>&1; then
         log_success "  API: Healthy"
     else
-        log_warn "  API: Not responding (may still be starting)"
-        HEALTH_OK=false
+        log_warn "  API: Starting..."
     fi
     
-    # Check PostgreSQL
-    if docker compose -f "$COMPOSE_FILE" exec -T postgres pg_isready -U ctfautopilot > /dev/null 2>&1; then
-        log_success "  PostgreSQL: Healthy"
-    else
-        log_warn "  PostgreSQL: Not ready"
-        HEALTH_OK=false
-    fi
-    
-    # Check Redis
-    if docker compose -f "$COMPOSE_FILE" exec -T redis redis-cli ping > /dev/null 2>&1; then
-        log_success "  Redis: Healthy"
-    else
-        log_warn "  Redis: Not ready"
-        HEALTH_OK=false
-    fi
-    
-    # Check Web
     if curl -sf http://localhost:3000 > /dev/null 2>&1; then
         log_success "  Web UI: Healthy"
     else
-        log_warn "  Web UI: Not responding (may still be starting)"
-        HEALTH_OK=false
-    fi
-    
-    if [[ "$HEALTH_OK" == "false" ]]; then
-        log_warn "Some services may still be starting. Check logs with:"
-        log_warn "  docker compose -f $INSTALL_DIR/$COMPOSE_FILE logs -f"
+        log_warn "  Web UI: Starting..."
     fi
     
     log_success "Services started"
@@ -618,9 +568,8 @@ start_services() {
 # Print Summary
 #-------------------------------------------------------------------------------
 print_summary() {
-    # Get server IP
+    VERSION=$(cd "$INSTALL_DIR" && git rev-parse --short HEAD 2>/dev/null || echo 'unknown')
     SERVER_IP=$(hostname -I | awk '{print $1}')
-    CURRENT_COMMIT=$(cd $INSTALL_DIR && git rev-parse --short HEAD 2>/dev/null || echo 'unknown')
     
     echo ""
     echo -e "${GREEN}╔═══════════════════════════════════════════════════════════════════╗${NC}"
@@ -629,57 +578,49 @@ print_summary() {
     echo -e "${GREEN}║${NC}                                                                   ${GREEN}║${NC}"
     echo -e "${GREEN}╠═══════════════════════════════════════════════════════════════════╣${NC}"
     echo -e "${GREEN}║${NC}                                                                   ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}  ${BOLD}Version:${NC} $CURRENT_COMMIT                                                    ${GREEN}║${NC}"
+    echo -e "${GREEN}║${NC}  ${BOLD}Version:${NC} $VERSION                                                    ${GREEN}║${NC}"
     echo -e "${GREEN}║${NC}                                                                   ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}  ${BOLD}Access the Application:${NC}                                        ${GREEN}║${NC}"
+    echo -e "${GREEN}║${NC}  ${BOLD}Access the Application:${NC}                                          ${GREEN}║${NC}"
     echo -e "${GREEN}║${NC}    Web UI: ${CYAN}http://${SERVER_IP}:3000${NC}                             ${GREEN}║${NC}"
     echo -e "${GREEN}║${NC}    API:    ${CYAN}http://${SERVER_IP}:8000${NC}                             ${GREEN}║${NC}"
     echo -e "${GREEN}║${NC}                                                                   ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}  ${BOLD}Installation Directory:${NC}                                        ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}    ${CYAN}$INSTALL_DIR${NC}                                         ${GREEN}║${NC}"
+    echo -e "${GREEN}║${NC}  ${BOLD}Installation Directory:${NC}                                          ${GREEN}║${NC}"
+    echo -e "${GREEN}║${NC}    $INSTALL_DIR                                              ${GREEN}║${NC}"
     echo -e "${GREEN}║${NC}                                                                   ${GREEN}║${NC}"
     echo -e "${GREEN}╚═══════════════════════════════════════════════════════════════════╝${NC}"
     echo ""
-    echo -e "${YELLOW}Next Steps:${NC}"
-    echo -e "  1. Set your MegaLLM API key:"
-    echo -e "     ${CYAN}nano $INSTALL_DIR/.env${NC}"
-    echo -e "     Add: MEGALLM_API_KEY=your-key-here"
+    echo -e "${CYAN}Next Steps:${NC}"
+    echo "  1. Open the Web UI and log in with your admin password"
+    echo "  2. Go to Configuration page to set your MegaLLM API key"
+    echo "  3. Start analyzing CTF challenges!"
     echo ""
-    echo -e "  2. Restart services after editing .env:"
-    echo -e "     ${CYAN}cd $INSTALL_DIR && docker compose -f ctf-autopilot/infra/docker-compose.yml restart${NC}"
+    echo -e "${CYAN}Useful Commands:${NC}"
+    echo "  View logs:     docker compose -f $INSTALL_DIR/ctf-autopilot/infra/docker-compose.yml logs -f"
+    echo "  Stop:          docker compose -f $INSTALL_DIR/ctf-autopilot/infra/docker-compose.yml down"
+    echo "  Start:         docker compose -f $INSTALL_DIR/ctf-autopilot/infra/docker-compose.yml up -d"
+    echo "  Update:        sudo bash $INSTALL_DIR/ctf-autopilot/infra/scripts/update.sh"
+    echo "  Uninstall:     sudo bash $INSTALL_DIR/ctf-autopilot/infra/scripts/uninstall.sh"
     echo ""
-    echo -e "${YELLOW}Useful Commands:${NC}"
-    echo -e "  View logs:       ${CYAN}docker compose -f $INSTALL_DIR/ctf-autopilot/infra/docker-compose.yml logs -f${NC}"
-    echo -e "  Stop services:   ${CYAN}docker compose -f $INSTALL_DIR/ctf-autopilot/infra/docker-compose.yml down${NC}"
-    echo -e "  Start services:  ${CYAN}docker compose -f $INSTALL_DIR/ctf-autopilot/infra/docker-compose.yml up -d${NC}"
-    echo -e "  Check status:    ${CYAN}docker compose -f $INSTALL_DIR/ctf-autopilot/infra/docker-compose.yml ps${NC}"
-    echo -e "  Update system:   ${CYAN}sudo bash $INSTALL_DIR/ctf-autopilot/infra/scripts/update.sh${NC}"
+    echo -e "${CYAN}Documentation:${NC}"
+    echo "  README:        $INSTALL_DIR/ctf-autopilot/README.md"
+    echo "  User Guide:    $INSTALL_DIR/ctf-autopilot/docs/USAGE.md"
+    echo "  Troubleshoot:  $INSTALL_DIR/ctf-autopilot/docs/DEBUG.md"
     echo ""
-    echo -e "${YELLOW}Documentation:${NC}"
-    echo -e "  README:      ${CYAN}$INSTALL_DIR/ctf-autopilot/README.md${NC}"
-    echo -e "  Debug Guide: ${CYAN}$INSTALL_DIR/ctf-autopilot/docs/DEBUG.md${NC}"
-    echo -e "  User Guide:  ${CYAN}$INSTALL_DIR/ctf-autopilot/docs/USAGE.md${NC}"
-    echo ""
-    echo -e "${YELLOW}GitHub Repository:${NC}"
-    echo -e "  ${CYAN}https://github.com/huynhtrungcipp/ctf-compass${NC}"
+    echo -e "${CYAN}GitHub:${NC} https://github.com/huynhtrungcipp/ctf-compass"
     echo ""
 }
 
 #-------------------------------------------------------------------------------
-# Main Execution
+# Main
 #-------------------------------------------------------------------------------
 main() {
-    # Create log file
-    touch "$LOG_FILE"
-    chmod 644 "$LOG_FILE"
+    # Initialize log file
+    mkdir -p "$(dirname "$LOG_FILE")"
+    echo "=== CTF Compass Installation Log ===" > "$LOG_FILE"
+    echo "Started: $(date)" >> "$LOG_FILE"
+    echo "" >> "$LOG_FILE"
     
     print_banner
-    
-    log_info "Installation started at $(date)"
-    log_info "Log file: $LOG_FILE"
-    log_info "GitHub: $GITHUB_REPO"
-    echo ""
-    
     preflight_checks
     update_system
     install_docker
@@ -689,11 +630,9 @@ main() {
     configure_environment
     build_sandbox
     start_services
-    
-    log_info "Installation completed at $(date)"
-    
     print_summary
+    
+    echo "Installation completed at $(date)" >> "$LOG_FILE"
 }
 
-# Run main function
 main "$@"

@@ -21,33 +21,17 @@ curl -fsSL https://raw.githubusercontent.com/huynhtrungcipp/ctf-compass/main/ctf
 ### Clean Installation (Remove Old Files First)
 
 ```bash
-# Stop and remove old installation
-sudo docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml down 2>/dev/null || true
-sudo rm -rf /opt/ctf-compass
-
-# Fresh install
-curl -fsSL https://raw.githubusercontent.com/huynhtrungcipp/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/huynhtrungcipp/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --clean
 ```
 
-### Manual Installation
+### Post-Installation
 
-```bash
-# Clone the repository
-git clone https://github.com/huynhtrungcipp/ctf-compass.git
-cd ctf-compass
+1. **Access the Web UI:** `http://YOUR_SERVER_IP:3000`
+2. **Login** with the admin password shown during installation
+3. **Configure API Key:** Go to Configuration page and enter your MegaLLM API key
+4. **Start analyzing!**
 
-# Copy environment file and configure
-cp ctf-autopilot/.env.example .env
-nano .env  # Add your MEGALLM_API_KEY
-
-# Start services
-./ctf-autopilot/infra/scripts/prod_up.sh
-```
-
-### Access
-
-- **Web UI:** `http://localhost:3000`
-- **API:** `http://localhost:8000`
+> **Note:** API key can be configured directly in the Web UI - no need to edit files manually!
 
 ---
 
@@ -57,8 +41,11 @@ nano .env  # Add your MEGALLM_API_KEY
 # Check for updates
 sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh --check
 
-# Perform update (auto cleanup old containers/images)
+# Perform update
 sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh
+
+# Deep cleanup and update
+sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh --clean
 ```
 
 ---
@@ -66,17 +53,32 @@ sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh
 ## 🗑️ Complete Uninstall
 
 ```bash
+# Interactive uninstall
+sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/uninstall.sh
+
+# Force uninstall (no prompts)
+sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/uninstall.sh --force
+
+# Keep database data
+sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/uninstall.sh --keep-data
+```
+
+### Manual Cleanup
+
+```bash
 # Stop all services
 sudo docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml down -v
 
 # Remove all data and files
-sudo rm -rf /opt/ctf-compass
-sudo rm -rf /opt/ctf-compass-backups
+sudo rm -rf /opt/ctf-compass /opt/ctf-compass-backups
 sudo rm -f /var/log/ctf-compass-*.log
 
-# Remove Docker images (optional)
-sudo docker rmi $(docker images | grep ctf-compass | awk '{print $3}') 2>/dev/null || true
-sudo docker rmi $(docker images | grep ctf-autopilot | awk '{print $3}') 2>/dev/null || true
+# Remove Docker images
+sudo docker rmi $(docker images | grep -E 'ctf[-_]compass|ctf[-_]autopilot' | awk '{print $3}') 2>/dev/null || true
+
+# Clean all Docker resources
+sudo docker system prune -af
+sudo docker volume prune -f
 ```
 
 ---
@@ -103,19 +105,18 @@ All analysis runs in isolated Docker containers with:
 ┌─────────────────────────────────────────────────────────────┐
 │                   Frontend (React/Vite)                      │
 │                    localhost:3000                            │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐          │
+│  │  Dashboard  │  │  Job Create │  │   Config    │          │
+│  │    Page     │  │    Page     │  │    Page     │          │
+│  └─────────────┘  └─────────────┘  └─────────────┘          │
 └─────────────────────┬───────────────────────────────────────┘
-                      │ HTTP/HTTPS
-┌─────────────────────▼───────────────────────────────────────┐
-│                    Nginx Reverse Proxy                       │
-│                    (TLS Termination)                         │
-└─────────────────────┬───────────────────────────────────────┘
-                      │
+                      │ HTTP/WebSocket
 ┌─────────────────────▼───────────────────────────────────────┐
 │                    FastAPI Backend                           │
 │                    localhost:8000                            │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐          │
-│  │    Auth     │  │    Jobs     │  │   Writeup   │          │
-│  │   Service   │  │   Service   │  │  Generator  │          │
+│  │    Auth     │  │    Jobs     │  │   System    │          │
+│  │   Service   │  │   Service   │  │   Config    │          │
 │  └─────────────┘  └──────┬──────┘  └─────────────┘          │
 └──────────────────────────┼──────────────────────────────────┘
                            │
@@ -143,22 +144,29 @@ ctf-compass/
 │   ├── apps/
 │   │   ├── web/                 # Frontend Dockerfile
 │   │   └── api/                 # FastAPI backend
+│   │       └── app/
+│   │           ├── routers/     # API endpoints (auth, jobs, system, ws)
+│   │           ├── services/    # Business logic
+│   │           └── models.py    # Database models
 │   ├── sandbox/
 │   │   ├── image/               # Sandbox Dockerfile
 │   │   └── profiles/            # Seccomp/AppArmor profiles
 │   ├── infra/
-│   │   ├── docker-compose.yml   # Main compose file
+│   │   ├── docker-compose.yml   # Production compose
 │   │   ├── docker-compose.dev.yml
 │   │   ├── nginx/               # Reverse proxy config
-│   │   └── scripts/             # Install, update, and run scripts
-│   ├── docs/
-│   │   ├── ARCHITECTURE.md
-│   │   ├── SECURITY.md
-│   │   ├── DEBUG.md
-│   │   ├── USAGE.md
-│   │   └── RUNBOOK.md
-│   ├── .env.example
-│   └── README.md
+│   │   └── scripts/
+│   │       ├── install_ubuntu_24.04.sh
+│   │       ├── update.sh
+│   │       ├── uninstall.sh
+│   │       ├── prod_up.sh
+│   │       └── dev_up.sh
+│   └── docs/
+│       ├── ARCHITECTURE.md
+│       ├── SECURITY.md
+│       ├── DEBUG.md
+│       ├── USAGE.md
+│       └── RUNBOOK.md
 ├── src/                         # React frontend source
 ├── package.json
 └── README.md
@@ -168,13 +176,21 @@ ctf-compass/
 
 ## 🔧 Configuration
 
-### Required Environment Variables
+### Web UI Configuration (Recommended)
 
-| Variable | Description |
-|----------|-------------|
-| `MEGALLM_API_KEY` | API key from [ai.megallm.io](https://ai.megallm.io) |
-| `ADMIN_PASSWORD` | Password for admin login |
-| `POSTGRES_PASSWORD` | Database password |
+After installation:
+1. Login to the Web UI
+2. Go to **Configuration** page
+3. Enter your **MegaLLM API key**
+4. Configure model settings if needed
+
+### Environment Variables
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `MEGALLM_API_KEY` | API key from [ai.megallm.io](https://ai.megallm.io) | Yes |
+| `ADMIN_PASSWORD` | Admin login password | Auto-generated |
+| `POSTGRES_PASSWORD` | Database password | Auto-generated |
 
 ### Optional Settings
 
@@ -183,18 +199,7 @@ ctf-compass/
 | `SECRET_KEY` | Auto-generated | JWT signing key |
 | `MAX_UPLOAD_SIZE_MB` | 200 | Maximum file upload size |
 | `SANDBOX_TIMEOUT_SECONDS` | 60 | Per-command timeout |
-| `MEGALLM_MODEL` | llama3.3-70b-instruct | Default AI model |
-
-### TLS Configuration
-
-#### Development (Self-Signed)
-```bash
-./ctf-autopilot/infra/scripts/generate_self_signed_cert.sh
-ENABLE_TLS=true ./ctf-autopilot/infra/scripts/prod_up.sh
-```
-
-#### Production (Let's Encrypt)
-See [docs/RUNBOOK.md](ctf-autopilot/docs/RUNBOOK.md#tls-configuration)
+| `MEGALLM_MODEL` | llama3.3-70b-instruct | AI model to use |
 
 ---
 
@@ -204,7 +209,7 @@ See [docs/RUNBOOK.md](ctf-autopilot/docs/RUNBOOK.md#tls-configuration)
 # Start development environment
 ./ctf-autopilot/infra/scripts/dev_up.sh
 
-# Run with Lovable
+# Run frontend with Vite
 npm run dev
 
 # Run backend tests
@@ -234,6 +239,10 @@ cd ctf-autopilot/apps/api && ruff check .
 # View logs
 docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml logs -f
 
+# View specific service logs
+docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml logs -f api
+docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml logs -f worker
+
 # Stop services
 docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml down
 
@@ -248,6 +257,7 @@ sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh
 
 # Cleanup old Docker resources
 docker system prune -af
+docker volume prune -f
 ```
 
 ---

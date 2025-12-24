@@ -1,28 +1,20 @@
 #!/bin/bash
 #===============================================================================
 # CTF Compass - System Update Script
-# Automatically pulls latest changes from GitHub, cleans up, and restarts
+# Pulls latest changes, cleans up, and restarts services
 #===============================================================================
 #
-# GitHub Repository: https://github.com/huynhtrungcipp/ctf-compass.git
+# GitHub: https://github.com/huynhtrungcipp/ctf-compass
 #
 # USAGE:
 #   sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh
 #
 # OPTIONS:
-#   --check   Check for updates without installing
-#   --clean   Force cleanup of all Docker resources before update
-#   --json    Output in JSON format (for API use)
-#   --ci      CI mode - non-interactive
-#   --help    Show help message
-#
-# WHAT THIS SCRIPT DOES:
-#   1. Backup current configuration
-#   2. Pull latest changes from GitHub
-#   3. Clean up old Docker images and containers
-#   4. Rebuild sandbox image if needed
-#   5. Restart all services
-#   6. Verify health
+#   --check     Check for updates without installing
+#   --clean     Force deep cleanup before update
+#   --json      Output in JSON format (for API)
+#   --force     Skip confirmation prompts
+#   --help      Show help message
 #
 #===============================================================================
 
@@ -32,13 +24,18 @@ set -euo pipefail
 # Configuration
 #-------------------------------------------------------------------------------
 INSTALL_DIR="${INSTALL_DIR:-/opt/ctf-compass}"
+BACKUP_DIR="/opt/ctf-compass-backups"
 LOG_FILE="/var/log/ctf-compass-update.log"
 GITHUB_REPO="https://github.com/huynhtrungcipp/ctf-compass.git"
 GITHUB_BRANCH="main"
-BACKUP_DIR="/opt/ctf-compass-backups"
+
+# Flags
+CLEAN_MODE=false
+JSON_MODE=false
+FORCE_MODE=false
 
 #-------------------------------------------------------------------------------
-# Colors and Logging
+# Colors
 #-------------------------------------------------------------------------------
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -47,11 +44,6 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'
-
-# Modes
-JSON_MODE="${JSON_MODE:-false}"
-CI_MODE="${CI_MODE:-false}"
-CLEAN_MODE=false
 
 log_info()    { 
     if [[ "$JSON_MODE" == "true" ]]; then
@@ -97,27 +89,64 @@ log_step()    {
 preflight_checks() {
     log_step "Running pre-flight checks..."
     
-    # Check if running as root
     if [[ $EUID -ne 0 ]]; then
         log_error "This script must be run as root (use sudo)"
     fi
     
-    # Check if install directory exists
     if [[ ! -d "$INSTALL_DIR" ]]; then
         log_error "Installation directory not found: $INSTALL_DIR"
     fi
     
-    # Check if git is available
     if ! command -v git &> /dev/null; then
         log_error "Git is not installed"
     fi
     
-    # Check if docker is running
     if ! docker info &> /dev/null; then
         log_error "Docker is not running"
     fi
     
     log_success "Pre-flight checks passed"
+}
+
+#-------------------------------------------------------------------------------
+# Check for Updates
+#-------------------------------------------------------------------------------
+check_updates() {
+    cd "$INSTALL_DIR"
+    
+    if [[ ! -d ".git" ]]; then
+        if [[ "$JSON_MODE" == "true" ]]; then
+            echo '{"updates_available":false,"error":"Not a git repository"}'
+        else
+            echo "Not a git repository"
+        fi
+        return 0
+    fi
+    
+    git remote set-url origin "$GITHUB_REPO" 2>/dev/null || true
+    git fetch origin $GITHUB_BRANCH 2>/dev/null
+    
+    LOCAL=$(git rev-parse HEAD 2>/dev/null)
+    REMOTE=$(git rev-parse origin/$GITHUB_BRANCH 2>/dev/null)
+    
+    if [[ "$LOCAL" == "$REMOTE" ]]; then
+        if [[ "$JSON_MODE" == "true" ]]; then
+            echo "{\"updates_available\":false,\"current_version\":\"${LOCAL:0:8}\",\"message\":\"Already up to date\"}"
+        else
+            echo "Already up to date (${LOCAL:0:8})"
+        fi
+    else
+        COMMITS_BEHIND=$(git rev-list --count HEAD..origin/$GITHUB_BRANCH 2>/dev/null || echo "0")
+        if [[ "$JSON_MODE" == "true" ]]; then
+            echo "{\"updates_available\":true,\"current_version\":\"${LOCAL:0:8}\",\"latest_version\":\"${REMOTE:0:8}\",\"commits_behind\":$COMMITS_BEHIND}"
+        else
+            echo "Updates available: $COMMITS_BEHIND commits behind"
+            echo "Current: ${LOCAL:0:8}"
+            echo "Latest:  ${REMOTE:0:8}"
+            echo ""
+            echo "Run 'sudo bash $0' to update"
+        fi
+    fi
 }
 
 #-------------------------------------------------------------------------------
@@ -131,10 +160,9 @@ backup_config() {
     
     cd "$INSTALL_DIR"
     
-    # Backup .env and credentials
     if [[ -f ".env" ]]; then
         tar -czf "$BACKUP_FILE" .env CREDENTIALS.txt 2>/dev/null || tar -czf "$BACKUP_FILE" .env 2>/dev/null || true
-        log_info "Configuration backed up to: $BACKUP_FILE"
+        log_info "Backed up to: $BACKUP_FILE"
     fi
     
     # Keep only last 5 backups
@@ -147,60 +175,48 @@ backup_config() {
 # Pull Latest Changes
 #-------------------------------------------------------------------------------
 pull_latest() {
-    log_step "Step 2/6: Pulling latest changes from GitHub..."
+    log_step "Step 2/6: Pulling latest changes..."
     
     cd "$INSTALL_DIR"
     
-    # Store current version
     OLD_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
     
-    # Check if it's a git repo
     if [[ ! -d ".git" ]]; then
         log_warn "Not a git repository. Initializing..."
         git init
         git remote add origin "$GITHUB_REPO" 2>/dev/null || git remote set-url origin "$GITHUB_REPO"
     fi
     
-    # Ensure correct remote URL
     git remote set-url origin "$GITHUB_REPO" 2>/dev/null || true
-    
-    # Stash any local changes (preserve .env)
     git stash --include-untracked 2>/dev/null || true
-    
-    # Fetch and reset to origin
     git fetch origin $GITHUB_BRANCH 2>&1 | tee -a "$LOG_FILE"
     git reset --hard origin/$GITHUB_BRANCH 2>&1 | tee -a "$LOG_FILE"
     
-    # Get new version
     NEW_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
     
     if [[ "$OLD_COMMIT" == "$NEW_COMMIT" ]]; then
         log_info "Already up to date (${NEW_COMMIT:0:8})"
     else
         log_info "Updated: ${OLD_COMMIT:0:8} → ${NEW_COMMIT:0:8}"
-        
-        # Show changes
-        log_info "Recent changes:"
-        git log --oneline "$OLD_COMMIT".."$NEW_COMMIT" 2>/dev/null | head -10 | while read line; do
+        git log --oneline "$OLD_COMMIT".."$NEW_COMMIT" 2>/dev/null | head -5 | while read line; do
             log_info "  $line"
         done
     fi
     
-    # Restore .env if it was stashed
     git stash pop 2>/dev/null || true
     
-    log_success "Latest code pulled from GitHub"
+    log_success "Latest code pulled"
 }
 
 #-------------------------------------------------------------------------------
-# Clean Up Docker Resources
+# Cleanup Docker Resources
 #-------------------------------------------------------------------------------
 cleanup_docker() {
     log_step "Step 3/6: Cleaning up Docker resources..."
     
     cd "$INSTALL_DIR"
     
-    # Find docker-compose location
+    # Find compose file
     COMPOSE_FILE=""
     if [[ -f "ctf-autopilot/infra/docker-compose.yml" ]]; then
         COMPOSE_FILE="ctf-autopilot/infra/docker-compose.yml"
@@ -217,32 +233,30 @@ cleanup_docker() {
             cp .env "$COMPOSE_DIR/.env" 2>/dev/null || true
         fi
         
-        # Export environment variables
-        set -a
-        source .env 2>/dev/null || true
-        set +a
+        # Export env vars
+        if [[ -f ".env" ]]; then
+            set -a
+            source .env 2>/dev/null || true
+            set +a
+        fi
         
-        # Stop services gracefully
         log_info "Stopping services..."
         docker compose -f "$COMPOSE_FILE" down --remove-orphans 2>&1 | tee -a "$LOG_FILE" || true
     fi
     
-    # Remove old containers
+    # Clean old containers
     log_info "Removing old containers..."
     docker container prune -f 2>&1 | tee -a "$LOG_FILE" || true
     
-    # Remove dangling images
+    # Clean old images
     log_info "Removing dangling images..."
     docker image prune -f 2>&1 | tee -a "$LOG_FILE" || true
     
-    # Clean mode - more aggressive cleanup
     if [[ "$CLEAN_MODE" == "true" ]]; then
-        log_info "Performing deep cleanup..."
-        docker image prune -af 2>&1 | tee -a "$LOG_FILE" || true
+        log_info "Deep cleanup..."
+        docker images --format "{{.Repository}}:{{.Tag}} {{.ID}}" | grep -E "ctf[-_]compass|ctf[-_]autopilot" | awk '{print $2}' | xargs -r docker rmi -f 2>/dev/null || true
         docker builder prune -af 2>&1 | tee -a "$LOG_FILE" || true
     else
-        # Remove old build cache (keep 2GB)
-        log_info "Removing old build cache..."
         docker builder prune -f --keep-storage=2GB 2>&1 | tee -a "$LOG_FILE" || true
     fi
     
@@ -257,7 +271,6 @@ rebuild_sandbox() {
     
     cd "$INSTALL_DIR"
     
-    # Find Dockerfile location
     SANDBOX_PATH=""
     if [[ -f "ctf-autopilot/sandbox/image/Dockerfile" ]]; then
         SANDBOX_PATH="ctf-autopilot/sandbox/image"
@@ -270,14 +283,12 @@ rebuild_sandbox() {
         return 0
     fi
     
-    # Check if Dockerfile changed or clean mode
     DOCKERFILE_HASH=$(md5sum "$SANDBOX_PATH/Dockerfile" | cut -d' ' -f1)
     HASH_FILE="/tmp/ctf_compass_sandbox_hash"
     
-    if [[ "$CLEAN_MODE" == "true" ]] || [[ ! -f "$HASH_FILE" ]] || [[ "$(cat $HASH_FILE)" != "$DOCKERFILE_HASH" ]]; then
+    if [[ "$CLEAN_MODE" == "true" ]] || [[ ! -f "$HASH_FILE" ]] || [[ "$(cat $HASH_FILE 2>/dev/null)" != "$DOCKERFILE_HASH" ]]; then
         log_info "Building sandbox image..."
         docker build \
-            --no-cache \
             -t ctf-compass-sandbox:latest \
             -t ctf-autopilot-sandbox:latest \
             -f "$SANDBOX_PATH/Dockerfile" \
@@ -286,7 +297,7 @@ rebuild_sandbox() {
         echo "$DOCKERFILE_HASH" > "$HASH_FILE"
         log_success "Sandbox image rebuilt"
     else
-        log_info "Sandbox Dockerfile unchanged, skipping rebuild"
+        log_info "Sandbox unchanged, skipping rebuild"
     fi
 }
 
@@ -298,10 +309,8 @@ restart_services() {
     
     cd "$INSTALL_DIR"
     
-    # Create data directories if not exist
     mkdir -p data/runs ctf-autopilot/data/runs 2>/dev/null || true
     
-    # Find docker-compose location
     COMPOSE_FILE=""
     if [[ -f "ctf-autopilot/infra/docker-compose.yml" ]]; then
         COMPOSE_FILE="ctf-autopilot/infra/docker-compose.yml"
@@ -312,33 +321,32 @@ restart_services() {
     fi
     
     if [[ -z "$COMPOSE_FILE" ]]; then
-        log_warn "docker-compose.yml not found, skipping service restart..."
+        log_warn "docker-compose.yml not found"
         return 0
     fi
     
-    # Copy .env to compose directory
+    # Copy .env
     COMPOSE_DIR=$(dirname "$COMPOSE_FILE")
     if [[ "$COMPOSE_DIR" != "." ]] && [[ -f ".env" ]]; then
         cp .env "$COMPOSE_DIR/.env" 2>/dev/null || true
     fi
     
-    # Export environment variables
-    set -a
-    source .env 2>/dev/null || true
-    set +a
+    # Export env
+    if [[ -f ".env" ]]; then
+        set -a
+        source .env
+        set +a
+    fi
     
-    # Build options
     BUILD_OPTS="--build"
     if [[ "$CLEAN_MODE" == "true" ]]; then
         BUILD_OPTS="--build --no-cache"
     fi
     
-    # Start services with rebuild
     log_info "Starting services..."
     docker compose -f "$COMPOSE_FILE" up -d $BUILD_OPTS 2>&1 | tee -a "$LOG_FILE"
     
-    # Wait for services
-    log_info "Waiting for services to start (25 seconds)..."
+    log_info "Waiting for services (25 seconds)..."
     sleep 25
     
     log_success "Services restarted"
@@ -352,7 +360,6 @@ health_check() {
     
     HEALTH_OK=true
     
-    # Check API
     if curl -sf http://localhost:8000/api/health > /dev/null 2>&1; then
         log_success "  API: Healthy"
     else
@@ -360,7 +367,6 @@ health_check() {
         HEALTH_OK=false
     fi
     
-    # Check Web
     if curl -sf http://localhost:3000 > /dev/null 2>&1; then
         log_success "  Web UI: Healthy"
     else
@@ -371,7 +377,7 @@ health_check() {
     if [[ "$HEALTH_OK" == "true" ]]; then
         log_success "All health checks passed"
     else
-        log_warn "Some services may still be starting."
+        log_warn "Some services may still be starting"
         log_warn "Check logs: docker compose -f $INSTALL_DIR/ctf-autopilot/infra/docker-compose.yml logs -f"
     fi
 }
@@ -380,7 +386,7 @@ health_check() {
 # Print Summary
 #-------------------------------------------------------------------------------
 print_summary() {
-    VERSION=$(cd $INSTALL_DIR && git rev-parse --short HEAD 2>/dev/null || echo 'unknown')
+    VERSION=$(cd "$INSTALL_DIR" && git rev-parse --short HEAD 2>/dev/null || echo 'unknown')
     SERVER_IP=$(hostname -I | awk '{print $1}')
     
     echo ""
@@ -402,50 +408,6 @@ print_summary() {
 }
 
 #-------------------------------------------------------------------------------
-# Check for Updates (dry run)
-#-------------------------------------------------------------------------------
-check_updates() {
-    cd "$INSTALL_DIR"
-    
-    if [[ ! -d ".git" ]]; then
-        if [[ "$JSON_MODE" == "true" ]]; then
-            echo '{"updates_available":false,"error":"Not a git repository"}'
-        else
-            echo "Not a git repository"
-        fi
-        return 0
-    fi
-    
-    # Ensure correct remote
-    git remote set-url origin "$GITHUB_REPO" 2>/dev/null || true
-    
-    # Fetch latest
-    git fetch origin $GITHUB_BRANCH 2>/dev/null
-    
-    LOCAL=$(git rev-parse HEAD 2>/dev/null)
-    REMOTE=$(git rev-parse origin/$GITHUB_BRANCH 2>/dev/null)
-    
-    if [[ "$LOCAL" == "$REMOTE" ]]; then
-        if [[ "$JSON_MODE" == "true" ]]; then
-            echo "{\"updates_available\":false,\"current_version\":\"${LOCAL:0:8}\",\"message\":\"Already up to date\"}"
-        else
-            echo "Already up to date (${LOCAL:0:8})"
-        fi
-    else
-        COMMITS_BEHIND=$(git rev-list --count HEAD..origin/$GITHUB_BRANCH 2>/dev/null || echo "unknown")
-        if [[ "$JSON_MODE" == "true" ]]; then
-            echo "{\"updates_available\":true,\"current_version\":\"${LOCAL:0:8}\",\"latest_version\":\"${REMOTE:0:8}\",\"commits_behind\":$COMMITS_BEHIND}"
-        else
-            echo "Updates available: $COMMITS_BEHIND commits behind"
-            echo "Current: ${LOCAL:0:8}"
-            echo "Latest:  ${REMOTE:0:8}"
-            echo ""
-            echo "Run 'sudo bash $0' to update"
-        fi
-    fi
-}
-
-#-------------------------------------------------------------------------------
 # Main
 #-------------------------------------------------------------------------------
 main() {
@@ -456,15 +418,9 @@ main() {
                 check_updates
                 exit 0
                 ;;
-            --clean)
-                CLEAN_MODE=true
-                ;;
-            --json)
-                JSON_MODE="true"
-                ;;
-            --ci)
-                CI_MODE="true"
-                ;;
+            --clean) CLEAN_MODE=true ;;
+            --json) JSON_MODE=true ;;
+            --force) FORCE_MODE=true ;;
             --help|-h)
                 echo "CTF Compass Update Script"
                 echo ""
@@ -472,33 +428,26 @@ main() {
                 echo ""
                 echo "Options:"
                 echo "  --check   Check for updates without installing"
-                echo "  --clean   Force cleanup of all Docker resources"
-                echo "  --json    Output in JSON format (for API use)"
-                echo "  --ci      CI mode - non-interactive"
-                echo "  --help    Show this help message"
-                echo ""
-                echo "GitHub: https://github.com/huynhtrungcipp/ctf-compass"
+                echo "  --clean   Force deep cleanup before update"
+                echo "  --json    Output in JSON format"
+                echo "  --force   Skip confirmations"
+                echo "  --help    Show this help"
                 exit 0
                 ;;
         esac
     done
     
-    # Create log file
-    touch "$LOG_FILE"
-    chmod 644 "$LOG_FILE"
+    # Initialize log
+    mkdir -p "$(dirname "$LOG_FILE")"
+    echo "=== CTF Compass Update Log ===" > "$LOG_FILE"
+    echo "Started: $(date)" >> "$LOG_FILE"
     
     if [[ "$JSON_MODE" != "true" ]]; then
-        echo ""
-        echo -e "${CYAN}╔═══════════════════════════════════════════════════════════════════╗${NC}"
-        echo -e "${CYAN}║${NC}                   CTF Compass System Update                       ${CYAN}║${NC}"
-        echo -e "${CYAN}║${NC}          github.com/huynhtrungcipp/ctf-compass                   ${CYAN}║${NC}"
-        echo -e "${CYAN}╚═══════════════════════════════════════════════════════════════════╝${NC}"
-        echo ""
-    fi
-    
-    log_info "Update started at $(date)"
-    if [[ "$CLEAN_MODE" == "true" ]]; then
-        log_info "Running in CLEAN mode - will remove all old Docker resources"
+        echo -e "${CYAN}"
+        echo "╔═══════════════════════════════════════════════════════════════════╗"
+        echo "║                  CTF Compass - System Update                      ║"
+        echo "╚═══════════════════════════════════════════════════════════════════╝"
+        echo -e "${NC}"
     fi
     
     preflight_checks
@@ -509,15 +458,12 @@ main() {
     restart_services
     health_check
     
-    log_info "Update completed at $(date)"
-    
-    if [[ "$JSON_MODE" == "true" ]]; then
-        VERSION=$(cd $INSTALL_DIR && git rev-parse --short HEAD 2>/dev/null || echo 'unknown')
-        echo "{\"status\":\"success\",\"version\":\"$VERSION\",\"timestamp\":\"$(date -Iseconds)\"}"
-    else
+    if [[ "$JSON_MODE" != "true" ]]; then
         print_summary
+    else
+        VERSION=$(cd "$INSTALL_DIR" && git rev-parse --short HEAD 2>/dev/null || echo 'unknown')
+        echo "{\"success\":true,\"version\":\"$VERSION\",\"timestamp\":\"$(date -Iseconds)\"}"
     fi
 }
 
-# Run main
 main "$@"
