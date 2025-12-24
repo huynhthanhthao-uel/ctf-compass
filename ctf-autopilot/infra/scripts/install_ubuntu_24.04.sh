@@ -113,15 +113,17 @@ print_banner() {
 cleanup_old_installation() {
     log_step "Cleaning up old installation..."
     
+    # CRITICAL: Change to safe directory first to prevent getcwd() errors
+    cd /tmp || cd /root || cd /
+    
     # Stop and remove old containers
     if [[ -f "$INSTALL_DIR/ctf-autopilot/infra/docker-compose.yml" ]]; then
         log_info "Stopping old services..."
-        cd "$INSTALL_DIR" 2>/dev/null || true
         
         # Export env if exists
-        if [[ -f ".env" ]]; then
+        if [[ -f "$INSTALL_DIR/.env" ]]; then
             set -a
-            source .env 2>/dev/null || true
+            source "$INSTALL_DIR/.env" 2>/dev/null || true
             set +a
         fi
         
@@ -130,30 +132,28 @@ cleanup_old_installation() {
     
     # Stop containers by label/name
     log_info "Removing old containers..."
-    docker ps -aq --filter "label=com.ctf-compass.service" | xargs -r docker rm -f 2>/dev/null || true
-    docker ps -aq --filter "name=ctf_compass" | xargs -r docker rm -f 2>/dev/null || true
-    docker ps -aq --filter "name=ctf-compass" | xargs -r docker rm -f 2>/dev/null || true
+    docker ps -aq --filter "label=com.ctf-compass.service" 2>/dev/null | xargs -r docker rm -f 2>/dev/null || true
+    docker ps -aq --filter "name=ctf_compass" 2>/dev/null | xargs -r docker rm -f 2>/dev/null || true
+    docker ps -aq --filter "name=ctf-compass" 2>/dev/null | xargs -r docker rm -f 2>/dev/null || true
+    docker ps -aq --filter "name=infra" 2>/dev/null | xargs -r docker rm -f 2>/dev/null || true
     
     # Remove old images
     log_info "Removing old images..."
-    docker images --format "{{.Repository}}:{{.Tag}} {{.ID}}" | grep -E "ctf[-_]compass|ctf[-_]autopilot" | awk '{print $2}' | xargs -r docker rmi -f 2>/dev/null || true
+    docker images --format "{{.Repository}}:{{.Tag}} {{.ID}}" 2>/dev/null | grep -E "ctf[-_]compass|ctf[-_]autopilot|infra" | awk '{print $2}' | xargs -r docker rmi -f 2>/dev/null || true
     
     # Remove old volumes
     log_info "Removing old volumes..."
-    docker volume rm ctf_compass_postgres_data 2>/dev/null || true
-    docker volume rm ctf_compass_redis_data 2>/dev/null || true
-    docker volume rm ctf_compass_app_data 2>/dev/null || true
+    docker volume ls -q 2>/dev/null | grep -E "ctf[-_]compass|ctf[-_]autopilot|infra" | xargs -r docker volume rm -f 2>/dev/null || true
     
     # Remove old networks
-    docker network rm ctf_compass_frontend 2>/dev/null || true
-    docker network rm ctf_compass_backend 2>/dev/null || true
+    docker network ls -q --filter "name=ctf" 2>/dev/null | xargs -r docker network rm 2>/dev/null || true
+    docker network ls -q --filter "name=infra" 2>/dev/null | xargs -r docker network rm 2>/dev/null || true
     
     # Cleanup dangling resources
     log_info "Pruning Docker resources..."
-    docker system prune -af 2>/dev/null || true
-    docker volume prune -f 2>/dev/null || true
+    docker system prune -af --volumes 2>/dev/null || true
     
-    # Remove old files
+    # Remove old files (safe because we changed to /tmp first)
     log_info "Removing old files..."
     rm -rf "$INSTALL_DIR"
     rm -f /var/log/ctf-compass-*.log
@@ -372,10 +372,15 @@ EOF
 setup_repository() {
     log_step "Step 5/8: Setting up repository..."
     
-    log_info "Cloning from GitHub..."
-    git clone --depth 1 --branch "$GITHUB_BRANCH" "$GITHUB_REPO" "$INSTALL_DIR" 2>&1 | tee -a "$LOG_FILE"
+    # Ensure we're in a valid directory before git operations
+    cd /tmp || cd /root || cd /
     
-    cd "$INSTALL_DIR"
+    log_info "Cloning from GitHub..."
+    if ! git clone --depth 1 --branch "$GITHUB_BRANCH" "$GITHUB_REPO" "$INSTALL_DIR" 2>&1 | tee -a "$LOG_FILE"; then
+        log_error "Failed to clone repository. Check internet connection and GitHub access."
+    fi
+    
+    cd "$INSTALL_DIR" || log_error "Failed to enter install directory"
     CURRENT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
     log_info "Version: $CURRENT_COMMIT"
     
