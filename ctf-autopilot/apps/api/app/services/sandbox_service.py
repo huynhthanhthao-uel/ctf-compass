@@ -105,9 +105,13 @@ class SandboxService:
         "john",
         "hashcat",
         "hash-identifier",
+        "name-that-hash",
+        "nth",
+        "fcrackzip",
         
         # Memory/Disk forensics
         "volatility",
+        "volatility3",
         "bulk_extractor",
         "photorec",
         "testdisk",
@@ -119,19 +123,38 @@ class SandboxService:
         "rasm2",
         "rafind2",
         "rahash2",
+        "r2pipe",
+        # Decompiler
+        "retdec-decompiler",
+        "retdec-fileinfo",
+        "retdec-unpacker",
+        # ROP/Exploit tools
+        "ropper",
+        "ROPgadget",
+        "one_gadget",
+        "checksec",
+        "patchelf",
         
         # Debugging
         "gdb",
         "ltrace",
         "strace",
+        "objcopy",
         
         # QR/Barcode
         "zbarimg",
+        "zxing",
+        
+        # Image analysis
+        "pngcheck",
+        "pngcrush",
+        "optipng",
         
         # Audio analysis
         "sox",
         "ffmpeg",
         "ffprobe",
+        "audacity",
         
         # Misc utilities
         "jq",
@@ -141,6 +164,13 @@ class SandboxService:
         "wget",
         "nc",
         "ncat",
+        "xxd",
+        "od",
+        "hexdump",
+        "dd",
+        "split",
+        "file",
+        "stat",
     ]
     
     def __init__(self):
