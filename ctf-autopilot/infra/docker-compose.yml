@@ -1,5 +1,10 @@
 # CTF Autopilot - Docker Compose Configuration
 # Production-ready multi-service deployment
+#
+# USAGE:
+#   docker compose -f ctf-autopilot/infra/docker-compose.yml up -d
+#
+# GitHub: https://github.com/huynhtrungcipp/ctf-compass
 
 services:
   # =============================================================================
@@ -9,12 +14,15 @@ services:
     build:
       context: ../../
       dockerfile: ctf-autopilot/apps/web/Dockerfile
+      args:
+        - VITE_API_URL=${API_URL:-http://localhost:8000}
     ports:
       - "${WEB_PORT:-3000}:3000"
     environment:
       - VITE_API_URL=${API_URL:-http://localhost:8000}
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - frontend
@@ -23,6 +31,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 10s
 
   # =============================================================================
   # Backend API - FastAPI Application
@@ -54,7 +63,7 @@ services:
       - SANDBOX_CPU_LIMIT=${SANDBOX_CPU_LIMIT:-1}
       - ENABLE_TLS=${ENABLE_TLS:-false}
     volumes:
-      - ../data:/data
+      - app_data:/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
     depends_on:
       postgres:
@@ -70,6 +79,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 15s
 
   # =============================================================================
   # Celery Worker - Background Job Processing
@@ -97,7 +107,7 @@ services:
       - SANDBOX_MEMORY_LIMIT=${SANDBOX_MEMORY_LIMIT:-512m}
       - SANDBOX_CPU_LIMIT=${SANDBOX_CPU_LIMIT:-1}
     volumes:
-      - ../data:/data
+      - app_data:/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
     depends_on:
       postgres:
@@ -170,10 +180,16 @@ services:
 
 volumes:
   postgres_data:
+    name: ctf_compass_postgres_data
   redis_data:
+    name: ctf_compass_redis_data
+  app_data:
+    name: ctf_compass_app_data
 
 networks:
   frontend:
+    name: ctf_compass_frontend
     driver: bridge
   backend:
+    name: ctf_compass_backend
     driver: bridge

@@ -7,7 +7,11 @@
 # GitHub Repository: https://github.com/huynhtrungcipp/ctf-compass.git
 #
 # USAGE:
-#   ./prod_up.sh
+#   ./prod_up.sh [--clean] [--rebuild]
+#
+# OPTIONS:
+#   --clean    Remove old containers and images before starting
+#   --rebuild  Force rebuild all images
 #
 #===============================================================================
 
@@ -29,6 +33,21 @@ log_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
 log_warn()    { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error()   { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
 
+CLEAN_MODE=false
+REBUILD_MODE=false
+
+# Parse arguments
+for arg in "$@"; do
+    case $arg in
+        --clean)
+            CLEAN_MODE=true
+            ;;
+        --rebuild)
+            REBUILD_MODE=true
+            ;;
+    esac
+done
+
 echo -e "${CYAN}"
 echo "╔═══════════════════════════════════════════════════════════════════╗"
 echo "║                CTF Compass - Production Startup                   ║"
@@ -39,35 +58,6 @@ echo -e "${NC}"
 cd "$PROJECT_ROOT"
 
 log_info "Starting CTF Compass in production mode..."
-
-# Check for .env file
-if [[ ! -f ".env" ]]; then
-    if [[ -f ".env.example" ]]; then
-        log_warn ".env file not found, copying from .env.example"
-        cp .env.example .env
-        log_warn "Please edit .env and set MEGALLM_API_KEY"
-    elif [[ -f "ctf-autopilot/.env.example" ]]; then
-        cp ctf-autopilot/.env.example .env
-        log_warn "Please edit .env and set MEGALLM_API_KEY"
-    else
-        log_error ".env file not found! Please create one from .env.example"
-    fi
-fi
-
-# Source .env to check required variables
-set -a
-source .env 2>/dev/null || true
-set +a
-
-if [[ -z "${MEGALLM_API_KEY:-}" ]]; then
-    log_warn "MEGALLM_API_KEY is not set in .env"
-    log_warn "AI features will not work without it."
-    read -p "Continue anyway? (y/N) " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        exit 1
-    fi
-fi
 
 # Find docker-compose file
 COMPOSE_FILE=""
@@ -85,51 +75,92 @@ fi
 
 log_info "Using compose file: $COMPOSE_FILE"
 
-# Copy .env to compose directory if needed
+# Check for .env file
+if [[ ! -f ".env" ]]; then
+    if [[ -f "ctf-autopilot/.env.example" ]]; then
+        log_warn ".env file not found, copying from ctf-autopilot/.env.example"
+        cp ctf-autopilot/.env.example .env
+        log_warn "Please edit .env and set MEGALLM_API_KEY"
+    elif [[ -f ".env.example" ]]; then
+        cp .env.example .env
+        log_warn "Please edit .env and set MEGALLM_API_KEY"
+    else
+        log_error ".env file not found! Please create one from .env.example"
+    fi
+fi
+
+# Copy .env to compose directory
 COMPOSE_DIR=$(dirname "$COMPOSE_FILE")
 if [[ "$COMPOSE_DIR" != "." ]] && [[ -f ".env" ]]; then
     cp .env "$COMPOSE_DIR/.env" 2>/dev/null || true
 fi
 
+# Source .env to check required variables
+set -a
+source .env 2>/dev/null || true
+set +a
+
+if [[ -z "${MEGALLM_API_KEY:-}" ]]; then
+    log_warn "MEGALLM_API_KEY is not set in .env"
+    log_warn "AI features will not work without it."
+    read -p "Continue anyway? (y/N) " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        exit 1
+    fi
+fi
+
+# Clean mode - remove old containers and images
+if [[ "$CLEAN_MODE" == "true" ]]; then
+    log_info "Cleaning old containers and images..."
+    docker compose -f "$COMPOSE_FILE" down -v --remove-orphans 2>/dev/null || true
+    docker image prune -af 2>/dev/null || true
+    docker builder prune -af 2>/dev/null || true
+    log_success "Cleanup completed"
+fi
+
 # Build sandbox image if not exists
 if ! docker image inspect ctf-compass-sandbox:latest > /dev/null 2>&1; then
-    if ! docker image inspect ctf-autopilot-sandbox:latest > /dev/null 2>&1; then
-        log_info "Building sandbox image..."
-        
-        SANDBOX_PATH=""
-        if [[ -f "sandbox/image/Dockerfile" ]]; then
-            SANDBOX_PATH="sandbox/image"
-        elif [[ -f "ctf-autopilot/sandbox/image/Dockerfile" ]]; then
-            SANDBOX_PATH="ctf-autopilot/sandbox/image"
-        fi
-        
-        if [[ -n "$SANDBOX_PATH" ]]; then
-            docker build -t ctf-compass-sandbox:latest -t ctf-autopilot-sandbox:latest -f "$SANDBOX_PATH/Dockerfile" "$SANDBOX_PATH/"
-            log_success "Sandbox image built"
-        else
-            log_warn "Sandbox Dockerfile not found, skipping..."
-        fi
+    log_info "Building sandbox image..."
+    
+    SANDBOX_PATH=""
+    if [[ -f "ctf-autopilot/sandbox/image/Dockerfile" ]]; then
+        SANDBOX_PATH="ctf-autopilot/sandbox/image"
+    elif [[ -f "sandbox/image/Dockerfile" ]]; then
+        SANDBOX_PATH="sandbox/image"
+    fi
+    
+    if [[ -n "$SANDBOX_PATH" ]]; then
+        docker build -t ctf-compass-sandbox:latest -t ctf-autopilot-sandbox:latest -f "$SANDBOX_PATH/Dockerfile" "$SANDBOX_PATH/"
+        log_success "Sandbox image built"
+    else
+        log_warn "Sandbox Dockerfile not found, skipping..."
     fi
 fi
 
 # Create data directories
-mkdir -p data/runs ctf-autopilot/data/runs ctf-autopilot/infra/data/runs
-chmod -R 755 data ctf-autopilot/data 2>/dev/null || true
+mkdir -p data/runs ctf-autopilot/data/runs 2>/dev/null || true
+
+# Build options
+BUILD_OPTS="--build"
+if [[ "$REBUILD_MODE" == "true" ]]; then
+    BUILD_OPTS="--build --no-cache"
+fi
 
 # Start all services
 log_info "Starting all services..."
 
 if [[ "${ENABLE_TLS:-false}" == "true" ]]; then
     log_info "Starting with TLS enabled..."
-    docker compose -f "$COMPOSE_FILE" --profile production up -d --build
+    docker compose -f "$COMPOSE_FILE" --profile production up -d $BUILD_OPTS
 else
     log_info "Starting without TLS..."
-    docker compose -f "$COMPOSE_FILE" up -d --build
+    docker compose -f "$COMPOSE_FILE" up -d $BUILD_OPTS
 fi
 
 # Wait for services
-log_info "Waiting for services to be ready (15 seconds)..."
-sleep 15
+log_info "Waiting for services to be ready (20 seconds)..."
+sleep 20
 
 # Health checks
 log_info "Running health checks..."
@@ -186,9 +217,10 @@ else
 fi
 echo ""
 echo -e "Useful commands:"
-echo -e "  View logs:     ${CYAN}docker compose -f $PROJECT_ROOT/$COMPOSE_FILE logs -f${NC}"
-echo -e "  Stop services: ${CYAN}docker compose -f $PROJECT_ROOT/$COMPOSE_FILE down${NC}"
-echo -e "  Check status:  ${CYAN}docker compose -f $PROJECT_ROOT/$COMPOSE_FILE ps${NC}"
+echo -e "  View logs:     ${CYAN}docker compose -f $COMPOSE_FILE logs -f${NC}"
+echo -e "  Stop services: ${CYAN}docker compose -f $COMPOSE_FILE down${NC}"
+echo -e "  Check status:  ${CYAN}docker compose -f $COMPOSE_FILE ps${NC}"
+echo -e "  Clean restart: ${CYAN}$0 --clean${NC}"
 echo ""
 echo -e "Update system:"
 echo -e "  ${CYAN}sudo bash $PROJECT_ROOT/ctf-autopilot/infra/scripts/update.sh${NC}"

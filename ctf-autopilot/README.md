@@ -18,6 +18,17 @@ A production-grade, security-first, local-only CTF challenge analyzer and writeu
 curl -fsSL https://raw.githubusercontent.com/huynhtrungcipp/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash
 ```
 
+### Clean Installation (Remove Old Files First)
+
+```bash
+# Stop and remove old installation
+sudo docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml down 2>/dev/null || true
+sudo rm -rf /opt/ctf-compass
+
+# Fresh install
+curl -fsSL https://raw.githubusercontent.com/huynhtrungcipp/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash
+```
+
 ### Manual Installation
 
 ```bash
@@ -26,7 +37,7 @@ git clone https://github.com/huynhtrungcipp/ctf-compass.git
 cd ctf-compass
 
 # Copy environment file and configure
-cp .env.example .env
+cp ctf-autopilot/.env.example .env
 nano .env  # Add your MEGALLM_API_KEY
 
 # Start services
@@ -46,8 +57,26 @@ nano .env  # Add your MEGALLM_API_KEY
 # Check for updates
 sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh --check
 
-# Perform update
+# Perform update (auto cleanup old containers/images)
 sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh
+```
+
+---
+
+## 🗑️ Complete Uninstall
+
+```bash
+# Stop all services
+sudo docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml down -v
+
+# Remove all data and files
+sudo rm -rf /opt/ctf-compass
+sudo rm -rf /opt/ctf-compass-backups
+sudo rm -f /var/log/ctf-compass-*.log
+
+# Remove Docker images (optional)
+sudo docker rmi $(docker images | grep ctf-compass | awk '{print $3}') 2>/dev/null || true
+sudo docker rmi $(docker images | grep ctf-autopilot | awk '{print $3}') 2>/dev/null || true
 ```
 
 ---
@@ -112,13 +141,14 @@ All analysis runs in isolated Docker containers with:
 ctf-compass/
 ├── ctf-autopilot/
 │   ├── apps/
-│   │   ├── web/                 # Frontend application
+│   │   ├── web/                 # Frontend Dockerfile
 │   │   └── api/                 # FastAPI backend
 │   ├── sandbox/
 │   │   ├── image/               # Sandbox Dockerfile
 │   │   └── profiles/            # Seccomp/AppArmor profiles
 │   ├── infra/
-│   │   ├── docker-compose.yml
+│   │   ├── docker-compose.yml   # Main compose file
+│   │   ├── docker-compose.dev.yml
 │   │   ├── nginx/               # Reverse proxy config
 │   │   └── scripts/             # Install, update, and run scripts
 │   ├── docs/
@@ -129,7 +159,7 @@ ctf-compass/
 │   │   └── RUNBOOK.md
 │   ├── .env.example
 │   └── README.md
-├── src/                         # Lovable frontend source
+├── src/                         # React frontend source
 ├── package.json
 └── README.md
 ```
@@ -202,19 +232,22 @@ cd ctf-autopilot/apps/api && ruff check .
 
 ```bash
 # View logs
-cd /opt/ctf-compass && docker compose logs -f
+docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml logs -f
 
 # Stop services
-cd /opt/ctf-compass && docker compose down
+docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml down
 
 # Restart services
-cd /opt/ctf-compass && docker compose restart
+docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml restart
 
 # Check status
-cd /opt/ctf-compass && docker compose ps
+docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml ps
 
 # Update system
 sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh
+
+# Cleanup old Docker resources
+docker system prune -af
 ```
 
 ---
