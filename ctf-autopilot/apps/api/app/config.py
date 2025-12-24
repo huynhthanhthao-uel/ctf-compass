@@ -34,9 +34,10 @@ class Settings(BaseSettings):
     admin_password: str
     session_timeout_seconds: int = 3600
     
-    # MegaLLM
+    # MegaLLM - https://ai.megallm.io/v1
     megallm_api_key: str
-    megallm_api_url: str = "https://api.megallm.example.com/v1/chat/completions"
+    megallm_api_url: str = "https://ai.megallm.io/v1/chat/completions"
+    megallm_model: str = "llama3.3-70b-instruct"  # Free tier: use open-source models
     
     # Upload
     max_upload_size_mb: int = 200
