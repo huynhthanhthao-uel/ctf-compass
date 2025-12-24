@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, RefreshCw, LayoutGrid, List, Search, Wifi, WifiOff, Radio } from 'lucide-react';
+import { Plus, RefreshCw, LayoutGrid, List, Search, Wifi, WifiOff, Radio, TrendingUp, Clock, CheckCircle, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -9,17 +9,31 @@ import { JobCard } from '@/components/jobs/JobCard';
 import { useJobs } from '@/hooks/use-jobs';
 import { useAuth } from '@/hooks/use-auth';
 import { useJobsWithWebSocket } from '@/hooks/use-websocket';
+import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { Job } from '@/lib/types';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { jobs, isLoading, fetchJobs, runJob, isBackendConnected } = useJobs();
+  const { toast } = useToast();
+  const { jobs, isLoading, fetchJobs, runJob, stopJob, deleteJob, isBackendConnected } = useJobs();
   const { retryBackendConnection } = useAuth();
   const { isConnected: wsConnected, getJobUpdate } = useJobsWithWebSocket();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [isRetrying, setIsRetrying] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [jobToDelete, setJobToDelete] = useState<string | null>(null);
 
   useEffect(() => {
     fetchJobs();
@@ -31,13 +45,38 @@ export default function Dashboard() {
     setIsRetrying(false);
   };
 
+  const handleStopJob = useCallback((jobId: string) => {
+    stopJob(jobId);
+    toast({
+      title: 'Analysis Stopped',
+      description: 'The analysis has been cancelled.',
+    });
+  }, [stopJob, toast]);
+
+  const handleDeleteJob = useCallback((jobId: string) => {
+    setJobToDelete(jobId);
+    setDeleteDialogOpen(true);
+  }, []);
+
+  const confirmDelete = useCallback(() => {
+    if (jobToDelete) {
+      deleteJob(jobToDelete);
+      toast({
+        title: 'Job Deleted',
+        description: 'The job has been removed.',
+        variant: 'destructive',
+      });
+      setJobToDelete(null);
+      setDeleteDialogOpen(false);
+    }
+  }, [jobToDelete, deleteJob, toast]);
+
   // Merge WebSocket updates with job data
   const getEnhancedJobs = useCallback((): Job[] => {
     return jobs.map(job => {
       const wsUpdate = getJobUpdate(job.id);
       if (!wsUpdate) return job;
       
-      // Apply WebSocket updates
       return {
         ...job,
         status: wsUpdate.status === 'completed' ? 'done' : 
@@ -66,22 +105,22 @@ export default function Dashboard() {
 
   return (
     <AppLayout>
-      <div className="p-6 lg:p-8 space-y-6 animate-fade-in">
+      <div className="p-6 lg:p-8 space-y-8 animate-fade-in">
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="text-2xl font-semibold text-foreground">Dashboard</h1>
+              <h1 className="text-2xl font-bold text-foreground tracking-tight">Dashboard</h1>
               
               {/* Connection Status Badge */}
               {isBackendConnected ? (
                 <Badge 
                   variant="outline" 
                   className={cn(
-                    "text-xs gap-1.5 cursor-default",
+                    "text-xs gap-1.5 cursor-default font-medium",
                     wsConnected 
-                      ? "border-emerald-600/30 text-emerald-600 bg-emerald-500/10" 
-                      : "border-amber-600/30 text-amber-600 bg-amber-500/10"
+                      ? "border-success/40 text-success bg-success/10" 
+                      : "border-info/40 text-info bg-info/10"
                   )}
                 >
                   {wsConnected ? (
@@ -99,7 +138,7 @@ export default function Dashboard() {
               ) : (
                 <Badge 
                   variant="outline" 
-                  className="text-xs gap-1.5 border-amber-600/30 text-amber-600 bg-amber-500/10 cursor-pointer hover:bg-amber-500/20 transition-colors"
+                  className="text-xs gap-1.5 border-warning/40 text-warning bg-warning/10 cursor-pointer hover:bg-warning/20 transition-colors font-medium"
                   onClick={handleRetryConnection}
                 >
                   {isRetrying ? (
@@ -116,40 +155,55 @@ export default function Dashboard() {
                 </Badge>
               )}
             </div>
-            <p className="text-muted-foreground mt-1">
+            <p className="text-muted-foreground mt-1.5 text-sm">
               {isBackendConnected 
                 ? 'Manage and monitor your CTF challenge analyses'
                 : 'Running in demo mode • Click badge to retry connection'
               }
             </p>
           </div>
-          <Button onClick={() => navigate('/jobs/new')} size="lg">
+          <Button onClick={() => navigate('/jobs/new')} size="lg" className="shadow-sm">
             <Plus className="h-4 w-4 mr-2" />
             New Analysis
           </Button>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
-          <div className="p-4 rounded-lg bg-card border border-border">
-            <p className="text-sm text-muted-foreground">Total Jobs</p>
-            <p className="text-2xl font-semibold text-foreground mt-1">{stats.total}</p>
+        {/* Stats Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="stats-card">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-muted-foreground">Total Jobs</p>
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            </div>
+            <p className="text-3xl font-bold text-foreground mt-2">{stats.total}</p>
           </div>
-          <div className="p-4 rounded-lg bg-card border border-border">
-            <p className="text-sm text-muted-foreground">Queued</p>
-            <p className="text-2xl font-semibold text-foreground mt-1">{stats.queued}</p>
+          <div className="stats-card">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-muted-foreground">Queued</p>
+              <Clock className="h-4 w-4 text-muted-foreground" />
+            </div>
+            <p className="text-3xl font-bold text-foreground mt-2">{stats.queued}</p>
           </div>
-          <div className="p-4 rounded-lg bg-info/10 border border-info/30">
-            <p className="text-sm text-info">Running</p>
-            <p className="text-2xl font-semibold text-info mt-1">{stats.running}</p>
+          <div className="stats-card group border-info/30 hover:border-info/50">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-info">Running</p>
+              <div className="h-2 w-2 rounded-full bg-info animate-pulse" />
+            </div>
+            <p className="text-3xl font-bold text-info mt-2">{stats.running}</p>
           </div>
-          <div className="p-4 rounded-lg bg-success/10 border border-success/30">
-            <p className="text-sm text-success">Completed</p>
-            <p className="text-2xl font-semibold text-success mt-1">{stats.done}</p>
+          <div className="stats-card border-success/30 hover:border-success/50">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-success">Completed</p>
+              <CheckCircle className="h-4 w-4 text-success" />
+            </div>
+            <p className="text-3xl font-bold text-success mt-2">{stats.done}</p>
           </div>
-          <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/30">
-            <p className="text-sm text-destructive">Failed</p>
-            <p className="text-2xl font-semibold text-destructive mt-1">{stats.failed}</p>
+          <div className="stats-card border-destructive/30 hover:border-destructive/50">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-destructive">Failed</p>
+              <XCircle className="h-4 w-4 text-destructive" />
+            </div>
+            <p className="text-3xl font-bold text-destructive mt-2">{stats.failed}</p>
           </div>
         </div>
 
@@ -161,19 +215,20 @@ export default function Dashboard() {
               placeholder="Search analyses..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
+              className="pl-10 h-10"
             />
           </div>
           <div className="flex items-center gap-2">
             <Button 
               variant="outline" 
               size="icon" 
+              className="h-10 w-10"
               onClick={fetchJobs} 
               disabled={isLoading}
             >
               <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
             </Button>
-            <div className="flex items-center border border-border rounded-lg p-0.5 bg-secondary/50">
+            <div className="flex items-center border border-border rounded-lg p-1 bg-muted/50">
               <Button
                 variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
                 size="icon"
@@ -196,35 +251,59 @@ export default function Dashboard() {
 
         {/* Jobs Grid/List */}
         {filteredJobs.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center border border-dashed border-border rounded-lg">
-            <div className="h-14 w-14 rounded-full bg-secondary flex items-center justify-center mb-4">
-              <Plus className="h-6 w-6 text-muted-foreground" />
+          <div className="flex flex-col items-center justify-center py-20 text-center border-2 border-dashed border-border rounded-xl bg-muted/20">
+            <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-5">
+              <Plus className="h-7 w-7 text-primary" />
             </div>
-            <h3 className="text-lg font-medium text-foreground mb-1">
+            <h3 className="text-lg font-semibold text-foreground mb-2">
               {searchQuery ? 'No results found' : 'No analyses yet'}
             </h3>
-            <p className="text-muted-foreground mb-4">
-              {searchQuery ? 'Try a different search term' : 'Create your first CTF challenge analysis'}
+            <p className="text-muted-foreground mb-5 max-w-sm">
+              {searchQuery ? 'Try a different search term' : 'Create your first CTF challenge analysis to get started'}
             </p>
             {!searchQuery && (
-              <Button onClick={() => navigate('/jobs/new')}>
+              <Button onClick={() => navigate('/jobs/new')} size="lg">
                 <Plus className="h-4 w-4 mr-2" />
-                New Analysis
+                Create Analysis
               </Button>
             )}
           </div>
         ) : (
           <div className={cn(
             viewMode === 'grid' 
-              ? "grid gap-4 sm:grid-cols-2 xl:grid-cols-3" 
-              : "space-y-3"
+              ? "grid gap-5 sm:grid-cols-2 xl:grid-cols-3" 
+              : "space-y-4"
           )}>
             {filteredJobs.map(job => (
-              <JobCard key={job.id} job={job} onRun={runJob} />
+              <JobCard 
+                key={job.id} 
+                job={job} 
+                onRun={runJob}
+                onStop={handleStopJob}
+                onDelete={handleDeleteJob}
+              />
             ))}
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent className="bg-popover">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Job?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the job and all associated data.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppLayout>
   );
 }

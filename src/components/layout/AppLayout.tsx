@@ -9,7 +9,6 @@ import {
   Menu,
   X,
   Github,
-  Bell,
   User,
   ChevronDown,
 } from 'lucide-react';
@@ -24,8 +23,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Badge } from '@/components/ui/badge';
 import { BackendStatus } from '@/components/BackendStatus';
+import { NotificationDropdown } from '@/components/NotificationDropdown';
 
 const navItems = [
   { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
@@ -108,16 +107,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             </Button>
 
             {/* Notifications */}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="relative h-8 w-8 text-muted-foreground hover:text-foreground"
-            >
-              <Bell className="h-4 w-4" />
-              <Badge className="absolute -top-1 -right-1 h-4 w-4 p-0 flex items-center justify-center text-[10px] bg-destructive">
-                2
-              </Badge>
-            </Button>
+            <NotificationDropdown />
 
             {/* Settings Gear Icon */}
             <Button
