@@ -40,13 +40,15 @@ async function testMegaLLMApiKey(apiKey: string): Promise<{ valid: boolean; erro
         'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini', // Use cheapest model for testing
+        model: 'llama3.3-70b-instruct', // Use free tier model for testing
         messages: [
-          { role: 'user', content: 'Hello' }
+          { role: 'user', content: 'Hi' }
         ],
-        max_tokens: 5, // Minimal tokens to save cost
+        max_tokens: 3, // Minimal tokens to save cost
       }),
     });
+
+    const data = await response.json().catch(() => ({}));
 
     if (response.ok) {
       return { valid: true };
@@ -54,28 +56,32 @@ async function testMegaLLMApiKey(apiKey: string): Promise<{ valid: boolean; erro
 
     // Handle specific error codes
     if (response.status === 401) {
-      return { valid: false, error: 'Invalid API key. Please check your key and try again.' };
+      return { valid: false, error: 'API key không hợp lệ. Vui lòng kiểm tra lại.' };
     }
     if (response.status === 403) {
-      return { valid: false, error: 'API key is not authorized. Please check your account permissions.' };
+      const msg = data.error?.message || 'Không có quyền truy cập.';
+      // Check if it's a model access issue
+      if (msg.includes('tier') || msg.includes('model')) {
+        return { valid: false, error: `Tài khoản không có quyền: ${msg}` };
+      }
+      return { valid: false, error: 'API key không có quyền truy cập.' };
     }
     if (response.status === 429) {
-      return { valid: false, error: 'Rate limit exceeded. Please try again later.' };
+      return { valid: false, error: 'Vượt giới hạn request. Vui lòng thử lại sau.' };
     }
     if (response.status === 402) {
-      return { valid: false, error: 'Insufficient credits. Please top up your account.' };
+      return { valid: false, error: 'Hết credits. Vui lòng nạp thêm.' };
     }
 
-    const errorData = await response.json().catch(() => ({}));
     return { 
       valid: false, 
-      error: errorData.error?.message || `API error: ${response.status}` 
+      error: data.error?.message || `Lỗi API: ${response.status}` 
     };
   } catch (error) {
     console.error('API test error:', error);
     return { 
       valid: false, 
-      error: error instanceof Error ? error.message : 'Network error. Please check your connection.' 
+      error: error instanceof Error ? error.message : 'Lỗi mạng. Kiểm tra kết nối internet.' 
     };
   }
 }
