@@ -2,7 +2,6 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, 
-  PlayCircle, 
   Download, 
   Clock, 
   CheckCircle, 
@@ -17,9 +16,8 @@ import {
   WifiOff,
   TerminalSquare,
   Brain,
-  Pause,
-  Square,
-  History
+  History,
+  Archive
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -107,8 +105,119 @@ export default function JobDetail() {
   const handleApplyStrategy = useCallback((tools: string[]) => {
     toast.info(`Applying strategy with ${tools.length} tools: ${tools.slice(0, 3).join(', ')}...`);
     setActiveTab('analysis');
-    // The strategy tools will be passed to autopilot
   }, []);
+
+  // Download All - downloads all artifacts as a zip
+  const [isDownloadingAll, setIsDownloadingAll] = useState(false);
+  const handleDownloadAll = useCallback(async () => {
+    if (!jobDetail) return;
+    
+    setIsDownloadingAll(true);
+    try {
+      // Create a simple combined download by triggering individual downloads
+      const artifacts = jobDetail.artifacts;
+      if (artifacts.length === 0) {
+        toast.error('No artifacts to download');
+        return;
+      }
+
+      // Download all artifacts
+      for (const artifact of artifacts) {
+        const response = await fetch(`/api/jobs/${jobDetail.id}/artifacts/${encodeURIComponent(artifact.path)}`, {
+          credentials: 'include',
+        });
+        
+        if (response.ok) {
+          const blob = await response.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = artifact.name;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+        }
+      }
+      
+      toast.success(`Downloaded ${artifacts.length} artifacts`);
+    } catch (err) {
+      console.error('Download error:', err);
+      toast.error('Failed to download artifacts');
+    } finally {
+      setIsDownloadingAll(false);
+    }
+  }, [jobDetail]);
+
+  // Export Report - generates a comprehensive report
+  const [isExportingReport, setIsExportingReport] = useState(false);
+  const handleExportReport = useCallback(async () => {
+    if (!jobDetail) return;
+    
+    setIsExportingReport(true);
+    try {
+      const report = {
+        meta: {
+          title: jobDetail.title,
+          id: jobDetail.id,
+          status: jobDetail.status,
+          createdAt: jobDetail.createdAt,
+          exportedAt: new Date().toISOString(),
+          flagFormat: jobDetail.flagFormat,
+        },
+        summary: {
+          totalCommands: jobDetail.commands.length,
+          totalArtifacts: jobDetail.artifacts.length,
+          flagsFound: [...foundFlags, ...jobDetail.flagCandidates.map(c => c.value)],
+        },
+        flags: [
+          ...foundFlags.map((f, i) => ({ 
+            value: f, 
+            confidence: 1, 
+            source: 'AI Analysis' 
+          })),
+          ...jobDetail.flagCandidates.map(c => ({
+            value: c.value,
+            confidence: c.confidence,
+            source: c.source,
+          }))
+        ],
+        commands: jobDetail.commands.map(cmd => ({
+          tool: cmd.tool,
+          args: cmd.args,
+          exitCode: cmd.exitCode,
+          stdout: cmd.stdout,
+          stderr: cmd.stderr,
+          executedAt: cmd.executedAt,
+          duration: cmd.duration,
+        })),
+        artifacts: jobDetail.artifacts.map(a => ({
+          name: a.name,
+          path: a.path,
+          size: a.size,
+          type: a.type,
+        })),
+        writeup: jobDetail.writeup || 'No writeup generated',
+      };
+
+      const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `ctf-report-${jobDetail.id}-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      toast.success('Report exported successfully');
+    } catch (err) {
+      console.error('Export error:', err);
+      toast.error('Failed to export report');
+    } finally {
+      setIsExportingReport(false);
+    }
+  }, [jobDetail, foundFlags]);
 
   if (isLoading || !jobDetail) {
     return (
@@ -183,15 +292,32 @@ export default function JobDetail() {
             </div>
           </div>
 
-          {/* Action Buttons - Only show Download/Export when flags found */}
-          {hasFoundFlags && (
+          {/* Action Buttons - Always show when there's something to export */}
+          {(hasFoundFlags || jobDetail.artifacts.length > 0 || jobDetail.commands.length > 0) && (
             <div className="flex items-center gap-2 shrink-0 ml-12 lg:ml-0">
-              <Button variant="secondary" className="gap-2">
-                <Download className="h-4 w-4" />
-                Download All
+              <Button 
+                variant="secondary" 
+                className="gap-2"
+                onClick={handleDownloadAll}
+                disabled={isDownloadingAll || jobDetail.artifacts.length === 0}
+              >
+                {isDownloadingAll ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Archive className="h-4 w-4" />
+                )}
+                Download All ({jobDetail.artifacts.length})
               </Button>
-              <Button className="gap-2">
-                <FileText className="h-4 w-4" />
+              <Button 
+                className="gap-2"
+                onClick={handleExportReport}
+                disabled={isExportingReport}
+              >
+                {isExportingReport ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <FileText className="h-4 w-4" />
+                )}
                 Export Report
               </Button>
             </div>
