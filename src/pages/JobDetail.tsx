@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, 
@@ -16,7 +16,10 @@ import {
   Wifi,
   WifiOff,
   TerminalSquare,
-  Brain
+  Brain,
+  Pause,
+  Square,
+  Zap
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -34,10 +37,12 @@ import { useJobDetail } from '@/hooks/use-jobs';
 import { useJobWebSocket, JobUpdate } from '@/hooks/use-websocket';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
+import { toast } from 'sonner';
 
 const statusConfig = {
   queued: { icon: Clock, label: 'Queued', className: 'bg-secondary text-secondary-foreground' },
   running: { icon: Loader2, label: 'Running', className: 'bg-info/15 text-info' },
+  analyzing: { icon: Brain, label: 'AI Analyzing', className: 'bg-primary/15 text-primary' },
   done: { icon: CheckCircle, label: 'Completed', className: 'bg-success/15 text-success' },
   failed: { icon: XCircle, label: 'Failed', className: 'bg-destructive/15 text-destructive' },
 };
@@ -52,6 +57,15 @@ export default function JobDetail() {
   const [realtimeStatus, setRealtimeStatus] = useState<string | null>(null);
   const [realtimeLogs, setRealtimeLogs] = useState<string[]>([]);
   
+  // AI Analysis state
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [analysisPhase, setAnalysisPhase] = useState<string>('');
+  const [foundFlags, setFoundFlags] = useState<string[]>([]);
+  const [activeTab, setActiveTab] = useState('analysis');
+  
+  const autopilotRef = useRef<{ start: () => void; pause: () => void; resume: () => void; stop: () => void } | null>(null);
+  
   const handleJobUpdate = useCallback((update: JobUpdate) => {
     if (update.type === 'job_update' && update.job_id === id) {
       if (update.data.progress !== undefined) {
@@ -62,7 +76,6 @@ export default function JobDetail() {
                             update.data.status === 'pending' ? 'queued' : update.data.status;
         setRealtimeStatus(mappedStatus);
         
-        // Refresh job detail when completed
         if (update.data.completed) {
           fetchJobDetail();
         }
@@ -83,6 +96,45 @@ export default function JobDetail() {
     }
   }, [id, fetchJobDetail]);
 
+  // Handle flag found
+  const handleFlagFound = useCallback((flag: string) => {
+    setFoundFlags(prev => {
+      if (!prev.includes(flag)) {
+        toast.success(`🎉 Flag found: ${flag}`);
+        return [...prev, flag];
+      }
+      return prev;
+    });
+  }, []);
+
+  // Start AI Analysis
+  const handleStartAnalysis = useCallback(() => {
+    setIsAnalyzing(true);
+    setIsPaused(false);
+    setActiveTab('analysis');
+    setAnalysisPhase('Starting AI analysis...');
+    // Autopilot will auto-start when rendered
+  }, []);
+
+  // Pause/Resume
+  const handlePauseResume = useCallback(() => {
+    if (isPaused) {
+      setIsPaused(false);
+      autopilotRef.current?.resume();
+    } else {
+      setIsPaused(true);
+      autopilotRef.current?.pause();
+    }
+  }, [isPaused]);
+
+  // Stop Analysis
+  const handleStopAnalysis = useCallback(() => {
+    setIsAnalyzing(false);
+    setIsPaused(false);
+    autopilotRef.current?.stop();
+    setAnalysisPhase('Analysis stopped');
+  }, []);
+
   if (isLoading || !jobDetail) {
     return (
       <AppLayout>
@@ -93,12 +145,16 @@ export default function JobDetail() {
     );
   }
 
-  // Use realtime status/progress if available
-  const currentStatus = (realtimeStatus as keyof typeof statusConfig) || jobDetail.status;
+  // Determine display status
+  const displayStatus = isAnalyzing ? 'analyzing' : 
+    (realtimeStatus as keyof typeof statusConfig) || jobDetail.status;
   const currentProgress = realtimeProgress ?? jobDetail.progress;
   
-  const status = statusConfig[currentStatus];
+  const status = statusConfig[displayStatus] || statusConfig.queued;
   const StatusIcon = status.icon;
+
+  const canStartAnalysis = !isAnalyzing && (jobDetail.inputFiles?.length || 0) > 0;
+  const hasFoundFlags = foundFlags.length > 0 || jobDetail.flagCandidates.length > 0;
 
   return (
     <AppLayout>
@@ -118,7 +174,7 @@ export default function JobDetail() {
               <div className="flex items-center gap-3 flex-wrap">
                 <h1 className="text-xl font-semibold text-foreground">{jobDetail.title}</h1>
                 <Badge className={cn("text-xs", status.className)}>
-                  <StatusIcon className={cn("h-3 w-3 mr-1", currentStatus === 'running' && "animate-spin")} />
+                  <StatusIcon className={cn("h-3 w-3 mr-1", (displayStatus === 'running' || displayStatus === 'analyzing') && "animate-spin")} />
                   {status.label}
                 </Badge>
                 <Badge variant="outline" className={cn(
@@ -154,14 +210,38 @@ export default function JobDetail() {
             </div>
           </div>
 
+          {/* Action Buttons */}
           <div className="flex items-center gap-2 shrink-0 ml-12 lg:ml-0">
-            {currentStatus === 'queued' && (
-              <Button>
-                <PlayCircle className="h-4 w-4 mr-2" />
-                Start Analysis
+            {canStartAnalysis && (
+              <Button onClick={handleStartAnalysis} className="gap-2">
+                <Zap className="h-4 w-4" />
+                Start AI Analysis
               </Button>
             )}
-            {currentStatus === 'done' && (
+            
+            {isAnalyzing && (
+              <>
+                <Button variant="outline" onClick={handlePauseResume} className="gap-2">
+                  {isPaused ? (
+                    <>
+                      <PlayCircle className="h-4 w-4" />
+                      Resume
+                    </>
+                  ) : (
+                    <>
+                      <Pause className="h-4 w-4" />
+                      Pause
+                    </>
+                  )}
+                </Button>
+                <Button variant="destructive" onClick={handleStopAnalysis} className="gap-2">
+                  <Square className="h-4 w-4" />
+                  Stop
+                </Button>
+              </>
+            )}
+            
+            {hasFoundFlags && (
               <>
                 <Button variant="outline">
                   <Download className="h-4 w-4 mr-2" />
@@ -176,24 +256,50 @@ export default function JobDetail() {
           </div>
         </div>
 
+        {/* Found Flags Banner */}
+        {foundFlags.length > 0 && (
+          <Card className="border-success/50 bg-success/5">
+            <CardContent className="py-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-success/20 flex items-center justify-center">
+                  <Flag className="h-5 w-5 text-success" />
+                </div>
+                <div className="flex-1">
+                  <p className="font-medium text-success">Flags Found!</p>
+                  <div className="flex flex-wrap gap-2 mt-1">
+                    {foundFlags.map((flag, i) => (
+                      <code key={i} className="px-2 py-0.5 bg-success/20 rounded font-mono text-sm text-foreground">
+                        {flag}
+                      </code>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Progress */}
-        {(currentStatus === 'running' || currentStatus === 'failed') && currentProgress !== undefined && (
+        {(displayStatus === 'running' || displayStatus === 'analyzing' || displayStatus === 'failed') && (
           <Card>
             <CardContent className="py-4">
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">
-                    Analysis Progress
+                    {isAnalyzing ? analysisPhase : 'Analysis Progress'}
                     {wsConnected && <span className="text-success ml-2">(Live)</span>}
                   </span>
-                  <span className="font-medium text-foreground">{Math.round(currentProgress)}%</span>
+                  {currentProgress !== undefined && (
+                    <span className="font-medium text-foreground">{Math.round(currentProgress)}%</span>
+                  )}
                 </div>
-                <Progress value={currentProgress} className="h-2" />
+                {currentProgress !== undefined && (
+                  <Progress value={currentProgress} className="h-2" />
+                )}
                 {jobDetail.errorMessage && (
                   <p className="text-sm text-destructive mt-2">{jobDetail.errorMessage}</p>
                 )}
                 
-                {/* Real-time logs */}
                 {realtimeLogs.length > 0 && (
                   <div className="mt-3 max-h-32 overflow-y-auto bg-muted/50 rounded p-2 font-mono text-xs">
                     {realtimeLogs.slice(-10).map((log, i) => (
@@ -237,12 +343,14 @@ export default function JobDetail() {
           <Card>
             <CardContent className="pt-4 pb-4">
               <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <Flag className="h-5 w-5 text-primary" />
+                <div className="h-10 w-10 rounded-lg bg-success/10 flex items-center justify-center">
+                  <Flag className="h-5 w-5 text-success" />
                 </div>
                 <div>
-                  <p className="text-2xl font-semibold text-foreground">{jobDetail.flagCandidates.length}</p>
-                  <p className="text-xs text-muted-foreground">Candidates</p>
+                  <p className="text-2xl font-semibold text-foreground">
+                    {Math.max(foundFlags.length, jobDetail.flagCandidates.length)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Flags Found</p>
                 </div>
               </div>
             </CardContent>
@@ -263,19 +371,19 @@ export default function JobDetail() {
         </div>
 
         {/* Tabs */}
-        <Tabs defaultValue="commands" className="space-y-4">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <TabsList className="bg-secondary/50 p-1">
-            <TabsTrigger value="commands" className="flex items-center gap-2 data-[state=active]:bg-background">
-              <Terminal className="h-4 w-4" />
-              Commands
+            <TabsTrigger value="analysis" className="flex items-center gap-2 data-[state=active]:bg-background">
+              <Brain className="h-4 w-4" />
+              AI Analysis
             </TabsTrigger>
             <TabsTrigger value="terminal" className="flex items-center gap-2 data-[state=active]:bg-background">
               <TerminalSquare className="h-4 w-4" />
               Terminal
             </TabsTrigger>
-            <TabsTrigger value="autopilot" className="flex items-center gap-2 data-[state=active]:bg-background">
-              <Brain className="h-4 w-4" />
-              Autopilot
+            <TabsTrigger value="commands" className="flex items-center gap-2 data-[state=active]:bg-background">
+              <Terminal className="h-4 w-4" />
+              Commands
             </TabsTrigger>
             <TabsTrigger value="artifacts" className="flex items-center gap-2 data-[state=active]:bg-background">
               <Folder className="h-4 w-4" />
@@ -291,15 +399,14 @@ export default function JobDetail() {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="commands">
-            <Card>
-              <CardHeader className="border-b border-border">
-                <CardTitle className="text-base">Command Execution Log</CardTitle>
-              </CardHeader>
-              <CardContent className="pt-4">
-                <CommandLog commands={jobDetail.commands} />
-              </CardContent>
-            </Card>
+          <TabsContent value="analysis">
+            <AutopilotPanel 
+              jobId={jobDetail.id} 
+              files={jobDetail.inputFiles || []}
+              description={jobDetail.description}
+              expectedFormat={jobDetail.flagFormat}
+              onFlagFound={handleFlagFound}
+            />
           </TabsContent>
 
           <TabsContent value="terminal">
@@ -316,12 +423,15 @@ export default function JobDetail() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="autopilot">
-            <AutopilotPanel 
-              jobId={jobDetail.id} 
-              files={jobDetail.inputFiles || []}
-              expectedFormat={jobDetail.flagFormat}
-            />
+          <TabsContent value="commands">
+            <Card>
+              <CardHeader className="border-b border-border">
+                <CardTitle className="text-base">Command Execution Log</CardTitle>
+              </CardHeader>
+              <CardContent className="pt-4">
+                <CommandLog commands={jobDetail.commands} />
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="artifacts">
@@ -342,7 +452,16 @@ export default function JobDetail() {
               </CardHeader>
               <CardContent className="pt-4">
                 <FlagValidator 
-                  candidates={jobDetail.flagCandidates} 
+                  candidates={[
+                    ...foundFlags.map((f, i) => ({ 
+                      id: `ai-${i}`, 
+                      value: f, 
+                      confidence: 1, 
+                      source: 'AI Analysis',
+                      context: 'Found by AI autopilot'
+                    })),
+                    ...jobDetail.flagCandidates.filter(c => !foundFlags.includes(c.value))
+                  ]} 
                   expectedFormat={jobDetail.flagFormat}
                 />
               </CardContent>
