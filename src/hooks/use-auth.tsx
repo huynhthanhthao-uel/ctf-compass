@@ -11,7 +11,7 @@ interface AuthContextType {
   retryBackendConnection: () => Promise<boolean>;
 }
 
-const AuthContext = createContext<AuthContextType | null>(null);
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Demo password for mock auth
 const DEMO_PASSWORD = 'admin';
@@ -41,7 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isBackendConnected, setIsBackendConnected] = useState(false);
   const retryCountRef = useRef(0);
-  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Retry backend connection with exponential backoff
   const retryBackendConnection = useCallback(async (): Promise<boolean> => {
@@ -156,16 +156,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser({ isAuthenticated: false });
   }, [isBackendConnected]);
 
+  const value: AuthContextType = {
+    user,
+    login,
+    logout,
+    isLoading,
+    isBackendConnected,
+    retryBackendConnection
+  };
+
   return (
-    <AuthContext.Provider value={{ user, login, logout, isLoading, isBackendConnected, retryBackendConnection }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );
 }
 
-export function useAuth() {
+export function useAuth(): AuthContextType {
   const context = useContext(AuthContext);
-  if (!context) {
+  if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
