@@ -15,11 +15,17 @@ const AuthContext = createContext<AuthContextType | null>(null);
 // Demo password for mock auth
 const DEMO_PASSWORD = 'admin';
 
-// Check if backend is available
+// Check if backend is available (must return JSON, not HTML)
 async function checkBackend(): Promise<boolean> {
   try {
     const response = await fetch('/api/health', { method: 'GET' });
-    return response.ok;
+    if (!response.ok) return false;
+    
+    const contentType = response.headers.get('content-type');
+    if (!contentType?.includes('application/json')) return false;
+    
+    const data = await response.json();
+    return data.status === 'healthy' || data.status === 'ok';
   } catch {
     return false;
   }
