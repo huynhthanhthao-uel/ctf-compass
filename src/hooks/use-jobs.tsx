@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Job, JobDetail } from '@/lib/types';
 import { mockJobs, mockJobDetail, mockCommands, mockArtifacts, mockFlagCandidates } from '@/lib/mock-data';
 import * as api from '@/lib/api';
@@ -34,43 +34,64 @@ async function isBackendAvailable(): Promise<boolean> {
 // Simulate running a mock analysis with progress updates
 function runMockAnalysis(
   jobId: string,
-  setJobs: React.Dispatch<React.SetStateAction<Job[]>>
+  setJobs: React.Dispatch<React.SetStateAction<Job[]>>,
+  mockIntervalsRef: React.MutableRefObject<Map<string, number>>,
 ): void {
+  // Ensure only one runner per job
+  const existing = mockIntervalsRef.current.get(jobId);
+  if (existing !== undefined) {
+    window.clearInterval(existing);
+    mockIntervalsRef.current.delete(jobId);
+  }
+
   // Start running
-  setJobs(prev => prev.map(job =>
-    job.id === jobId
-      ? { ...job, status: 'running' as const, startedAt: new Date().toISOString(), progress: 0 }
-      : job
-  ));
+  setJobs(prev =>
+    prev.map(job =>
+      job.id === jobId
+        ? { ...job, status: 'running' as const, startedAt: new Date().toISOString(), progress: 0, errorMessage: undefined }
+        : job,
+    ),
+  );
 
   let progress = 0;
-  const interval = setInterval(() => {
+  const intervalId = window.setInterval(() => {
     progress += 15 + Math.random() * 10;
+
     if (progress >= 100) {
       progress = 100;
-      clearInterval(interval);
-      setJobs(prev => prev.map(job =>
-        job.id === jobId
-          ? { ...job, status: 'done' as const, completedAt: new Date().toISOString(), progress: 100 }
-          : job
-      ));
+      window.clearInterval(intervalId);
+      mockIntervalsRef.current.delete(jobId);
+
+      setJobs(prev =>
+        prev.map(job =>
+          job.id === jobId
+            ? { ...job, status: 'done' as const, completedAt: new Date().toISOString(), progress: 100 }
+            : job,
+        ),
+      );
+
       // Also update mockJobs array
       const idx = mockJobs.findIndex(j => j.id === jobId);
       if (idx !== -1) {
         mockJobs[idx] = { ...mockJobs[idx], status: 'done', completedAt: new Date().toISOString(), progress: 100 };
       }
-    } else {
-      setJobs(prev => prev.map(job =>
-        job.id === jobId ? { ...job, progress: Math.floor(progress) } : job
-      ));
+
+      return;
     }
+
+    setJobs(prev => prev.map(job => (job.id === jobId ? { ...job, progress: Math.floor(progress) } : job)));
   }, 600);
+
+  mockIntervalsRef.current.set(jobId, intervalId);
 }
 
 export function useJobs() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [useApi, setUseApi] = useState<boolean | null>(null);
+
+  const mockIntervalsRef = useRef<Map<string, number>>(new Map());
+  const mockStartTimeoutRef = useRef<Map<string, number>>(new Map());
 
   // Check backend availability on mount
   useEffect(() => {
@@ -177,9 +198,11 @@ export function useJobs() {
     setIsLoading(false);
 
     // Auto-run analysis in mock mode after creation
-    setTimeout(() => {
-      runMockAnalysis(newJob.id, setJobs);
+    const timeoutId = window.setTimeout(() => {
+      mockStartTimeoutRef.current.delete(newJob.id);
+      runMockAnalysis(newJob.id, setJobs, mockIntervalsRef);
     }, 500);
+    mockStartTimeoutRef.current.set(newJob.id, timeoutId);
 
     return newJob;
   }, [useApi]);
@@ -226,37 +249,36 @@ export function useJobs() {
     }
 
     // Fallback to mock simulation
-    setJobs(prev => prev.map(job => 
-      job.id === jobId 
-        ? { ...job, status: 'running' as const, startedAt: new Date().toISOString(), progress: 0 }
-        : job
-    ));
+    const pendingStart = mockStartTimeoutRef.current.get(jobId);
+    if (pendingStart !== undefined) {
+      window.clearTimeout(pendingStart);
+      mockStartTimeoutRef.current.delete(jobId);
+    }
 
-    let progress = 0;
-    const interval = setInterval(() => {
-      progress += Math.random() * 20;
-      if (progress >= 100) {
-        progress = 100;
-        clearInterval(interval);
-        setJobs(prev => prev.map(job =>
-          job.id === jobId
-            ? { ...job, status: 'done' as const, completedAt: new Date().toISOString(), progress: 100 }
-            : job
-        ));
-      } else {
-        setJobs(prev => prev.map(job =>
-          job.id === jobId ? { ...job, progress } : job
-        ));
-      }
-    }, 500);
+    runMockAnalysis(jobId, setJobs, mockIntervalsRef);
   }, [useApi]);
 
   const stopJob = useCallback((jobId: string) => {
-    setJobs(prev => prev.map(job =>
-      job.id === jobId
-        ? { ...job, status: 'failed' as const, errorMessage: 'Analysis cancelled by user', progress: job.progress }
-        : job
-    ));
+    const pendingStart = mockStartTimeoutRef.current.get(jobId);
+    if (pendingStart !== undefined) {
+      window.clearTimeout(pendingStart);
+      mockStartTimeoutRef.current.delete(jobId);
+    }
+
+    const intervalId = mockIntervalsRef.current.get(jobId);
+    if (intervalId !== undefined) {
+      window.clearInterval(intervalId);
+      mockIntervalsRef.current.delete(jobId);
+    }
+
+    setJobs(prev =>
+      prev.map(job =>
+        job.id === jobId
+          ? { ...job, status: 'failed' as const, errorMessage: 'Analysis cancelled by user', progress: job.progress }
+          : job,
+      ),
+    );
+
     // Update mock data too
     const idx = mockJobs.findIndex(j => j.id === jobId);
     if (idx !== -1) {
@@ -265,7 +287,20 @@ export function useJobs() {
   }, []);
 
   const deleteJob = useCallback((jobId: string) => {
+    const pendingStart = mockStartTimeoutRef.current.get(jobId);
+    if (pendingStart !== undefined) {
+      window.clearTimeout(pendingStart);
+      mockStartTimeoutRef.current.delete(jobId);
+    }
+
+    const intervalId = mockIntervalsRef.current.get(jobId);
+    if (intervalId !== undefined) {
+      window.clearInterval(intervalId);
+      mockIntervalsRef.current.delete(jobId);
+    }
+
     setJobs(prev => prev.filter(job => job.id !== jobId));
+
     // Remove from mock data too
     const idx = mockJobs.findIndex(j => j.id === jobId);
     if (idx !== -1) {

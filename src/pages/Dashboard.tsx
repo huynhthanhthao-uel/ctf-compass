@@ -28,7 +28,7 @@ export default function Dashboard() {
   const { toast } = useToast();
   const { jobs, isLoading, fetchJobs, runJob, stopJob, deleteJob, isBackendConnected } = useJobs();
   const { retryBackendConnection } = useAuth();
-  const { isConnected: wsConnected, getJobUpdate } = useJobsWithWebSocket();
+  const { isConnected: wsConnected, getJobUpdate, clearJobUpdate } = useJobsWithWebSocket();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [isRetrying, setIsRetrying] = useState(false);
@@ -46,12 +46,14 @@ export default function Dashboard() {
   };
 
   const handleStopJob = useCallback((jobId: string) => {
+    // Prevent stale WS status/progress from overriding local stop
+    clearJobUpdate(jobId);
     stopJob(jobId);
     toast({
       title: 'Analysis Stopped',
       description: 'The analysis has been cancelled.',
     });
-  }, [stopJob, toast]);
+  }, [stopJob, clearJobUpdate, toast]);
 
   const handleDeleteJob = useCallback((jobId: string) => {
     setJobToDelete(jobId);
@@ -60,6 +62,8 @@ export default function Dashboard() {
 
   const confirmDelete = useCallback(() => {
     if (jobToDelete) {
+      // Prevent stale WS updates from keeping deleted job around visually
+      clearJobUpdate(jobToDelete);
       deleteJob(jobToDelete);
       toast({
         title: 'Job Deleted',
@@ -69,7 +73,7 @@ export default function Dashboard() {
       setJobToDelete(null);
       setDeleteDialogOpen(false);
     }
-  }, [jobToDelete, deleteJob, toast]);
+  }, [jobToDelete, deleteJob, clearJobUpdate, toast]);
 
   // Merge WebSocket updates with job data
   const getEnhancedJobs = useCallback((): Job[] => {
