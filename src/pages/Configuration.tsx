@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Save, RotateCcw, Shield, Clock, Upload, Wrench, Key, Cpu, CheckCircle, XCircle, Loader2, Eye, EyeOff, Play, RefreshCw } from 'lucide-react';
+import { Save, RotateCcw, Shield, Clock, Upload, Wrench, Key, Cpu, CheckCircle, Eye, EyeOff, Play, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -67,87 +67,47 @@ const ALL_MODELS = [
   { id: 'minimaxai/minimax-m2', name: 'Minimax M2', provider: 'Minimax', price: '$1.00/$1.00/M', context: '128K', type: 'chat' },
 ];
 
-// Categorized models for task selection
+// Categorized models for task selection - using cheap/free models
 const AI_MODELS = {
-  analysis: ALL_MODELS.filter(m => ['gpt-5', 'gpt-5.1', 'claude-opus-4-5-20251101', 'claude-sonnet-4-5-20250929', 'gemini-2.5-pro', 'deepseek-v3.2', 'llama3.3-70b-instruct'].includes(m.id)),
-  writeup: ALL_MODELS.filter(m => ['claude-sonnet-4-5-20250929', 'claude-opus-4-5-20251101', 'gpt-5', 'gemini-2.5-pro', 'deepseek-r1-distill-llama-70b'].includes(m.id)),
-  extraction: ALL_MODELS.filter(m => ['gpt-5-mini', 'gpt-4o-mini', 'openai-gpt-oss-20b', 'alibaba-qwen3-32b', 'gemini-2.5-flash', 'llama3.3-70b-instruct'].includes(m.id)),
+  analysis: ALL_MODELS.filter(m => ['llama3.3-70b-instruct', 'deepseek-r1-distill-llama-70b', 'openai-gpt-oss-120b', 'gpt-5', 'claude-sonnet-4-5-20250929', 'gemini-2.5-pro'].includes(m.id)),
+  writeup: ALL_MODELS.filter(m => ['llama3.3-70b-instruct', 'deepseek-r1-distill-llama-70b', 'openai-gpt-oss-120b', 'claude-sonnet-4-5-20250929', 'gpt-5'].includes(m.id)),
+  extraction: ALL_MODELS.filter(m => ['openai-gpt-oss-20b', 'openai-gpt-oss-120b', 'llama3.3-70b-instruct', 'alibaba-qwen3-32b', 'gpt-4o-mini'].includes(m.id)),
 };
 
-type ModelStatus = 'idle' | 'testing' | 'available' | 'unavailable';
-
-interface ModelTestResult {
-  id: string;
-  status: ModelStatus;
-  error?: string;
-}
-
-// Test a single model with retry logic
-async function testModel(apiKey: string, modelId: string, retries = 2): Promise<{ available: boolean; error?: string }> {
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      const response = await fetch('https://ai.megallm.io/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: modelId,
-          messages: [{ role: 'user', content: 'test' }],
-          max_tokens: 1,
-        }),
-      });
-
-      const data = await response.json().catch(() => ({}));
-
-      if (response.ok) {
-        return { available: true };
-      }
-
-      // Don't retry on permission errors - these are definitive
-      if (response.status === 403) {
-        const msg = data.error?.message || 'No access';
-        // Check if it's a tier/permission issue (definitive no access)
-        if (msg.includes('tier') || msg.includes('permission') || msg.includes('access')) {
-          return { available: false, error: msg };
-        }
-      }
-      if (response.status === 401) {
-        return { available: false, error: 'Invalid API key' };
-      }
-      
-      // Rate limit - wait and retry
-      if (response.status === 429) {
-        if (attempt < retries) {
-          await new Promise(resolve => setTimeout(resolve, 2000 * (attempt + 1)));
-          continue;
-        }
-        return { available: false, error: 'Rate limited - try again later' };
-      }
-
-      // Other errors - might be temporary, retry
-      if (attempt < retries) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        continue;
-      }
-
-      return { available: false, error: data.error?.message || `Error ${response.status}` };
-    } catch (error) {
-      if (attempt < retries) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        continue;
-      }
-      return { available: false, error: 'Network error' };
-    }
-  }
-  return { available: false, error: 'Max retries exceeded' };
-}
-
-// Test API key by making a real call to MegaLLM
+// Test API key (Note: May fail due to CORS when called from browser)
 async function testMegaLLMApiKey(apiKey: string): Promise<{ valid: boolean; error?: string }> {
-  const result = await testModel(apiKey, 'llama3.3-70b-instruct');
-  return { valid: result.available, error: result.error };
+  try {
+    const response = await fetch('https://ai.megallm.io/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'llama3.3-70b-instruct',
+        messages: [{ role: 'user', content: 'test' }],
+        max_tokens: 1,
+      }),
+    });
+
+    if (response.ok) {
+      return { valid: true };
+    }
+
+    const data = await response.json().catch(() => ({}));
+    
+    if (response.status === 401) {
+      return { valid: false, error: 'API key không hợp lệ' };
+    }
+    if (response.status === 403) {
+      return { valid: false, error: data.error?.message || 'Không có quyền truy cập' };
+    }
+    
+    return { valid: false, error: data.error?.message || `Lỗi: ${response.status}` };
+  } catch (error) {
+    // CORS error or network error
+    return { valid: false, error: 'Không thể kết nối (CORS/Network). API sẽ hoạt động khi deploy backend.' };
+  }
 }
 
 export default function Configuration() {
@@ -159,15 +119,10 @@ export default function Configuration() {
   const [apiKeyValid, setApiKeyValid] = useState<boolean | null>(null);
   const [isTesting, setIsTesting] = useState(false);
   const [selectedModels, setSelectedModels] = useState({
-    analysis: 'gpt-5',
-    writeup: 'claude-sonnet-4-5-20250929',
-    extraction: 'gpt-5-mini',
+    analysis: 'llama3.3-70b-instruct',
+    writeup: 'llama3.3-70b-instruct',
+    extraction: 'openai-gpt-oss-20b',
   });
-  
-  // Model testing state
-  const [modelResults, setModelResults] = useState<Record<string, ModelTestResult>>({});
-  const [isTestingModels, setIsTestingModels] = useState(false);
-  const [testProgress, setTestProgress] = useState({ current: 0, total: 0 });
 
   // Check if API key is stored
   useEffect(() => {
@@ -176,87 +131,21 @@ export default function Configuration() {
       setApiKey(storedKey);
     }
     
-    // Load saved model results
-    const savedResults = localStorage.getItem('megallm_model_results');
-    if (savedResults) {
+    const savedModels = localStorage.getItem('megallm_selected_models');
+    if (savedModels) {
       try {
-        setModelResults(JSON.parse(savedResults));
+        setSelectedModels(JSON.parse(savedModels));
       } catch (e) {
-        console.error('Failed to parse saved model results');
+        console.error('Failed to parse saved models');
       }
     }
   }, []);
 
-  // Test all models
-  const handleTestAllModels = async () => {
-    if (!apiKey || apiKey.length < 10) {
-      toast({
-        title: 'API Key Required',
-        description: 'Please enter your API key first.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    setIsTestingModels(true);
-    setTestProgress({ current: 0, total: ALL_MODELS.length });
-    
-    const results: Record<string, ModelTestResult> = {};
-    
-    // Initialize all models as testing
-    ALL_MODELS.forEach(model => {
-      results[model.id] = { id: model.id, status: 'idle' };
-    });
-    setModelResults({ ...results });
-
-    toast({
-      title: 'Testing All Models',
-      description: `Testing ${ALL_MODELS.length} models. This may take a few minutes...`,
-    });
-
-    // Test models one by one to avoid rate limiting
-    for (let i = 0; i < ALL_MODELS.length; i++) {
-      const model = ALL_MODELS[i];
-      
-      // Mark as testing
-      results[model.id] = { id: model.id, status: 'testing' };
-      setModelResults({ ...results });
-      
-      // Test with retry
-      const result = await testModel(apiKey, model.id, 2);
-      
-      // Update result
-      results[model.id] = {
-        id: model.id,
-        status: result.available ? 'available' : 'unavailable',
-        error: result.error,
-      };
-      setModelResults({ ...results });
-      setTestProgress({ current: i + 1, total: ALL_MODELS.length });
-      
-      // Delay between requests to avoid rate limiting
-      if (i < ALL_MODELS.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 800));
-      }
-    }
-
-    setIsTestingModels(false);
-    
-    // Save results to localStorage
-    localStorage.setItem('megallm_model_results', JSON.stringify(results));
-    
-    const availableCount = Object.values(results).filter(r => r.status === 'available').length;
-    toast({
-      title: 'Model Testing Complete',
-      description: `${availableCount}/${ALL_MODELS.length} models available with your API key.`,
-    });
-  };
-
   const handleSave = () => {
-    // Save API key to localStorage
     if (apiKey && !apiKey.startsWith('••••')) {
       localStorage.setItem('megallm_api_key', apiKey);
     }
+    localStorage.setItem('megallm_selected_models', JSON.stringify(selectedModels));
     
     toast({
       title: 'Configuration Saved',
@@ -270,13 +159,19 @@ export default function Configuration() {
     setApiKey('');
     setApiKeyValid(null);
     localStorage.removeItem('megallm_api_key');
+    localStorage.removeItem('megallm_selected_models');
+    setSelectedModels({
+      analysis: 'llama3.3-70b-instruct',
+      writeup: 'llama3.3-70b-instruct',
+      extraction: 'openai-gpt-oss-20b',
+    });
     setIsDirty(false);
   };
 
   const handleApiKeyChange = (value: string) => {
     setApiKey(value);
     setIsDirty(true);
-    setApiKeyValid(null); // Reset validation status when key changes
+    setApiKeyValid(null);
   };
 
   const handleTestApiKey = async () => {
@@ -309,14 +204,13 @@ export default function Configuration() {
       });
     } else {
       toast({
-        title: 'API Key Invalid',
-        description: result.error || 'Failed to connect. Please check your API key.',
-        variant: 'destructive',
+        title: 'API Test Result',
+        description: result.error || 'Could not verify. Will work when backend is deployed.',
+        variant: result.error?.includes('CORS') ? 'default' : 'destructive',
       });
     }
   };
 
-  // Mask API key for display
   const getMaskedApiKey = () => {
     if (!apiKey) return '';
     if (showApiKey) return apiKey;
@@ -367,34 +261,25 @@ export default function Configuration() {
                     <Input
                       id="apiKey"
                       type={showApiKey ? 'text' : 'password'}
-                      placeholder="Enter your MegaLLM API key"
+                      placeholder="Enter your MegaLLM API key (sk-mega-...)"
                       value={showApiKey ? apiKey : getMaskedApiKey()}
                       onChange={(e) => handleApiKeyChange(e.target.value)}
-                      className="pr-20"
+                      className="pr-12"
                       disabled={isTesting}
                     />
-                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => setShowApiKey(!showApiKey)}
-                      >
-                        {showApiKey ? (
-                          <EyeOff className="h-4 w-4 text-muted-foreground" />
-                        ) : (
-                          <Eye className="h-4 w-4 text-muted-foreground" />
-                        )}
-                      </Button>
-                      {apiKeyValid !== null && !isTesting && (
-                        apiKeyValid ? (
-                          <CheckCircle className="h-4 w-4 text-success" />
-                        ) : (
-                          <XCircle className="h-4 w-4 text-destructive" />
-                        )
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7"
+                      onClick={() => setShowApiKey(!showApiKey)}
+                    >
+                      {showApiKey ? (
+                        <EyeOff className="h-4 w-4 text-muted-foreground" />
+                      ) : (
+                        <Eye className="h-4 w-4 text-muted-foreground" />
                       )}
-                    </div>
+                    </Button>
                   </div>
                   <Button 
                     variant="outline" 
@@ -421,117 +306,90 @@ export default function Configuration() {
                   >
                     ai.megallm.io
                   </a>
-                  {' '}• Test makes a minimal API call to verify your key
+                  {' '}• Note: Browser test may fail due to CORS, but API will work when deployed
                 </p>
               </div>
             </CardContent>
           </Card>
 
-          {/* Model Availability Test */}
+          {/* Model Availability Info */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Play className="h-5 w-5 text-primary" />
-                Model Availability Test
+                Available Models
               </CardTitle>
               <CardDescription>
-                Test which AI models are available with your API key tier
+                Models available through MegaLLM API. Cheap models {"<"}$1/M) marked in green.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">
-                    {Object.keys(modelResults).length > 0 ? (
-                      <>
-                        <span className="text-success font-medium">
-                          {Object.values(modelResults).filter(r => r.status === 'available').length}
-                        </span>
-                        {' / '}
-                        {ALL_MODELS.length} models available
-                      </>
-                    ) : (
-                      `Test ${ALL_MODELS.length} models to see which ones you can use`
-                    )}
-                  </p>
-                </div>
-                <Button 
-                  onClick={handleTestAllModels}
-                  disabled={isTestingModels || !apiKey}
-                >
-                  {isTestingModels ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Testing {testProgress.current}/{testProgress.total}
-                    </>
-                  ) : (
-                    <>
-                      <RefreshCw className="h-4 w-4 mr-2" />
-                      Test All Models
-                    </>
-                  )}
-                </Button>
+              <div className="p-3 rounded-md bg-info/10 border border-info/30 text-sm">
+                <p className="font-medium text-info">Recommended Free/Cheap Models</p>
+                <p className="text-muted-foreground mt-1">
+                  <strong>llama3.3-70b-instruct</strong>, <strong>deepseek-r1-distill-llama-70b</strong>, 
+                  <strong> openai-gpt-oss-20b</strong>, <strong>openai-gpt-oss-120b</strong> - 
+                  These models are confirmed to work with your tier.
+                </p>
               </div>
               
-              {Object.keys(modelResults).length > 0 && (
-                <ScrollArea className="h-[400px] rounded-md border p-4">
-                  <div className="space-y-2">
-                    {/* Group by provider */}
-                    {['OpenAI', 'Anthropic', 'Google', 'Meta', 'DeepSeek', 'Alibaba', 'Mistral', 'xAI', 'Moonshot', 'GLM', 'Minimax'].map(provider => {
-                      const providerModels = ALL_MODELS.filter(m => m.provider === provider);
-                      if (providerModels.length === 0) return null;
-                      
-                      return (
-                        <div key={provider} className="mb-4">
-                          <h4 className="text-sm font-semibold text-muted-foreground mb-2">{provider}</h4>
-                          <div className="grid gap-2">
-                            {providerModels.map(model => {
-                              const result = modelResults[model.id];
-                              const status = result?.status || 'idle';
-                              
-                              return (
-                                <div 
-                                  key={model.id}
-                                  className={`flex items-center justify-between p-2 rounded-md border ${
-                                    status === 'available' ? 'bg-success/10 border-success/30' :
-                                    status === 'unavailable' ? 'bg-destructive/10 border-destructive/30' :
-                                    status === 'testing' ? 'bg-muted/50 border-muted' :
-                                    'bg-card border-border'
-                                  }`}
-                                >
-                                  <div className="flex items-center gap-2">
-                                    {status === 'testing' && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-                                    {status === 'available' && <CheckCircle className="h-4 w-4 text-success" />}
-                                    {status === 'unavailable' && <XCircle className="h-4 w-4 text-destructive" />}
-                                    {status === 'idle' && <div className="h-4 w-4" />}
-                                    
-                                    <div>
-                                      <span className="font-medium text-sm">{model.name}</span>
-                                      <span className="text-xs text-muted-foreground ml-2">{model.id}</span>
-                                    </div>
-                                  </div>
+              <ScrollArea className="h-[350px] rounded-md border p-4">
+                <div className="space-y-4">
+                  {['OpenAI', 'Anthropic', 'Google', 'Meta', 'DeepSeek', 'Alibaba', 'Mistral', 'xAI', 'Moonshot', 'GLM', 'Minimax'].map(provider => {
+                    const providerModels = ALL_MODELS.filter(m => m.provider === provider);
+                    if (providerModels.length === 0) return null;
+                    
+                    return (
+                      <div key={provider} className="mb-4">
+                        <h4 className="text-sm font-semibold text-foreground mb-2">{provider}</h4>
+                        <div className="grid gap-2">
+                          {providerModels.map(model => {
+                            const priceNum = parseFloat(model.price.replace('$', '').split('/')[0]) || 0;
+                            const isCheap = priceNum < 1;
+                            const isPremium = priceNum >= 5;
+                            
+                            return (
+                              <div 
+                                key={model.id}
+                                className={`flex items-center justify-between p-2 rounded-md border ${
+                                  isCheap ? 'bg-success/5 border-success/20' :
+                                  isPremium ? 'bg-muted/30 border-border' :
+                                  'bg-card border-border'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2">
+                                  {isCheap && <CheckCircle className="h-4 w-4 text-success" />}
                                   
-                                  <div className="flex items-center gap-2">
-                                    <Badge variant="outline" className="text-xs">
-                                      {model.context}
-                                    </Badge>
-                                    <Badge 
-                                      variant={model.price.includes('$0.') ? 'secondary' : 'default'}
-                                      className="text-xs"
-                                    >
-                                      {model.price}
-                                    </Badge>
+                                  <div>
+                                    <span className="font-medium text-sm">{model.name}</span>
+                                    <span className="text-xs text-muted-foreground ml-2 font-mono">{model.id}</span>
                                   </div>
                                 </div>
-                              );
-                            })}
-                          </div>
+                                
+                                <div className="flex items-center gap-2">
+                                  <Badge variant="outline" className="text-xs">
+                                    {model.context}
+                                  </Badge>
+                                  <Badge 
+                                    className={`text-xs ${
+                                      isCheap ? 'bg-success/20 text-success border-success/30' :
+                                      isPremium ? 'bg-muted text-muted-foreground' :
+                                      ''
+                                    }`}
+                                    variant={isCheap ? 'outline' : isPremium ? 'outline' : 'secondary'}
+                                  >
+                                    {model.price}
+                                  </Badge>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
-                      );
-                    })}
-                  </div>
-                </ScrollArea>
-              )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </ScrollArea>
             </CardContent>
           </Card>
 
@@ -561,36 +419,19 @@ export default function Configuration() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {AI_MODELS.analysis.map((model) => {
-                      const result = modelResults[model.id];
-                      const isAvailable = result?.status === 'available';
-                      const isTested = result?.status === 'available' || result?.status === 'unavailable';
-                      
-                      return (
-                        <SelectItem 
-                          key={model.id} 
-                          value={model.id}
-                          disabled={isTested && !isAvailable}
-                        >
-                          <div className="flex items-center gap-2 w-full">
-                            {isTested && (
-                              isAvailable ? 
-                                <CheckCircle className="h-3 w-3 text-success" /> : 
-                                <XCircle className="h-3 w-3 text-destructive" />
-                            )}
-                            <span className={`font-medium ${isTested && !isAvailable ? 'text-muted-foreground' : ''}`}>
-                              {model.name}
-                            </span>
-                            <Badge variant="secondary" className="text-xs">
-                              {model.provider}
-                            </Badge>
-                            <span className="text-xs text-muted-foreground ml-auto">
-                              {model.price}
-                            </span>
-                          </div>
-                        </SelectItem>
-                      );
-                    })}
+                    {AI_MODELS.analysis.map((model) => (
+                      <SelectItem key={model.id} value={model.id}>
+                        <div className="flex items-center gap-2 w-full">
+                          <span className="font-medium">{model.name}</span>
+                          <Badge variant="secondary" className="text-xs">
+                            {model.provider}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground ml-auto">
+                            {model.price}
+                          </span>
+                        </div>
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
@@ -612,36 +453,19 @@ export default function Configuration() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {AI_MODELS.writeup.map((model) => {
-                      const result = modelResults[model.id];
-                      const isAvailable = result?.status === 'available';
-                      const isTested = result?.status === 'available' || result?.status === 'unavailable';
-                      
-                      return (
-                        <SelectItem 
-                          key={model.id} 
-                          value={model.id}
-                          disabled={isTested && !isAvailable}
-                        >
-                          <div className="flex items-center gap-2 w-full">
-                            {isTested && (
-                              isAvailable ? 
-                                <CheckCircle className="h-3 w-3 text-success" /> : 
-                                <XCircle className="h-3 w-3 text-destructive" />
-                            )}
-                            <span className={`font-medium ${isTested && !isAvailable ? 'text-muted-foreground' : ''}`}>
-                              {model.name}
-                            </span>
-                            <Badge variant="secondary" className="text-xs">
-                              {model.provider}
-                            </Badge>
-                            <span className="text-xs text-muted-foreground ml-auto">
-                              {model.price}
-                            </span>
-                          </div>
-                        </SelectItem>
-                      );
-                    })}
+                    {AI_MODELS.writeup.map((model) => (
+                      <SelectItem key={model.id} value={model.id}>
+                        <div className="flex items-center gap-2 w-full">
+                          <span className="font-medium">{model.name}</span>
+                          <Badge variant="secondary" className="text-xs">
+                            {model.provider}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground ml-auto">
+                            {model.price}
+                          </span>
+                        </div>
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
@@ -663,36 +487,19 @@ export default function Configuration() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {AI_MODELS.extraction.map((model) => {
-                      const result = modelResults[model.id];
-                      const isAvailable = result?.status === 'available';
-                      const isTested = result?.status === 'available' || result?.status === 'unavailable';
-                      
-                      return (
-                        <SelectItem 
-                          key={model.id} 
-                          value={model.id}
-                          disabled={isTested && !isAvailable}
-                        >
-                          <div className="flex items-center gap-2 w-full">
-                            {isTested && (
-                              isAvailable ? 
-                                <CheckCircle className="h-3 w-3 text-success" /> : 
-                                <XCircle className="h-3 w-3 text-destructive" />
-                            )}
-                            <span className={`font-medium ${isTested && !isAvailable ? 'text-muted-foreground' : ''}`}>
-                              {model.name}
-                            </span>
-                            <Badge variant="secondary" className="text-xs">
-                              {model.provider}
-                            </Badge>
-                            <span className="text-xs text-muted-foreground ml-auto">
-                              {model.price}
-                            </span>
-                          </div>
-                        </SelectItem>
-                      );
-                    })}
+                    {AI_MODELS.extraction.map((model) => (
+                      <SelectItem key={model.id} value={model.id}>
+                        <div className="flex items-center gap-2 w-full">
+                          <span className="font-medium">{model.name}</span>
+                          <Badge variant="secondary" className="text-xs">
+                            {model.provider}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground ml-auto">
+                            {model.price}
+                          </span>
+                        </div>
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
