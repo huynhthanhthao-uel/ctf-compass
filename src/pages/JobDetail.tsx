@@ -925,40 +925,6 @@ if __name__ == "__main__":
                 autopilotStartRef.current = startFn;
               }}
             />
-            
-            {/* Legacy Autopilot Panel - For manual control */}
-            <details className="group">
-              <summary className="cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground flex items-center gap-2 py-2">
-                <span className="transition-transform group-open:rotate-90">▶</span>
-                Advanced Controls (Manual AI Analysis)
-              </summary>
-              <div className="mt-4 space-y-4">
-                <AutopilotPanel 
-                  jobId={jobDetail.id} 
-                  files={jobDetail.inputFiles || []}
-                  description={jobDetail.description}
-                  expectedFormat={jobDetail.flagFormat}
-                  onFlagFound={handleFlagFound}
-                />
-                
-                {/* Solve Script Generator */}
-                <SolveScriptGenerator
-                  jobId={jobDetail.id}
-                  category={detectCategory()}
-                  files={jobDetail.inputFiles || []}
-                  flagFormat={jobDetail.flagFormat}
-                  analysisContext={analysisContext}
-                  onScriptExecuted={(result) => {
-                    if (result.stdout) {
-                      const flagMatch = result.stdout.match(new RegExp(jobDetail.flagFormat || 'CTF{.*}', 'g'));
-                      if (flagMatch) {
-                        flagMatch.forEach(handleFlagFound);
-                      }
-                    }
-                  }}
-                />
-              </div>
-            </details>
           </TabsContent>
 
           <TabsContent value="history">
