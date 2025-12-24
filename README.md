@@ -6,6 +6,21 @@
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Ubuntu 24.04](https://img.shields.io/badge/Ubuntu-24.04%20LTS-E95420?logo=ubuntu)](https://ubuntu.com/)
 [![Docker](https://img.shields.io/badge/Docker-Required-2496ED?logo=docker)](https://www.docker.com/)
+[![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)](https://reactjs.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?logo=fastapi)](https://fastapi.tiangolo.com/)
+
+---
+
+## ✨ Features
+
+- **AI-Powered Analysis**: Automated CTF challenge analysis using MegaLLM API
+- **Sandboxed Execution**: Secure Docker containers with network isolation
+- **Modern Web UI**: React 18 + TypeScript + Tailwind CSS + shadcn/ui
+- **Real-time Updates**: WebSocket-based live job status and progress
+- **Job Management**: Create, run, stop, and delete analysis jobs
+- **Demo Mode**: Full UI functionality without backend (mock data)
+- **Notification System**: Real-time alerts for job completions and system events
+- **Professional Writeups**: AI-generated CTF writeups with step-by-step solutions
 
 ---
 
@@ -34,11 +49,34 @@ curl -fsSL https://raw.githubusercontent.com/huynhtrungcipp/ctf-compass/main/ctf
 
 ## 📋 Requirements
 
-- **OS:** Ubuntu 24.04 LTS (recommended)
-- **Docker:** Engine 24.0+ with Compose v2.20+
-- **RAM:** 4GB minimum, 8GB recommended
-- **Disk:** 20GB minimum
-- **API Key:** MegaLLM API key from [ai.megallm.io](https://ai.megallm.io)
+| Requirement | Specification |
+|-------------|---------------|
+| **OS** | Ubuntu 24.04 LTS (recommended) |
+| **Docker** | Engine 24.0+ with Compose v2.20+ |
+| **RAM** | 4GB minimum, 8GB recommended |
+| **Disk** | 20GB minimum |
+| **API Key** | MegaLLM API key from [ai.megallm.io](https://ai.megallm.io) |
+
+---
+
+## 🖥️ Web Interface
+
+### Dashboard
+- **Statistics Cards**: Total jobs, running, completed, failed counts
+- **Job List**: Grid/list view with search functionality
+- **Status Badges**: Real-time job status with Live/Demo mode indicator
+- **Quick Actions**: Run, stop, delete jobs directly from cards
+
+### Job Management
+- **Create**: Upload files, set flag format, add descriptions
+- **Monitor**: Real-time progress with WebSocket updates
+- **Stop**: Cancel running analyses instantly
+- **Delete**: Remove completed/failed jobs with confirmation
+
+### Notifications
+- **Real-time Alerts**: Job completions, errors, system updates
+- **Mark as Read**: Individual or bulk read status
+- **Clear History**: Delete old notifications
 
 ---
 
@@ -69,6 +107,7 @@ docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml logs -
 # Specific service
 docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml logs -f api
 docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml logs -f worker
+docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml logs -f web
 ```
 
 ### System Update
@@ -92,16 +131,19 @@ sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/uninstall.sh
 
 # Force uninstall (no prompts)
 sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/uninstall.sh --force
+
+# Keep database data
+sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/uninstall.sh --keep-data
 ```
 
 ---
 
 ## 🔐 Security
 
-- **Isolated Sandbox:** All analysis runs in Docker containers with network disabled
+- **Isolated Sandbox:** All analysis runs in Docker containers with `--network=none`
 - **Resource Limits:** CPU, memory, and time limits on all sandboxed operations
 - **Session-based Auth:** Secure session management with CSRF protection
-- **API Key Protection:** Keys stored securely, never exposed in logs
+- **API Key Protection:** Keys stored securely, never exposed in logs or UI
 
 ### Security Checklist
 
@@ -109,6 +151,7 @@ sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/uninstall.sh --force
 - [ ] Configure `SECRET_KEY` for production
 - [ ] Enable TLS for public deployments
 - [ ] Set API key via Web UI (not environment)
+- [ ] Review firewall rules (UFW)
 
 ---
 
@@ -116,11 +159,11 @@ sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/uninstall.sh --force
 
 | Document | Description |
 |----------|-------------|
-| [Architecture](ctf-autopilot/docs/ARCHITECTURE.md) | System design overview |
-| [Security](ctf-autopilot/docs/SECURITY.md) | Security controls |
-| [Usage Guide](ctf-autopilot/docs/USAGE.md) | User guide |
-| [Debug Guide](ctf-autopilot/docs/DEBUG.md) | Troubleshooting |
-| [Runbook](ctf-autopilot/docs/RUNBOOK.md) | Operations guide |
+| [Architecture](ctf-autopilot/docs/ARCHITECTURE.md) | System design and component overview |
+| [Security](ctf-autopilot/docs/SECURITY.md) | Security controls and best practices |
+| [Usage Guide](ctf-autopilot/docs/USAGE.md) | User guide for the web interface |
+| [Debug Guide](ctf-autopilot/docs/DEBUG.md) | Troubleshooting common issues |
+| [Runbook](ctf-autopilot/docs/RUNBOOK.md) | Operations and maintenance guide |
 
 ---
 
@@ -130,11 +173,17 @@ sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/uninstall.sh --force
 ┌─────────────────────────────────────────────────────────────┐
 │                   Frontend (React/Vite)                      │
 │                    localhost:3000                            │
+│  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐           │
+│  │Dashboard│ │JobCreate│ │JobDetail│ │ Config  │           │
+│  └─────────┘ └─────────┘ └─────────┘ └─────────┘           │
 └─────────────────────┬───────────────────────────────────────┘
                       │ HTTP/WebSocket
 ┌─────────────────────▼───────────────────────────────────────┐
 │                    FastAPI Backend                           │
 │                    localhost:8000                            │
+│  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐           │
+│  │  Auth   │ │  Jobs   │ │ System  │ │WebSocket│           │
+│  └─────────┘ └─────────┘ └─────────┘ └─────────┘           │
 └─────────────────────┬───────────────────────────────────────┘
                       │
 ┌─────────────────────▼───────────────────────────────────────┐
@@ -152,9 +201,10 @@ sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/uninstall.sh --force
 
 ## 🛠️ Tech Stack
 
-| Component | Technology |
-|-----------|------------|
+| Layer | Technology |
+|-------|------------|
 | **Frontend** | React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui |
+| **State** | React Query, React Context, WebSocket |
 | **Backend** | Python 3.12, FastAPI, Celery, SQLAlchemy |
 | **Database** | PostgreSQL 16, Redis 7 |
 | **Infrastructure** | Docker, Docker Compose, Nginx |
@@ -168,8 +218,10 @@ sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/uninstall.sh --force
 |-------|----------|
 | "Demo Mode" on login | Backend not running - check `docker compose ps` |
 | Job stuck in "Queued" | Worker issue - `docker compose restart worker` |
+| Stop/Delete not working | Refresh page, check browser console |
 | API Key not saving | Check backend connectivity and permissions |
-| File upload fails | Check file size limit and disk space |
+| File upload fails | Check file size limit (200MB) and disk space |
+| Notifications not showing | Clear browser cache, check JavaScript console |
 
 For detailed troubleshooting, see [DEBUG.md](ctf-autopilot/docs/DEBUG.md).
 
