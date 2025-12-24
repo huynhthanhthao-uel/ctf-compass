@@ -978,25 +978,49 @@ ${insight ? `# AI Analysis: ${insight.analysis.slice(0, 200)}` : ''}
   return (
     <div className="space-y-4">
       {/* Main Control Card */}
-      <Card className="border-2 border-primary/20">
+      <Card className={cn(
+        "border-2 transition-all duration-300",
+        isRunning ? "border-primary/50 animate-pulse-glow" : "border-primary/20",
+        currentPhase === 'completed' && "border-success/50",
+        currentPhase === 'failed' && "border-destructive/50"
+      )}>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <Rocket className="h-6 w-6 text-primary" />
+              <div className={cn(
+                "p-2 rounded-lg transition-all duration-300",
+                isRunning ? "bg-primary/20 animate-bounce-subtle" : "bg-primary/10",
+                currentPhase === 'completed' && "bg-success/20",
+                currentPhase === 'failed' && "bg-destructive/20"
+              )}>
+                <Rocket className={cn(
+                  "h-6 w-6 transition-colors",
+                  isRunning ? "text-primary animate-spin-slow" : "text-primary",
+                  currentPhase === 'completed' && "text-success",
+                  currentPhase === 'failed' && "text-destructive"
+                )} />
               </div>
               <div>
                 <CardTitle className="text-lg flex items-center gap-2">
                   Full Autopilot
                   {isRunning && (
-                    <Badge variant="secondary" className="animate-pulse">
-                      <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                      Running
+                    <Badge variant="secondary" className="gap-1.5 bg-primary/20 text-primary border-primary/30">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      <span className="relative">
+                        Running
+                        <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-primary animate-ping" />
+                      </span>
+                    </Badge>
+                  )}
+                  {currentPhase === 'completed' && foundFlags.length > 0 && (
+                    <Badge className="bg-success/20 text-success border-success/30 animate-scale-in">
+                      <Sparkles className="h-3 w-3 mr-1" />
+                      Solved!
                     </Badge>
                   )}
                 </CardTitle>
                 <p className="text-sm text-muted-foreground">
-                  One-click automated CTF solving
+                  One-click automated CTF solving with AI
                 </p>
               </div>
             </div>
@@ -1046,26 +1070,64 @@ ${insight ? `# AI Analysis: ${insight.analysis.slice(0, 200)}` : ''}
         </CardHeader>
 
         <CardContent className="space-y-4">
-          {/* Phase Progress */}
+          {/* Phase Progress with enhanced animation */}
           <div className="space-y-2">
             <div className="flex items-center justify-between text-sm">
-              <div className="flex items-center gap-2">
-                {getPhaseIcon(currentPhase)}
-                <span className="font-medium">{phaseMessage}</span>
+              <div className={cn(
+                "flex items-center gap-2 transition-all",
+                isRunning && "animate-slide-up"
+              )}>
+                <span className={cn(
+                  "transition-transform",
+                  isRunning && currentPhase === 'ai_analysis' && "animate-bounce-subtle"
+                )}>
+                  {getPhaseIcon(currentPhase)}
+                </span>
+                <span className={cn(
+                  "font-medium",
+                  currentPhase === 'ai_analysis' && "text-primary"
+                )}>
+                  {phaseMessage}
+                </span>
+                {currentPhase === 'ai_analysis' && (
+                  <span className="inline-flex gap-0.5 ml-1">
+                    <span className="h-1.5 w-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <span className="h-1.5 w-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <span className="h-1.5 w-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: '300ms' }} />
+                  </span>
+                )}
               </div>
               {totalAttempts > 0 && (
-                <span className="text-muted-foreground">
+                <Badge variant="outline" className="text-xs animate-fade-in">
+                  <Brain className="h-3 w-3 mr-1" />
                   {totalAttempts} AI iterations
-                </span>
+                </Badge>
               )}
             </div>
-            <Progress value={progress} className="h-2" />
+            <div className="relative">
+              <Progress 
+                value={progress} 
+                className={cn(
+                  "h-2.5 transition-all",
+                  isRunning && "[&>div]:bg-gradient-to-r [&>div]:from-primary [&>div]:via-primary/80 [&>div]:to-primary"
+                )} 
+              />
+              {isRunning && progress > 0 && progress < 100 && (
+                <div 
+                  className="absolute top-0 h-2.5 w-20 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer rounded-full"
+                  style={{ 
+                    left: `${Math.min(progress - 10, 80)}%`,
+                    backgroundSize: '200% 100%'
+                  }}
+                />
+              )}
+            </div>
           </div>
 
           {/* Detected Category & Strategy */}
           {detectedCategory !== 'unknown' && strategy && (
-            <div className="flex items-center gap-4 p-3 rounded-lg bg-muted/50">
-              <Badge variant="outline" className="capitalize text-sm">
+            <div className="flex items-center gap-4 p-3 rounded-lg bg-muted/50 animate-fade-in">
+              <Badge variant="outline" className="capitalize text-sm bg-primary/5 border-primary/30">
                 <Target className="h-3 w-3 mr-1" />
                 {strategy.name}
               </Badge>
@@ -1073,8 +1135,13 @@ ${insight ? `# AI Analysis: ${insight.analysis.slice(0, 200)}` : ''}
                 {strategy.description}
               </span>
               <div className="ml-auto flex gap-1">
-                {strategy.tools.slice(0, 4).map(tool => (
-                  <Badge key={tool} variant="secondary" className="text-xs">
+                {strategy.tools.slice(0, 4).map((tool, i) => (
+                  <Badge 
+                    key={tool} 
+                    variant="secondary" 
+                    className="text-xs animate-scale-in"
+                    style={{ animationDelay: `${i * 50}ms` }}
+                  >
                     {tool}
                   </Badge>
                 ))}
@@ -1149,22 +1216,35 @@ ${insight ? `# AI Analysis: ${insight.analysis.slice(0, 200)}` : ''}
             </div>
           )}
 
-          {/* Found Flags */}
+          {/* Found Flags - Animated Success */}
           {foundFlags.length > 0 && (
-            <div className="p-4 rounded-lg bg-success/10 border border-success/30">
-              <div className="flex items-center gap-2 text-success font-medium mb-2">
-                <Sparkles className="h-5 w-5" />
-                🎉 FLAG FOUND!
-              </div>
-              <div className="space-y-2">
-                {foundFlags.map((flag, i) => (
-                  <code 
-                    key={i} 
-                    className="block px-3 py-2 bg-success/20 rounded font-mono text-sm select-all"
-                  >
-                    {flag}
-                  </code>
-                ))}
+            <div className="p-4 rounded-lg bg-success/10 border-2 border-success/40 animate-scale-in relative overflow-hidden">
+              {/* Celebration shimmer effect */}
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-success/10 to-transparent animate-shimmer" style={{ backgroundSize: '200% 100%' }} />
+              
+              <div className="relative">
+                <div className="flex items-center gap-2 text-success font-medium mb-3">
+                  <Sparkles className="h-5 w-5 animate-bounce-subtle" />
+                  <span className="text-lg">🎉 FLAG FOUND!</span>
+                  <Badge className="ml-auto bg-success text-success-foreground">
+                    {foundFlags.length} flag{foundFlags.length > 1 ? 's' : ''}
+                  </Badge>
+                </div>
+                <div className="space-y-2">
+                  {foundFlags.map((flag, i) => (
+                    <code 
+                      key={i} 
+                      className="block px-4 py-3 bg-success/20 rounded-lg font-mono text-sm select-all border border-success/30 animate-fade-in hover:bg-success/30 transition-colors cursor-pointer"
+                      style={{ animationDelay: `${i * 100}ms` }}
+                      onClick={() => {
+                        navigator.clipboard.writeText(flag);
+                        toast.success('Flag copied to clipboard!');
+                      }}
+                    >
+                      {flag}
+                    </code>
+                  ))}
+                </div>
               </div>
             </div>
           )}
