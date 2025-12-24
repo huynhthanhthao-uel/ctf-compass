@@ -311,12 +311,71 @@ export interface TerminalCommandResult {
   duration_ms?: number;
 }
 
-async function invokeEdgeFunction<T>(functionName: string, body: unknown): Promise<T> {
-  const { data, error } = await supabase.functions.invoke(functionName, { body });
-  if (error) {
-    throw new Error(error.message || 'Edge function error');
+// Retry config with exponential backoff
+const MAX_RETRIES = 3;
+const INITIAL_DELAY_MS = 1000;
+
+async function invokeEdgeFunctionWithRetry<T>(
+  functionName: string,
+  body: unknown,
+  retries = MAX_RETRIES
+): Promise<T> {
+  let lastError: Error | null = null;
+  let delay = INITIAL_DELAY_MS;
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const { data, error } = await supabase.functions.invoke(functionName, { body });
+
+      if (error) {
+        const msg = error.message || '';
+        // Handle rate limit (429) and payment required (402)
+        if (msg.includes('429') || msg.toLowerCase().includes('rate limit')) {
+          throw new RateLimitError('Rate limit exceeded. Please wait and try again.');
+        }
+        if (msg.includes('402') || msg.toLowerCase().includes('payment')) {
+          throw new PaymentRequiredError('AI credits exhausted. Please add funds to your workspace.');
+        }
+        throw new Error(msg || 'Edge function error');
+      }
+
+      return data as T;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error('Unknown error');
+
+      // Don't retry for non-retriable errors
+      if (err instanceof RateLimitError || err instanceof PaymentRequiredError) {
+        throw err;
+      }
+
+      if (attempt < retries) {
+        console.log(`[API] Retry ${attempt + 1}/${retries} for ${functionName} after ${delay}ms`);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        delay *= 2; // exponential backoff
+      }
+    }
   }
-  return data as T;
+
+  throw lastError ?? new Error('Edge function failed after retries');
+}
+
+// Custom error classes for specific handling
+export class RateLimitError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RateLimitError';
+  }
+}
+
+export class PaymentRequiredError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'PaymentRequiredError';
+  }
+}
+
+async function invokeEdgeFunction<T>(functionName: string, body: unknown): Promise<T> {
+  return invokeEdgeFunctionWithRetry<T>(functionName, body);
 }
 
 async function executeViaEdgeFunction(
