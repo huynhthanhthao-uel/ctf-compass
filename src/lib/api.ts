@@ -556,3 +556,58 @@ export async function getSimilarSolves(
     body: JSON.stringify({ category, file_types: fileTypes }),
   });
 }
+
+// ============ Sandbox Tools API ============
+
+export interface ToolStatus {
+  available: boolean;
+  path?: string;
+  error?: string;
+  assumed?: boolean;
+}
+
+export interface ToolAvailabilityResponse {
+  tools: Record<string, ToolStatus>;
+  cached: boolean;
+  checked_at: string;
+  summary?: {
+    available: number;
+    total: number;
+    percentage: number;
+  };
+}
+
+export interface PythonPackagesResponse {
+  packages: string[];
+  can_install_more: boolean;
+  venv_supported: boolean;
+}
+
+export interface RunScriptRequest {
+  script: string;
+  pip_packages?: string[];
+  timeout?: number;
+}
+
+export interface RunScriptResponse {
+  exit_code: number;
+  stdout: string;
+  stderr: string;
+  script: string;
+  packages: string[];
+}
+
+export async function checkToolAvailability(refresh: boolean = false): Promise<ToolAvailabilityResponse> {
+  return apiFetch(`/system/sandbox/tools?refresh=${refresh}`);
+}
+
+export async function getPythonPackages(): Promise<PythonPackagesResponse> {
+  return apiFetch('/system/sandbox/python-packages');
+}
+
+export async function runPythonScript(request: RunScriptRequest): Promise<RunScriptResponse> {
+  return apiFetch('/system/sandbox/run-script', {
+    method: 'POST',
+    body: JSON.stringify(request),
+  });
+}
