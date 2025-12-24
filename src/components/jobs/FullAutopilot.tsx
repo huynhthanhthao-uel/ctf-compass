@@ -751,16 +751,12 @@ ${insight ? `# AI Analysis: ${insight.analysis.slice(0, 200)}` : ''}
     setIsRunning(false);
   }, [runReconnaissance, detectCategoryPhase, runAIAnalysis, generateSolveScript, executeSolveScript, onComplete]);
 
-  // Expose start function to parent via callback
+  // Expose start function to parent via callback - run immediately on mount
   useEffect(() => {
     if (onStartRef) {
-      onStartRef(() => {
-        if (!isRunning && files.length > 0) {
-          runFullAutopilot();
-        }
-      });
+      onStartRef(runFullAutopilot);
     }
-  }, [onStartRef, isRunning, files.length, runFullAutopilot]);
+  }, [onStartRef, runFullAutopilot]);
 
   const handlePause = () => {
     setIsPaused(true);
