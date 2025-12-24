@@ -253,6 +253,18 @@ export function useJobs() {
   }, [useApi, handleMockJobComplete, handleMockJobStart]);
 
   const runJob = useCallback(async (jobId: string) => {
+    // First check if job exists and is in queued status
+    const job = jobs.find(j => j.id === jobId);
+    if (!job) {
+      console.error('Job not found:', jobId);
+      return;
+    }
+    
+    if (job.status !== 'queued') {
+      console.log('Job is not in queued status, cannot run:', job.status);
+      return;
+    }
+
     if (useApi) {
       try {
         await api.runJob(jobId);
@@ -290,18 +302,20 @@ export function useJobs() {
         return;
       } catch (error) {
         console.error('Failed to run job:', error);
+        // Fall through to mock mode
       }
     }
 
-    // Fallback to mock simulation
+    // Mock mode - always run simulation for queued jobs
     const pendingStart = mockStartTimeoutRef.current.get(jobId);
     if (pendingStart !== undefined) {
       window.clearTimeout(pendingStart);
       mockStartTimeoutRef.current.delete(jobId);
     }
 
+    console.log('Running mock analysis for job:', jobId);
     runMockAnalysis(jobId, setJobs, mockIntervalsRef, handleMockJobComplete, handleMockJobStart);
-  }, [useApi, handleMockJobComplete, handleMockJobStart]);
+  }, [useApi, jobs, handleMockJobComplete, handleMockJobStart]);
 
   const stopJob = useCallback((jobId: string) => {
     const pendingStart = mockStartTimeoutRef.current.get(jobId);

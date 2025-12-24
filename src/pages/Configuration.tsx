@@ -13,6 +13,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ToolChecker } from '@/components/jobs/ToolChecker';
+import { SolveScriptGenerator } from '@/components/jobs/SolveScriptGenerator';
 import * as api from '@/lib/api';
 
 // Complete list of MegaLLM models with accurate pricing
@@ -1122,6 +1123,17 @@ export default function Configuration() {
               </Alert>
             </CardContent>
           </Card>
+
+          {/* Tool Availability Checker */}
+          <ToolChecker />
+
+          {/* AI Solve Script Generator Preview */}
+          <SolveScriptGenerator 
+            jobId="preview"
+            category="misc"
+            files={[]}
+            flagFormat="CTF{...}"
+          />
 
           {/* Security Notice */}
           <Card className="border-primary/30 bg-primary/5">
