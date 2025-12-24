@@ -1,11 +1,18 @@
 #!/bin/bash
 #===============================================================================
-# CTF Autopilot Analyzer - System Update Script
+# CTF Compass - System Update Script
 # Automatically pulls latest changes from GitHub, updates, and restarts
 #===============================================================================
 #
+# GitHub Repository: https://github.com/huynhtrungcipp/ctf-compass.git
+#
 # USAGE:
-#   sudo bash /opt/ctf-autopilot/infra/scripts/update.sh
+#   sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh
+#
+# OPTIONS:
+#   --check   Check for updates without installing
+#   --json    Output in JSON format (for API use)
+#   --help    Show help message
 #
 # WHAT THIS SCRIPT DOES:
 #   1. Backup current configuration
@@ -22,10 +29,11 @@ set -euo pipefail
 #-------------------------------------------------------------------------------
 # Configuration
 #-------------------------------------------------------------------------------
-INSTALL_DIR="${INSTALL_DIR:-/opt/ctf-autopilot}"
-LOG_FILE="/var/log/ctf-autopilot-update.log"
+INSTALL_DIR="${INSTALL_DIR:-/opt/ctf-compass}"
+LOG_FILE="/var/log/ctf-compass-update.log"
 GITHUB_REPO="https://github.com/huynhtrungcipp/ctf-compass.git"
-BACKUP_DIR="/opt/ctf-autopilot-backups"
+GITHUB_BRANCH="main"
+BACKUP_DIR="/opt/ctf-compass-backups"
 
 #-------------------------------------------------------------------------------
 # Colors and Logging
@@ -117,11 +125,11 @@ backup_config() {
     mkdir -p "$BACKUP_DIR"
     BACKUP_FILE="$BACKUP_DIR/backup_$(date +%Y%m%d_%H%M%S).tar.gz"
     
-    # Backup .env and data directory structure (not actual data for speed)
     cd "$INSTALL_DIR"
     
+    # Backup .env and credentials
     if [[ -f ".env" ]]; then
-        tar -czf "$BACKUP_FILE" .env 2>/dev/null || true
+        tar -czf "$BACKUP_FILE" .env CREDENTIALS.txt 2>/dev/null || tar -czf "$BACKUP_FILE" .env 2>/dev/null || true
         log_info "Configuration backed up to: $BACKUP_FILE"
     fi
     
@@ -149,12 +157,15 @@ pull_latest() {
         git remote add origin "$GITHUB_REPO" 2>/dev/null || git remote set-url origin "$GITHUB_REPO"
     fi
     
-    # Stash any local changes
+    # Ensure correct remote URL
+    git remote set-url origin "$GITHUB_REPO" 2>/dev/null || true
+    
+    # Stash any local changes (preserve .env)
     git stash --include-untracked 2>/dev/null || true
     
     # Fetch and reset to origin
-    git fetch origin main 2>&1 | tee -a "$LOG_FILE"
-    git reset --hard origin/main 2>&1 | tee -a "$LOG_FILE"
+    git fetch origin $GITHUB_BRANCH 2>&1 | tee -a "$LOG_FILE"
+    git reset --hard origin/$GITHUB_BRANCH 2>&1 | tee -a "$LOG_FILE"
     
     # Get new version
     NEW_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
@@ -165,6 +176,7 @@ pull_latest() {
         log_info "Updated: ${OLD_COMMIT:0:8} → ${NEW_COMMIT:0:8}"
         
         # Show changes
+        log_info "Recent changes:"
         git log --oneline "$OLD_COMMIT".."$NEW_COMMIT" 2>/dev/null | head -10 | while read line; do
             log_info "  $line"
         done
@@ -173,7 +185,7 @@ pull_latest() {
     # Restore .env if it was stashed
     git stash pop 2>/dev/null || true
     
-    log_success "Latest code pulled"
+    log_success "Latest code pulled from GitHub"
 }
 
 #-------------------------------------------------------------------------------
@@ -185,15 +197,24 @@ cleanup_docker() {
     cd "$INSTALL_DIR"
     
     # Find docker-compose location
+    COMPOSE_DIR=""
     if [[ -f "infra/docker-compose.yml" ]]; then
-        cd infra
+        COMPOSE_DIR="infra"
     elif [[ -f "ctf-autopilot/infra/docker-compose.yml" ]]; then
-        cd ctf-autopilot/infra
+        COMPOSE_DIR="ctf-autopilot/infra"
+    elif [[ -f "docker-compose.yml" ]]; then
+        COMPOSE_DIR="."
     fi
     
-    # Stop services gracefully
-    log_info "Stopping services..."
-    docker compose down --remove-orphans 2>&1 | tee -a "$LOG_FILE" || true
+    if [[ -n "$COMPOSE_DIR" ]]; then
+        cd "$COMPOSE_DIR"
+        
+        # Stop services gracefully
+        log_info "Stopping services..."
+        docker compose down --remove-orphans 2>&1 | tee -a "$LOG_FILE" || true
+        
+        cd "$INSTALL_DIR"
+    fi
     
     # Remove old containers
     log_info "Removing old containers..."
@@ -211,10 +232,6 @@ cleanup_docker() {
     log_info "Removing old build cache..."
     docker builder prune -f --keep-storage=2GB 2>&1 | tee -a "$LOG_FILE" || true
     
-    # Calculate space freed
-    SPACE_FREED=$(docker system df --format "{{.Reclaimable}}" 2>/dev/null | head -1 || echo "unknown")
-    log_info "Potential space to reclaim: $SPACE_FREED"
-    
     log_success "Docker cleanup completed"
 }
 
@@ -227,18 +244,21 @@ rebuild_sandbox() {
     cd "$INSTALL_DIR"
     
     # Find Dockerfile location
+    SANDBOX_PATH=""
     if [[ -f "sandbox/image/Dockerfile" ]]; then
         SANDBOX_PATH="sandbox/image"
     elif [[ -f "ctf-autopilot/sandbox/image/Dockerfile" ]]; then
         SANDBOX_PATH="ctf-autopilot/sandbox/image"
-    else
+    fi
+    
+    if [[ -z "$SANDBOX_PATH" ]]; then
         log_warn "Sandbox Dockerfile not found, skipping..."
         return 0
     fi
     
     # Check if Dockerfile changed
     DOCKERFILE_HASH=$(md5sum "$SANDBOX_PATH/Dockerfile" | cut -d' ' -f1)
-    HASH_FILE="/tmp/sandbox_dockerfile_hash"
+    HASH_FILE="/tmp/ctf_compass_sandbox_hash"
     
     if [[ -f "$HASH_FILE" ]] && [[ "$(cat $HASH_FILE)" == "$DOCKERFILE_HASH" ]]; then
         log_info "Sandbox Dockerfile unchanged, skipping rebuild"
@@ -246,6 +266,7 @@ rebuild_sandbox() {
         log_info "Building sandbox image..."
         docker build \
             --no-cache \
+            -t ctf-compass-sandbox:latest \
             -t ctf-autopilot-sandbox:latest \
             -f "$SANDBOX_PATH/Dockerfile" \
             "$SANDBOX_PATH/" 2>&1 | tee -a "$LOG_FILE"
@@ -268,11 +289,21 @@ restart_services() {
     chmod 755 data
     
     # Find docker-compose location
+    COMPOSE_DIR=""
     if [[ -f "infra/docker-compose.yml" ]]; then
-        cd infra
+        COMPOSE_DIR="infra"
     elif [[ -f "ctf-autopilot/infra/docker-compose.yml" ]]; then
-        cd ctf-autopilot/infra
+        COMPOSE_DIR="ctf-autopilot/infra"
+    elif [[ -f "docker-compose.yml" ]]; then
+        COMPOSE_DIR="."
     fi
+    
+    if [[ -z "$COMPOSE_DIR" ]]; then
+        log_warn "docker-compose.yml not found, skipping service restart..."
+        return 0
+    fi
+    
+    cd "$COMPOSE_DIR"
     
     # Start services with rebuild
     log_info "Starting services..."
@@ -309,21 +340,11 @@ health_check() {
         HEALTH_OK=false
     fi
     
-    # Check containers
-    cd "$INSTALL_DIR"
-    if [[ -f "infra/docker-compose.yml" ]]; then
-        cd infra
-    elif [[ -f "ctf-autopilot/infra/docker-compose.yml" ]]; then
-        cd ctf-autopilot/infra
-    fi
-    
-    RUNNING_CONTAINERS=$(docker compose ps --status running -q | wc -l)
-    log_info "  Running containers: $RUNNING_CONTAINERS"
-    
     if [[ "$HEALTH_OK" == "true" ]]; then
         log_success "All health checks passed"
     else
-        log_warn "Some services may still be starting. Check: docker compose logs -f"
+        log_warn "Some services may still be starting."
+        log_warn "Check logs: docker compose logs -f"
     fi
 }
 
@@ -331,15 +352,22 @@ health_check() {
 # Print Summary
 #-------------------------------------------------------------------------------
 print_summary() {
+    VERSION=$(cd $INSTALL_DIR && git rev-parse --short HEAD 2>/dev/null || echo 'unknown')
+    SERVER_IP=$(hostname -I | awk '{print $1}')
+    
     echo ""
     echo -e "${GREEN}╔═══════════════════════════════════════════════════════════════════╗${NC}"
     echo -e "${GREEN}║${NC}                                                                   ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}        ${BOLD}✓ CTF Autopilot Update Complete!${NC}                           ${GREEN}║${NC}"
+    echo -e "${GREEN}║${NC}        ${BOLD}✓ CTF Compass Update Complete!${NC}                             ${GREEN}║${NC}"
     echo -e "${GREEN}║${NC}                                                                   ${GREEN}║${NC}"
     echo -e "${GREEN}╠═══════════════════════════════════════════════════════════════════╣${NC}"
     echo -e "${GREEN}║${NC}                                                                   ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}  ${BOLD}Version:${NC} $(cd $INSTALL_DIR && git rev-parse --short HEAD 2>/dev/null || echo 'unknown')                                                    ${GREEN}║${NC}"
+    echo -e "${GREEN}║${NC}  ${BOLD}Version:${NC} $VERSION                                                    ${GREEN}║${NC}"
     echo -e "${GREEN}║${NC}  ${BOLD}Updated:${NC} $(date '+%Y-%m-%d %H:%M:%S')                               ${GREEN}║${NC}"
+    echo -e "${GREEN}║${NC}                                                                   ${GREEN}║${NC}"
+    echo -e "${GREEN}║${NC}  ${BOLD}Access:${NC}                                                           ${GREEN}║${NC}"
+    echo -e "${GREEN}║${NC}    Web UI: ${CYAN}http://${SERVER_IP}:3000${NC}                             ${GREEN}║${NC}"
+    echo -e "${GREEN}║${NC}    API:    ${CYAN}http://${SERVER_IP}:8000${NC}                             ${GREEN}║${NC}"
     echo -e "${GREEN}║${NC}                                                                   ${GREEN}║${NC}"
     echo -e "${GREEN}╚═══════════════════════════════════════════════════════════════════╝${NC}"
     echo ""
@@ -360,11 +388,14 @@ check_updates() {
         return 0
     fi
     
+    # Ensure correct remote
+    git remote set-url origin "$GITHUB_REPO" 2>/dev/null || true
+    
     # Fetch latest
-    git fetch origin main 2>/dev/null
+    git fetch origin $GITHUB_BRANCH 2>/dev/null
     
     LOCAL=$(git rev-parse HEAD 2>/dev/null)
-    REMOTE=$(git rev-parse origin/main 2>/dev/null)
+    REMOTE=$(git rev-parse origin/$GITHUB_BRANCH 2>/dev/null)
     
     if [[ "$LOCAL" == "$REMOTE" ]]; then
         if [[ "$JSON_MODE" == "true" ]]; then
@@ -373,13 +404,15 @@ check_updates() {
             echo "Already up to date (${LOCAL:0:8})"
         fi
     else
-        COMMITS_BEHIND=$(git rev-list --count HEAD..origin/main 2>/dev/null || echo "unknown")
+        COMMITS_BEHIND=$(git rev-list --count HEAD..origin/$GITHUB_BRANCH 2>/dev/null || echo "unknown")
         if [[ "$JSON_MODE" == "true" ]]; then
             echo "{\"updates_available\":true,\"current_version\":\"${LOCAL:0:8}\",\"latest_version\":\"${REMOTE:0:8}\",\"commits_behind\":$COMMITS_BEHIND}"
         else
             echo "Updates available: $COMMITS_BEHIND commits behind"
             echo "Current: ${LOCAL:0:8}"
             echo "Latest:  ${REMOTE:0:8}"
+            echo ""
+            echo "Run 'sudo bash $0' to update"
         fi
     fi
 }
@@ -397,13 +430,17 @@ main() {
         --json)
             JSON_MODE="true"
             ;;
-        --help)
-            echo "Usage: $0 [--check|--json|--help]"
+        --help|-h)
+            echo "CTF Compass Update Script"
+            echo ""
+            echo "Usage: $0 [OPTIONS]"
             echo ""
             echo "Options:"
             echo "  --check   Check for updates without installing"
             echo "  --json    Output in JSON format (for API use)"
             echo "  --help    Show this help message"
+            echo ""
+            echo "GitHub: https://github.com/huynhtrungcipp/ctf-compass"
             exit 0
             ;;
     esac
@@ -415,7 +452,8 @@ main() {
     if [[ "$JSON_MODE" != "true" ]]; then
         echo ""
         echo -e "${CYAN}╔═══════════════════════════════════════════════════════════════════╗${NC}"
-        echo -e "${CYAN}║${NC}                 CTF Autopilot System Update                       ${CYAN}║${NC}"
+        echo -e "${CYAN}║${NC}                   CTF Compass System Update                       ${CYAN}║${NC}"
+        echo -e "${CYAN}║${NC}          github.com/huynhtrungcipp/ctf-compass                   ${CYAN}║${NC}"
         echo -e "${CYAN}╚═══════════════════════════════════════════════════════════════════╝${NC}"
         echo ""
     fi
