@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Bell, Check, Trash2, AlertCircle, CheckCircle, Info, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -12,42 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
-
-interface Notification {
-  id: string;
-  type: 'success' | 'error' | 'info' | 'warning';
-  title: string;
-  message: string;
-  timestamp: string;
-  read: boolean;
-}
-
-const initialNotifications: Notification[] = [
-  {
-    id: '1',
-    type: 'success',
-    title: 'Analysis Complete',
-    message: 'Crypto Challenge - RSA Basics completed successfully',
-    timestamp: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
-    read: false,
-  },
-  {
-    id: '2',
-    type: 'info',
-    title: 'New Update Available',
-    message: 'CTF Compass v1.1.0 is available for download',
-    timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-    read: false,
-  },
-  {
-    id: '3',
-    type: 'warning',
-    title: 'Sandbox Warning',
-    message: 'Sandbox timeout approaching for running job',
-    timestamp: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
-    read: true,
-  },
-];
+import { useNotifications, Notification } from '@/hooks/use-notifications';
 
 const iconMap = {
   success: CheckCircle,
@@ -64,26 +28,14 @@ const colorMap = {
 };
 
 export function NotificationDropdown() {
-  const [notifications, setNotifications] = useState<Notification[]>(initialNotifications);
-  const unreadCount = notifications.filter(n => !n.read).length;
-
-  const markAsRead = (id: string) => {
-    setNotifications(prev =>
-      prev.map(n => (n.id === id ? { ...n, read: true } : n))
-    );
-  };
-
-  const markAllAsRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-  };
-
-  const deleteNotification = (id: string) => {
-    setNotifications(prev => prev.filter(n => n.id !== id));
-  };
-
-  const clearAll = () => {
-    setNotifications([]);
-  };
+  const {
+    notifications,
+    unreadCount,
+    markAsRead,
+    markAllAsRead,
+    deleteNotification,
+    clearAll,
+  } = useNotifications();
 
   return (
     <DropdownMenu>
@@ -109,7 +61,11 @@ export function NotificationDropdown() {
               variant="ghost"
               size="sm"
               className="h-7 text-xs text-primary hover:text-primary"
-              onClick={markAllAsRead}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                markAllAsRead();
+              }}
             >
               <Check className="h-3 w-3 mr-1" />
               Mark all read
@@ -125,7 +81,7 @@ export function NotificationDropdown() {
           </div>
         ) : (
           <div className="max-h-80 overflow-y-auto">
-            {notifications.map((notification) => {
+            {notifications.map((notification: Notification) => {
               const Icon = iconMap[notification.type];
               return (
                 <DropdownMenuItem
@@ -134,7 +90,10 @@ export function NotificationDropdown() {
                     "flex items-start gap-3 p-3 cursor-pointer focus:bg-secondary/50",
                     !notification.read && "bg-primary/5"
                   )}
-                  onClick={() => markAsRead(notification.id)}
+                  onSelect={(e) => {
+                    e.preventDefault();
+                    markAsRead(notification.id);
+                  }}
                 >
                   <Icon className={cn("h-5 w-5 mt-0.5 shrink-0", colorMap[notification.type])} />
                   <div className="flex-1 min-w-0">
@@ -148,8 +107,9 @@ export function NotificationDropdown() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-5 w-5 shrink-0 opacity-0 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive"
+                        className="h-5 w-5 shrink-0 opacity-60 hover:opacity-100 hover:bg-destructive/10 hover:text-destructive"
                         onClick={(e) => {
+                          e.preventDefault();
                           e.stopPropagation();
                           deleteNotification(notification.id);
                         }}
@@ -181,7 +141,11 @@ export function NotificationDropdown() {
                 variant="ghost"
                 size="sm"
                 className="w-full h-8 text-xs text-muted-foreground hover:text-destructive"
-                onClick={clearAll}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  clearAll();
+                }}
               >
                 <Trash2 className="h-3 w-3 mr-1" />
                 Clear all notifications
