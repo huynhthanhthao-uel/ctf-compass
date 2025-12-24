@@ -1,5 +1,11 @@
 # Runbook
 
+Operations and troubleshooting guide for CTF Compass.
+
+**GitHub:** [github.com/huynhtrungcipp/ctf-compass](https://github.com/huynhtrungcipp/ctf-compass)
+
+---
+
 ## Installation
 
 ### Prerequisites
@@ -13,29 +19,31 @@
 ### Quick Install
 
 ```bash
-# Download and run install script
-curl -fsSL https://raw.githubusercontent.com/your-org/ctf-autopilot/main/infra/scripts/install_ubuntu_24.04.sh | bash
+# One-command installation
+curl -fsSL https://raw.githubusercontent.com/huynhtrungcipp/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash
 ```
 
 ### Manual Install
 
 ```bash
+# Clone repository
+git clone https://github.com/huynhtrungcipp/ctf-compass.git
+cd ctf-compass
+
 # Install Docker
 curl -fsSL https://get.docker.com | bash
 sudo usermod -aG docker $USER
 newgrp docker
 
-# Clone repository
-git clone https://github.com/your-org/ctf-autopilot.git
-cd ctf-autopilot
-
 # Configure environment
 cp .env.example .env
-nano .env  # Edit and set required values
+nano .env  # Set MEGALLM_API_KEY
 
-# Build and start
-docker compose up -d --build
+# Start services
+./ctf-autopilot/infra/scripts/prod_up.sh
 ```
+
+---
 
 ## Configuration
 
@@ -52,16 +60,18 @@ POSTGRES_PASSWORD=database-password-here
 
 See `.env.example` for all available options.
 
+---
+
 ## TLS Configuration
 
 ### Development (Self-Signed)
 
 ```bash
 # Generate self-signed certificate
-./infra/scripts/generate_self_signed_cert.sh
+./ctf-autopilot/infra/scripts/generate_self_signed_cert.sh
 
 # Start with TLS
-docker compose -f docker-compose.yml -f docker-compose.tls.yml up -d
+ENABLE_TLS=true ./ctf-autopilot/infra/scripts/prod_up.sh
 ```
 
 ### Production (Let's Encrypt)
@@ -69,16 +79,15 @@ docker compose -f docker-compose.yml -f docker-compose.tls.yml up -d
 1. Set domain in `.env`:
    ```bash
    ENABLE_TLS=true
-   TLS_DOMAIN=ctfautopilot.example.com
+   TLS_DOMAIN=ctfcompass.example.com
    LETSENCRYPT_EMAIL=admin@example.com
    ```
 
 2. Ensure ports 80 and 443 are accessible
 
-3. Start with Let's Encrypt:
-   ```bash
-   docker compose -f docker-compose.yml -f docker-compose.letsencrypt.yml up -d
-   ```
+3. Start with Let's Encrypt profile
+
+---
 
 ## Operations
 
@@ -86,10 +95,10 @@ docker compose -f docker-compose.yml -f docker-compose.tls.yml up -d
 
 ```bash
 # Production
-./infra/scripts/prod_up.sh
+./ctf-autopilot/infra/scripts/prod_up.sh
 
 # Development
-./infra/scripts/dev_up.sh
+./ctf-autopilot/infra/scripts/dev_up.sh
 ```
 
 ### Stopping Services
@@ -109,6 +118,16 @@ docker compose logs -f api
 docker compose logs -f worker
 ```
 
+### System Update
+
+```bash
+# Check for updates
+sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh --check
+
+# Perform update
+sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh
+```
+
 ### Database Backup
 
 ```bash
@@ -119,12 +138,7 @@ docker compose exec postgres pg_dump -U ctfautopilot ctfautopilot > backup.sql
 docker compose exec -T postgres psql -U ctfautopilot ctfautopilot < backup.sql
 ```
 
-### Cleaning Up Old Jobs
-
-```bash
-# Remove jobs older than 30 days
-docker compose exec api python -m app.scripts.cleanup --days 30
-```
+---
 
 ## Troubleshooting
 
@@ -145,7 +159,7 @@ docker compose restart worker
 docker compose exec api docker ps
 
 # Verify sandbox image exists
-docker images | grep ctf-sandbox
+docker images | grep ctf-compass-sandbox
 ```
 
 ### Database Connection Error
@@ -167,6 +181,8 @@ docker stats
 # Adjust limits in docker-compose.yml
 ```
 
+---
+
 ## Monitoring
 
 ### Health Check
@@ -180,6 +196,8 @@ curl http://localhost:8000/api/health
 ```bash
 curl http://localhost:8000/metrics
 ```
+
+---
 
 ## Security Checklist
 
@@ -200,23 +218,30 @@ curl http://localhost:8000/metrics
 - [ ] Review logs weekly
 - [ ] Test backups monthly
 
+---
+
 ## Upgrading
 
 ```bash
-# Pull latest changes
-git pull origin main
-
-# Rebuild and restart
-docker compose down
-docker compose up -d --build
+# Update from GitHub
+sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh
 ```
 
 ## Rollback
 
 ```bash
 # Revert to previous version
+cd /opt/ctf-compass
 git checkout <previous-tag>
 
 # Rebuild
 docker compose up -d --build
 ```
+
+---
+
+## Getting Help
+
+- **Documentation:** [ctf-autopilot/docs/](.)
+- **Debug Guide:** [DEBUG.md](DEBUG.md)
+- **GitHub Issues:** [github.com/huynhtrungcipp/ctf-compass/issues](https://github.com/huynhtrungcipp/ctf-compass/issues)
