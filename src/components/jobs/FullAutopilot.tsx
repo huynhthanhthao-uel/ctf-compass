@@ -321,42 +321,7 @@ export function FullAutopilot({
       return { output, flags, error, exitCode: result.exit_code };
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Command failed';
-
-      // Demo fallback: when backend API is not available in this environment,
-      // use mock outputs for the demo job so Full Autopilot still shows progress.
-      // (Prevents the "started" toast with no visible activity.)
-      if (/Backend API not available/i.test(message) || /HTTP 404/i.test(message)) {
-        try {
-          const { mockJob003Commands } = await import('@/lib/mock-data');
-          if (jobId === 'job-003') {
-            const hit = mockJob003Commands.find((c) => {
-              if (c.tool !== tool) return false;
-              const want = (c.args || []).join(' ');
-              const got = (args || []).join(' ');
-              // Accept both exact and contains match (e.g. objdump flags)
-              return want === got || got.includes(want) || want.includes(got);
-            });
-
-            if (hit) {
-              const output = hit.stdout || '';
-              const error = hit.stderr || '';
-              const flags = detectFlags(output);
-
-              commandHistoryRef.current.push({
-                tool,
-                args,
-                stdout: output,
-                stderr: error,
-                exit_code: hit.exitCode ?? 0,
-              });
-
-              return { output, flags, error: error || undefined, exitCode: hit.exitCode ?? 0 };
-            }
-          }
-        } catch {
-          // ignore and fall through
-        }
-      }
+      console.error('[FullAutopilot] Command error:', message);
 
       return {
         output: '',
