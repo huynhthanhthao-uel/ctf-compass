@@ -6,10 +6,11 @@
 
 | Control | Implementation |
 |---------|----------------|
-| No secrets in code | All secrets via environment variables |
+| No secrets in code | All secrets via environment variables or UI settings |
 | `.env` protection | `.gitignore` prevents commit |
 | Secret logging prevention | Secrets filtered from logs |
-| API key isolation | MegaLLM key only accessible in backend |
+| API key via UI | Set via Settings page, synced to backend |
+| Masked display | API keys shown as `sk-mega-...xxxx` |
 
 ### 2. File Upload Hardening
 
@@ -80,6 +81,24 @@ class JobCreate(BaseModel):
 - Tool outputs escaped before display
 - Error messages sanitized (no stack traces in production)
 
+---
+
+## API Key Security
+
+### Recommended Flow
+
+1. **Enter via UI Settings page** (not .env file directly)
+2. Key is sent to backend via HTTPS
+3. Backend stores in runtime memory AND persists to .env
+4. Key is never exposed in logs or responses (only masked prefix)
+
+### Fallback for Offline/Dev Mode
+
+- If backend is unavailable, key stored in browser localStorage
+- Will sync to backend when connection is restored
+
+---
+
 ## Security Checklist
 
 ### Before Deployment
@@ -87,8 +106,9 @@ class JobCreate(BaseModel):
 - [ ] Change default `ADMIN_PASSWORD`
 - [ ] Set strong `POSTGRES_PASSWORD`
 - [ ] Configure `SECRET_KEY` for production
-- [ ] Enable TLS
-- [ ] Review firewall rules
+- [ ] Set MegaLLM API key via Settings page
+- [ ] Enable TLS (recommended for production)
+- [ ] Review firewall rules (ports 3000, 8000)
 - [ ] Enable rate limiting
 - [ ] Test file upload restrictions
 - [ ] Verify sandbox isolation
@@ -96,38 +116,86 @@ class JobCreate(BaseModel):
 ### Regular Maintenance
 
 - [ ] Rotate secrets quarterly
-- [ ] Update container images monthly
+- [ ] Update container images monthly (`update.sh`)
 - [ ] Review access logs weekly
 - [ ] Test backup/restore procedures
 - [ ] Security scan dependencies
 
+---
+
+## Network Security
+
+### Firewall Rules (UFW)
+
+```bash
+# Allow SSH
+sudo ufw allow 22/tcp
+
+# Allow Web UI
+sudo ufw allow 3000/tcp
+
+# Allow API (optional, if needed externally)
+sudo ufw allow 8000/tcp
+
+# Enable firewall
+sudo ufw enable
+```
+
+### HTTPS (Production)
+
+For production, use a reverse proxy with TLS:
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name your-domain.com;
+    
+    ssl_certificate /etc/letsencrypt/live/your-domain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/your-domain.com/privkey.pem;
+    
+    location / {
+        proxy_pass http://localhost:3000;
+    }
+    
+    location /api {
+        proxy_pass http://localhost:8000;
+    }
+}
+```
+
+---
+
+## Incident Response
+
+### If You Suspect a Breach
+
+1. **Isolate**: Disconnect from network if possible
+2. **Preserve**: Keep logs and container states
+3. **Rotate**: Change all passwords and API keys
+4. **Review**: Check access logs for suspicious activity
+5. **Report**: Open GitHub issue (without sensitive details)
+
+### Log Locations
+
+- Install log: `/var/log/ctf-compass-install.log`
+- API logs: `docker compose logs api`
+- Worker logs: `docker compose logs worker`
+
+---
+
 ## Reporting Security Issues
 
-If you discover a security vulnerability, please:
+If you discover a security vulnerability:
 
 1. **Do not** open a public issue
-2. Email security@example.com with details
+2. Contact maintainers privately
 3. Allow 90 days for a fix before public disclosure
 
-## Security Headers Implementation
+---
 
-```python
-# apps/api/app/middleware/security.py
-from starlette.middleware.base import BaseHTTPMiddleware
+## Compliance Notes
 
-class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request, call_next):
-        response = await call_next(request)
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
-        response.headers["X-XSS-Protection"] = "1; mode=block"
-        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; "
-            "script-src 'self'; "
-            "style-src 'self' 'unsafe-inline'; "
-            "img-src 'self' data:; "
-            "font-src 'self';"
-        )
-        return response
-```
+- **Data Locality**: All data stays on your server
+- **No Telemetry**: No usage data sent to external services
+- **API Key Privacy**: Only sent to MegaLLM API for AI features
+- **User Uploads**: Stored locally, you control retention

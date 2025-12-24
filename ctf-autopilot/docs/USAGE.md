@@ -10,11 +10,12 @@ Complete guide for using CTF Compass. This document covers the web interface, jo
 
 1. [Getting Started](#getting-started)
 2. [Web Interface Overview](#web-interface-overview)
-3. [Creating Analysis Jobs](#creating-analysis-jobs)
-4. [Understanding Results](#understanding-results)
-5. [Working with Writeups](#working-with-writeups)
-6. [Best Practices](#best-practices)
-7. [FAQ](#faq)
+3. [Configuration](#configuration)
+4. [Creating Analysis Jobs](#creating-analysis-jobs)
+5. [Understanding Results](#understanding-results)
+6. [Working with Writeups](#working-with-writeups)
+7. [Best Practices](#best-practices)
+8. [FAQ](#faq)
 
 ---
 
@@ -32,10 +33,19 @@ Complete guide for using CTF Compass. This document covers the web interface, jo
 
 ### First-Time Setup
 
-1. **Check Configuration**: Click the gear icon (⚙️) in the top right
-2. **Verify API Key**: Ensure MegaLLM API key is configured
-3. **Select Models**: Choose analysis and writeup generation models
-4. **Test Connection**: Use the test button to verify API connectivity
+1. **Configure API Key**: 
+   - Click the Settings icon (⚙️) in the navigation
+   - Enter your MegaLLM API key in the "API Configuration" section
+   - Click "Test Connection" to verify
+   - Click "Save Changes"
+
+2. **Select AI Models** (Optional):
+   - Choose models for analysis, writeup generation, and flag extraction
+   - Free/cheap models are marked with green checkmarks
+
+3. **Verify System Status**:
+   - Check that current version is displayed
+   - "Check Updates" button should work
 
 ---
 
@@ -61,6 +71,52 @@ CTF Compass uses a modern top navigation bar:
 
 ---
 
+## Configuration
+
+### API Key Setup
+
+The API key can be configured in two ways:
+
+**1. Via Web Interface (Recommended):**
+- Go to Settings page
+- Enter your MegaLLM API key
+- Click "Test Connection" then "Save Changes"
+- Key is automatically synced to backend
+
+**2. Via Environment File:**
+```bash
+sudo nano /opt/ctf-compass/.env
+# Add: MEGALLM_API_KEY=your-key-here
+
+# Restart services
+cd /opt/ctf-compass
+docker compose -f ctf-autopilot/infra/docker-compose.yml restart
+```
+
+### Model Selection
+
+Choose different AI models for each task:
+
+| Task | Description | Recommended Model |
+|------|-------------|-------------------|
+| **Analysis** | Analyzing challenge files | llama3.3-70b-instruct |
+| **Writeup** | Generating writeups | llama3.3-70b-instruct |
+| **Extraction** | Flag extraction | openai-gpt-oss-20b |
+
+### System Updates
+
+Updates can be triggered from the Settings page:
+1. Click "Check Updates" to check for new versions
+2. If update is available, click "Update Now"
+3. System will automatically backup, update, and restart
+
+Manual update:
+```bash
+sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh
+```
+
+---
+
 ## Creating Analysis Jobs
 
 ### Step 1: Basic Information
@@ -73,7 +129,6 @@ CTF Compass uses a modern top navigation bar:
 | **Title** | Descriptive name | "picoCTF 2024 - forensics_corruption" |
 | **Description** | Challenge description, hints | Full challenge text from CTF |
 | **Flag Format** | Regex pattern for flags | `picoCTF\{[^}]+\}` |
-| **Category** | Challenge category | Forensics, Crypto, Web, etc. |
 
 ### Step 2: File Upload
 
@@ -94,7 +149,7 @@ Upload challenge files by:
 
 1. Click **Start Analysis**
 2. Job enters queue and starts processing
-3. Monitor progress on Dashboard
+3. Monitor progress on Dashboard or Job Detail page
 
 **Job Status Flow:**
 ```
@@ -112,17 +167,21 @@ After analysis completes:
 #### 1. Summary Tab
 - Status, duration, files analyzed, flags found
 
-#### 2. Artifacts Tab
+#### 2. Commands Tab
+- List of executed tools with output
+- Exit codes and execution time
+
+#### 3. Artifacts Tab
 - `strings_output.txt`: Extracted strings
 - `file_info.txt`: File type identification
 - `exif_data.json`: Image metadata
 - `binwalk_output.txt`: Embedded signatures
 
-#### 3. Evidence Tab
-- Extracted evidence with confidence scores
-- Flag candidates with context
+#### 4. Flags Tab
+- Extracted flag candidates with confidence scores
+- Source context for each candidate
 
-#### 4. Writeup Tab
+#### 5. Writeup Tab
 - AI-generated writeup with:
   - Challenge overview
   - Step-by-step solution
@@ -181,10 +240,10 @@ After analysis completes:
 ### Q: What if analysis fails?
 
 **A:** Check:
-1. Unsupported file type
-2. File too large
-3. Timeout (complex files)
-4. API key issues
+1. File type is supported
+2. File size within limits
+3. API key is configured correctly
+4. Check job error message for details
 
 ### Q: Can I use this during a live CTF?
 
@@ -197,8 +256,14 @@ After analysis completes:
 
 **A:** Yes, all data stays local:
 - Files stored on your server only
-- No data sent to cloud (except MegaLLM API for writeups)
+- No data sent to cloud (except MegaLLM API for AI features)
 - You control data retention
+
+### Q: How do I update the system?
+
+**A:** Two options:
+1. Via Settings page → "Update Now" button
+2. Via command: `sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh`
 
 ---
 

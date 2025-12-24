@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from app.config import settings
 from app.middleware.security import SecurityHeadersMiddleware
 from app.middleware.rate_limit import RateLimitMiddleware
-from app.routers import auth, jobs, config, health
+from app.routers import auth, jobs, config, health, system
 from app.database import engine
 from app.models import Base
 
@@ -48,3 +48,4 @@ app.include_router(health.router, prefix="/api", tags=["Health"])
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(jobs.router, prefix="/api/jobs", tags=["Jobs"])
 app.include_router(config.router, prefix="/api/config", tags=["Configuration"])
+app.include_router(system.router, prefix="/api/system", tags=["System"])

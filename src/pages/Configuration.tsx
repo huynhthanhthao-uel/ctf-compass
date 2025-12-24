@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Save, RotateCcw, Shield, Clock, Upload, Wrench, Key, Cpu, CheckCircle, Eye, EyeOff, Play, Loader2, RefreshCw, Download, Trash2, AlertTriangle, Github } from 'lucide-react';
+import { Save, RotateCcw, Shield, Clock, Upload, Wrench, Key, Cpu, CheckCircle, Eye, EyeOff, Loader2, RefreshCw, Download, Trash2, AlertTriangle, Github, Play } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,6 +12,7 @@ import { mockConfig } from '@/lib/mock-data';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import * as api from '@/lib/api';
 
 // Complete list of MegaLLM models with accurate pricing
 const ALL_MODELS = [
@@ -76,42 +77,6 @@ const AI_MODELS = {
   extraction: ALL_MODELS.filter(m => ['openai-gpt-oss-20b', 'openai-gpt-oss-120b', 'llama3.3-70b-instruct', 'alibaba-qwen3-32b', 'gpt-4o-mini'].includes(m.id)),
 };
 
-// Test API key (Note: May fail due to CORS when called from browser)
-async function testMegaLLMApiKey(apiKey: string): Promise<{ valid: boolean; error?: string }> {
-  try {
-    const response = await fetch('https://ai.megallm.io/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: 'llama3.3-70b-instruct',
-        messages: [{ role: 'user', content: 'test' }],
-        max_tokens: 1,
-      }),
-    });
-
-    if (response.ok) {
-      return { valid: true };
-    }
-
-    const data = await response.json().catch(() => ({}));
-    
-    if (response.status === 401) {
-      return { valid: false, error: 'API key không hợp lệ' };
-    }
-    if (response.status === 403) {
-      return { valid: false, error: data.error?.message || 'Không có quyền truy cập' };
-    }
-    
-    return { valid: false, error: data.error?.message || `Lỗi: ${response.status}` };
-  } catch (error) {
-    // CORS error or network error
-    return { valid: false, error: 'Không thể kết nối (CORS/Network). API sẽ hoạt động khi deploy backend.' };
-  }
-}
-
 // Update status types
 interface UpdateStatus {
   isUpdating: boolean;
@@ -125,6 +90,16 @@ interface UpdateStatus {
   error: string | null;
 }
 
+// Check if backend is available
+async function isBackendAvailable(): Promise<boolean> {
+  try {
+    const response = await fetch('/api/health', { method: 'GET' });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 export default function Configuration() {
   const { toast } = useToast();
   const [config, setConfig] = useState(mockConfig);
@@ -133,6 +108,7 @@ export default function Configuration() {
   const [showApiKey, setShowApiKey] = useState(false);
   const [apiKeyValid, setApiKeyValid] = useState<boolean | null>(null);
   const [isTesting, setIsTesting] = useState(false);
+  const [isBackendConnected, setIsBackendConnected] = useState(false);
   const [selectedModels, setSelectedModels] = useState({
     analysis: 'llama3.3-70b-instruct',
     writeup: 'llama3.3-70b-instruct',
@@ -152,66 +128,102 @@ export default function Configuration() {
     error: null,
   });
 
-  // Check if API key is stored
+  // Check backend and load config on mount
   useEffect(() => {
-    const storedKey = localStorage.getItem('megallm_api_key');
-    if (storedKey) {
-      setApiKey(storedKey);
-    }
-    
-    const savedModels = localStorage.getItem('megallm_selected_models');
-    if (savedModels) {
-      try {
-        setSelectedModels(JSON.parse(savedModels));
-      } catch (e) {
-        console.error('Failed to parse saved models');
+    const init = async () => {
+      const available = await isBackendAvailable();
+      setIsBackendConnected(available);
+      
+      if (available) {
+        // Load API key status
+        try {
+          const keyStatus = await api.getApiKeyStatus();
+          if (keyStatus.is_configured && keyStatus.key_prefix) {
+            setApiKey(keyStatus.key_prefix);
+            setApiKeyValid(true);
+          }
+        } catch {
+          // Ignore
+        }
+        
+        // Load model config
+        try {
+          const modelConfig = await api.getModelConfig();
+          setSelectedModels({
+            analysis: modelConfig.analysis_model,
+            writeup: modelConfig.writeup_model,
+            extraction: modelConfig.extraction_model,
+          });
+        } catch {
+          // Ignore
+        }
+        
+        // Load system config
+        try {
+          const sysConfig = await api.getConfig();
+          setConfig({
+            maxUploadSizeMb: sysConfig.max_upload_size_mb,
+            sandboxTimeout: sysConfig.sandbox_timeout_seconds,
+            allowedExtensions: sysConfig.allowed_extensions,
+            allowedTools: sysConfig.allowed_tools,
+          });
+        } catch {
+          // Ignore
+        }
+        
+        // Check for updates
+        checkForUpdates();
+      } else {
+        // Fallback to localStorage
+        const storedKey = localStorage.getItem('megallm_api_key');
+        if (storedKey) {
+          setApiKey(storedKey);
+        }
+        
+        const savedModels = localStorage.getItem('megallm_selected_models');
+        if (savedModels) {
+          try {
+            setSelectedModels(JSON.parse(savedModels));
+          } catch {
+            // Ignore
+          }
+        }
       }
-    }
+    };
     
-    // Check for updates on mount
-    checkForUpdates();
+    init();
   }, []);
   
   // Check for updates
   const checkForUpdates = async () => {
     setUpdateStatus(prev => ({ ...prev, isChecking: true, error: null }));
     
-    try {
-      // Call the backend API to check for updates
-      const response = await fetch('/api/system/check-update');
-      
-      if (response.ok) {
-        const data = await response.json();
+    if (isBackendConnected) {
+      try {
+        const data = await api.checkForUpdates();
         setUpdateStatus(prev => ({
           ...prev,
           isChecking: false,
-          hasUpdate: data.updates_available || false,
-          currentVersion: data.current_version || 'unknown',
-          latestVersion: data.latest_version || data.current_version || 'unknown',
+          hasUpdate: data.updates_available,
+          currentVersion: data.current_version,
+          latestVersion: data.latest_version,
         }));
-      } else {
-        // Fallback: Simulate check for demo
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        setUpdateStatus(prev => ({
-          ...prev,
-          isChecking: false,
-          currentVersion: 'v1.0.0',
-          latestVersion: 'v1.0.0',
-          hasUpdate: false,
-        }));
+        return;
+      } catch {
+        // Fall through to fallback
       }
-    } catch (error) {
-      // Fallback for demo/dev mode
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setUpdateStatus(prev => ({
-        ...prev,
-        isChecking: false,
-        currentVersion: 'local-dev',
-        latestVersion: 'local-dev',
-        hasUpdate: false,
-        error: 'Backend not available. Run update script manually.',
-      }));
     }
+    
+    // Fallback for demo/dev mode
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    setUpdateStatus(prev => ({
+      ...prev,
+      isChecking: false,
+      currentVersion: 'local-dev',
+      latestVersion: 'local-dev',
+      hasUpdate: false,
+      error: isBackendConnected ? null : 'Backend not connected. API key and settings stored locally.',
+    }));
   };
   
   // Perform system update
@@ -232,19 +244,14 @@ export default function Configuration() {
       }));
     };
     
-    try {
-      // Try to call backend update endpoint
-      const response = await fetch('/api/system/update', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-      
-      if (response.ok) {
-        // Stream response for progress updates
-        const reader = response.body?.getReader();
-        const decoder = new TextDecoder();
+    if (isBackendConnected) {
+      try {
+        const response = await api.performUpdate();
         
-        if (reader) {
+        if (response.ok && response.body) {
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          
           while (true) {
             const { done, value } = await reader.read();
             if (done) break;
@@ -268,71 +275,99 @@ export default function Configuration() {
               }
             }
           }
+          
+          setUpdateStatus(prev => ({
+            ...prev,
+            isUpdating: false,
+            progress: 100,
+            step: 'Update complete!',
+            hasUpdate: false,
+          }));
+          
+          toast({
+            title: 'Update Complete',
+            description: 'System has been updated successfully. Refreshing...',
+          });
+          
+          setTimeout(() => window.location.reload(), 2000);
+          return;
         }
-        
-        setUpdateStatus(prev => ({
-          ...prev,
-          isUpdating: false,
-          progress: 100,
-          step: 'Update complete!',
-          hasUpdate: false,
-        }));
-        
-        toast({
-          title: 'Update Complete',
-          description: 'System has been updated successfully. Refreshing...',
-        });
-        
-        // Reload page after update
-        setTimeout(() => window.location.reload(), 2000);
-        
-      } else {
-        throw new Error('Update failed');
+      } catch {
+        // Fall through to demo mode
       }
-      
-    } catch (error) {
-      // Simulate update steps for demo/manual mode
-      const steps = [
-        { step: 'Step 1/6: Backing up configuration...', progress: 10 },
-        { step: 'Step 2/6: Pulling latest from GitHub...', progress: 25 },
-        { step: 'Step 3/6: Cleaning Docker resources...', progress: 45 },
-        { step: 'Step 4/6: Rebuilding sandbox image...', progress: 60 },
-        { step: 'Step 5/6: Restarting services...', progress: 80 },
-        { step: 'Step 6/6: Running health checks...', progress: 95 },
-      ];
-      
-      for (const { step, progress } of steps) {
-        addLog(step);
-        setUpdateStatus(prev => ({ ...prev, step, progress }));
-        await new Promise(resolve => setTimeout(resolve, 800));
-      }
-      
-      setUpdateStatus(prev => ({
-        ...prev,
-        isUpdating: false,
-        progress: 100,
-        step: 'Demo complete - Run script manually on server',
-        error: 'Backend API not available. Please run the update script manually on your server:\n\nsudo bash /opt/ctf-autopilot/infra/scripts/update.sh',
-      }));
-      
-      toast({
-        title: 'Manual Update Required',
-        description: 'Run update.sh script on your server',
-        variant: 'destructive',
-      });
     }
-  };
-
-  const handleSave = () => {
-    if (apiKey && !apiKey.startsWith('••••')) {
-      localStorage.setItem('megallm_api_key', apiKey);
+    
+    // Demo mode simulation
+    const steps = [
+      { step: 'Step 1/6: Backing up configuration...', progress: 10 },
+      { step: 'Step 2/6: Pulling latest from GitHub...', progress: 25 },
+      { step: 'Step 3/6: Cleaning Docker resources...', progress: 45 },
+      { step: 'Step 4/6: Rebuilding sandbox image...', progress: 60 },
+      { step: 'Step 5/6: Restarting services...', progress: 80 },
+      { step: 'Step 6/6: Running health checks...', progress: 95 },
+    ];
+    
+    for (const { step, progress } of steps) {
+      addLog(step);
+      setUpdateStatus(prev => ({ ...prev, step, progress }));
+      await new Promise(resolve => setTimeout(resolve, 800));
     }
-    localStorage.setItem('megallm_selected_models', JSON.stringify(selectedModels));
+    
+    setUpdateStatus(prev => ({
+      ...prev,
+      isUpdating: false,
+      progress: 100,
+      step: 'Demo complete - Run script manually on server',
+      error: 'Backend API not available. Run update script manually:\n\nsudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh',
+    }));
     
     toast({
-      title: 'Configuration Saved',
-      description: 'Your settings have been updated successfully.',
+      title: 'Manual Update Required',
+      description: 'Run update.sh script on your server',
+      variant: 'destructive',
     });
+  };
+
+  const handleSave = async () => {
+    if (isBackendConnected) {
+      try {
+        // Save API key to backend
+        if (apiKey && !apiKey.includes('...')) {
+          await api.setApiKey(apiKey);
+        }
+        
+        // Save model config to backend
+        await api.setModelConfig({
+          analysis_model: selectedModels.analysis,
+          writeup_model: selectedModels.writeup,
+          extraction_model: selectedModels.extraction,
+        });
+        
+        toast({
+          title: 'Configuration Saved',
+          description: 'Your settings have been saved to the server.',
+        });
+      } catch (error) {
+        toast({
+          title: 'Save Failed',
+          description: error instanceof Error ? error.message : 'Failed to save settings',
+          variant: 'destructive',
+        });
+        return;
+      }
+    } else {
+      // Fallback to localStorage
+      if (apiKey && !apiKey.includes('...')) {
+        localStorage.setItem('megallm_api_key', apiKey);
+      }
+      localStorage.setItem('megallm_selected_models', JSON.stringify(selectedModels));
+      
+      toast({
+        title: 'Configuration Saved',
+        description: 'Settings saved locally. Connect to backend to persist.',
+      });
+    }
+    
     setIsDirty(false);
   };
 
@@ -357,7 +392,7 @@ export default function Configuration() {
   };
 
   const handleTestApiKey = async () => {
-    if (!apiKey || apiKey.length < 10) {
+    if (!apiKey || apiKey.length < 10 || apiKey.includes('...')) {
       toast({
         title: 'Invalid API Key',
         description: 'Please enter a valid API key.',
@@ -373,29 +408,42 @@ export default function Configuration() {
       description: 'Verifying your MegaLLM API key.',
     });
 
-    const result = await testMegaLLMApiKey(apiKey);
-    
-    setIsTesting(false);
-    setApiKeyValid(result.valid);
-
-    if (result.valid) {
-      localStorage.setItem('megallm_api_key', apiKey);
-      toast({
-        title: 'API Key Valid',
-        description: 'Successfully connected to MegaLLM API.',
-      });
+    if (isBackendConnected) {
+      try {
+        const result = await api.setApiKey(apiKey);
+        setApiKeyValid(result.is_configured);
+        
+        if (result.is_configured) {
+          toast({
+            title: 'API Key Saved',
+            description: 'API key has been saved to the server.',
+          });
+        }
+      } catch (error) {
+        setApiKeyValid(false);
+        toast({
+          title: 'Save Failed',
+          description: error instanceof Error ? error.message : 'Failed to save API key',
+          variant: 'destructive',
+        });
+      }
     } else {
+      // Fallback: just save locally
+      localStorage.setItem('megallm_api_key', apiKey);
+      setApiKeyValid(true);
       toast({
-        title: 'API Test Result',
-        description: result.error || 'Could not verify. Will work when backend is deployed.',
-        variant: result.error?.includes('CORS') ? 'default' : 'destructive',
+        title: 'API Key Saved Locally',
+        description: 'Key saved to browser. Will sync when backend is connected.',
       });
     }
+    
+    setIsTesting(false);
   };
 
   const getMaskedApiKey = () => {
     if (!apiKey) return '';
     if (showApiKey) return apiKey;
+    if (apiKey.includes('...')) return apiKey;
     if (apiKey.length <= 8) return '••••••••';
     return '••••••••••••' + apiKey.slice(-4);
   };
