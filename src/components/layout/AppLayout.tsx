@@ -25,6 +25,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
+import { BackendStatus } from '@/components/BackendStatus';
 
 const navItems = [
   { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
@@ -94,6 +95,8 @@ export function AppLayout({ children }: AppLayoutProps) {
 
           {/* Right Side Actions */}
           <div className="flex items-center gap-2 ml-auto">
+            {/* Backend Status */}
+            <BackendStatus />
             {/* GitHub Link */}
             <Button
               variant="ghost"
