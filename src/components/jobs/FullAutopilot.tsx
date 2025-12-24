@@ -774,7 +774,7 @@ ${insight ? `# AI Analysis: ${insight.analysis.slice(0, 200)}` : ''}
     let allFlags: string[] = [];
 
     try {
-      // Phase 1: Reconnaissance
+      // Phase 1: Reconnaissance (gather info, don't stop even if flags found)
       const recon = await runReconnaissance();
       if (abortRef.current) {
         setCurrentPhase('cancelled');
@@ -783,14 +783,12 @@ ${insight ? `# AI Analysis: ${insight.analysis.slice(0, 200)}` : ''}
         return;
       }
 
-      if (recon.earlyFlags.length > 0) {
-        allFlags = [...recon.earlyFlags];
-        setCurrentPhase('completed');
-        setPhaseMessage(`🎉 FLAG FOUND during reconnaissance!`);
-        setProgress(100);
-        onComplete?.(true, allFlags);
-        setIsRunning(false);
-        return;
+      // Store early flags but continue with AI analysis
+      let earlyFlags = recon.earlyFlags;
+      if (earlyFlags.length > 0) {
+        setFoundFlags(prev => [...new Set([...prev, ...earlyFlags])]);
+        earlyFlags.forEach(flag => onFlagFound?.(flag));
+        // Don't return - let AI analyze and validate
       }
 
       // Phase 2: Category Detection
@@ -809,17 +807,24 @@ ${insight ? `# AI Analysis: ${insight.analysis.slice(0, 200)}` : ''}
         return;
       }
 
+      // Collect AI flags
       if (aiResult.flagsFound.length > 0) {
-        allFlags = [...aiResult.flagsFound];
+        allFlags = [...new Set([...earlyFlags, ...aiResult.flagsFound])];
+      } else {
+        allFlags = [...earlyFlags];
+      }
+
+      // If we already have flags, complete successfully
+      if (allFlags.length > 0) {
         setCurrentPhase('completed');
-        setPhaseMessage(`🎉 FLAG FOUND through AI analysis!`);
+        setPhaseMessage(`🎉 SUCCESS! Found ${allFlags.length} flag(s)`);
         setProgress(100);
         onComplete?.(true, allFlags);
         setIsRunning(false);
         return;
       }
 
-      // Phase 4: Script Generation
+      // Phase 4: Script Generation (only if no flags yet)
       const script = await generateSolveScript(category, aiResult.insights);
       if (abortRef.current) {
         setCurrentPhase('cancelled');

@@ -25,6 +25,9 @@ type AIAnalysisResponse = {
   flag_candidates: string[];
   should_continue: boolean;
   rule_based: boolean;
+  playbook: string;
+  strategy: string;
+  alternative_approaches: string[];
 };
 
 function safeJson<T>(text: string): T | null {
@@ -34,6 +37,70 @@ function safeJson<T>(text: string): T | null {
     return null;
   }
 }
+
+// Category-specific playbooks like a real CTF player
+const PLAYBOOKS: Record<string, string> = {
+  rev: `REVERSE ENGINEERING PLAYBOOK:
+1. INITIAL RECON: file, strings -n 8, checksec
+2. STATIC ANALYSIS: objdump -d, readelf -a, nm -a
+3. DYNAMIC ANALYSIS: ltrace, strace, gdb
+4. COMMON PATTERNS:
+   - XOR encryption: look for loops with XOR operations
+   - Hardcoded passwords: search strings for comparison logic
+   - Anti-debug: check for ptrace calls
+   - Obfuscation: look for decryption routines
+5. DECOMPILATION: Use Ghidra/IDA patterns in analysis`,
+
+  pwn: `BINARY EXPLOITATION PLAYBOOK:
+1. SECURITY CHECK: checksec (NX, PIE, RELRO, Canary, ASLR)
+2. VULNERABILITY SCAN:
+   - Buffer overflow: look for gets(), strcpy(), scanf without bounds
+   - Format string: printf(user_input)
+   - Use-after-free: malloc/free patterns
+3. FIND OFFSET: pattern create/search or cyclic
+4. EXPLOIT TECHNIQUES:
+   - ret2win: find win() or flag() function
+   - ret2libc: leak libc, find system/bin/sh
+   - ROP: build chain with gadgets
+   - Format string: write-what-where`,
+
+  crypto: `CRYPTOGRAPHY PLAYBOOK:
+1. IDENTIFY CIPHER: Look for patterns, key sizes, IV usage
+2. COMMON ATTACKS:
+   - XOR: frequency analysis, known plaintext
+   - RSA: small e, common modulus, Wiener's attack
+   - AES: ECB mode patterns, padding oracle
+   - Base64/Hex: decode and analyze
+3. MATHEMATICAL ANALYSIS: factorization, discrete log
+4. IMPLEMENTATION FLAWS: weak RNG, reused nonces`,
+
+  forensics: `FORENSICS PLAYBOOK:
+1. FILE ANALYSIS: file, exiftool, binwalk
+2. STEGANOGRAPHY:
+   - Images: steghide, zsteg, stegsolve
+   - Audio: spectogram analysis
+   - LSB extraction
+3. MEMORY/DISK: volatility, foremost, strings
+4. NETWORK: wireshark filters, protocol analysis
+5. HIDDEN DATA: alternate data streams, file carving`,
+
+  web: `WEB EXPLOITATION PLAYBOOK:
+1. RECONNAISSANCE: dirb, nikto, robots.txt, .git
+2. INJECTION:
+   - SQLi: ' OR 1=1--, UNION SELECT
+   - XSS: <script>alert(1)</script>
+   - SSTI: {{7*7}}, ${7*7}
+   - Command injection: ; ls, | cat /etc/passwd
+3. AUTH BYPASS: JWT manipulation, session fixation
+4. LFI/RFI: ../../etc/passwd, php://filter`,
+
+  misc: `MISCELLANEOUS PLAYBOOK:
+1. FILE ANALYSIS: file, xxd, hexdump
+2. ENCODING: base64, hex, rot13, morse
+3. PATTERNS: regex for flags, hidden data
+4. PROGRAMMING: solve puzzles, automation
+5. OSINT: metadata, hidden clues`
+};
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
@@ -55,49 +122,84 @@ serve(async (req) => {
       flag_format = 'CTF{...}',
       current_category = 'unknown',
       attempt_number = 1,
+      early_flags = [],
     } = body ?? {};
+
+    console.log(`[ai-analyze] Job: ${job_id}, Category: ${current_category}, Attempt: ${attempt_number}`);
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured');
 
-    const systemPrompt = `You are a CTF solving assistant. Your job is to propose the next terminal commands to run.
+    const playbook = PLAYBOOKS[current_category] || PLAYBOOKS.misc;
 
-Rules:
-- Prefer safe, non-destructive commands.
-- Suggest at most 3 commands.
-- Commands must be from typical CTF CLI tools (file, strings, checksec, objdump, readelf, ltrace, strace, grep, binwalk, r2, python3).
-- If you see a flag candidate matching the provided format, include it.
-- If the current info is insufficient, propose reconnaissance commands first.
-- Keep reasoning short.`;
+    const systemPrompt = `You are an expert CTF (Capture The Flag) player with years of experience. You solve challenges like a human expert would - methodically, intelligently, and creatively.
 
-    const userPrompt = `JOB: ${job_id}
-FILES: ${Array.isArray(files) ? files.join(', ') : ''}
+YOUR ROLE:
+- Analyze the challenge and command outputs
+- Identify the challenge category and vulnerability/technique needed
+- Propose the next logical steps following proven CTF methodology
+- Extract any flags found in the output
+
+CURRENT PLAYBOOK FOR ${current_category.toUpperCase()}:
+${playbook}
+
+RULES:
+1. Think step-by-step like a real CTF player
+2. Suggest 1-5 commands based on what's most promising
+3. Available tools: file, strings, checksec, objdump, readelf, ltrace, strace, grep, binwalk, xxd, hexdump, base64, python3, r2
+4. If you see a flag matching the format, include it in flag_candidates
+5. Provide multiple alternative approaches when stuck
+6. Keep analysis concise but insightful
+7. If early flags were found, analyze HOW they were found and suggest validation`;
+
+    const userPrompt = `CHALLENGE: ${job_id}
+FILES: ${Array.isArray(files) ? files.join(', ') : 'none'}
 CATEGORY: ${current_category}
 ATTEMPT: ${attempt_number}
-EXPECTED FLAG FORMAT (regex-ish): ${flag_format}
+FLAG FORMAT: ${flag_format}
 DESCRIPTION: ${description}
+${early_flags.length > 0 ? `\nEARLY FLAGS FOUND: ${early_flags.join(', ')}` : ''}
 
-RECENT COMMAND HISTORY (last ${Array.isArray(command_history) ? command_history.length : 0}):
-${(command_history as CommandOutput[]).slice(-10).map((c) => {
+COMMAND HISTORY (${Array.isArray(command_history) ? command_history.length : 0} commands):
+${(command_history as CommandOutput[]).slice(-15).map((c) => {
   const head = `$ ${c.tool} ${(c.args || []).join(' ')}`.trim();
-  const out = (c.stdout || '').slice(0, 1200);
-  const err = (c.stderr || '').slice(0, 400);
-  return `${head}\n[stdout]\n${out}${out.length >= 1200 ? '\n...truncated...' : ''}\n[stderr]\n${err}${err.length >= 400 ? '\n...truncated...' : ''}`;
-}).join('\n\n---\n\n')}`;
+  const out = (c.stdout || '').slice(0, 2000);
+  const err = (c.stderr || '').slice(0, 500);
+  return `${head}\n[stdout]\n${out}${out.length >= 2000 ? '\n...truncated...' : ''}${err ? `\n[stderr]\n${err}` : ''}`;
+}).join('\n\n---\n\n')}
+
+Analyze this CTF challenge. What's the most likely solution path? What commands should we run next?`;
 
     const toolSpec = {
       type: 'function',
       function: {
         name: 'return_analysis',
-        description: 'Return structured analysis and next commands for a CTF job.',
+        description: 'Return structured CTF analysis with next commands and strategy',
         parameters: {
           type: 'object',
           additionalProperties: false,
           properties: {
-            analysis: { type: 'string' },
-            category: { type: 'string' },
-            confidence: { type: 'number' },
-            findings: { type: 'array', items: { type: 'string' } },
+            analysis: { 
+              type: 'string',
+              description: 'Detailed analysis of the challenge and current progress'
+            },
+            category: { 
+              type: 'string',
+              description: 'Detected category: rev, pwn, crypto, forensics, web, misc'
+            },
+            confidence: { 
+              type: 'number',
+              description: 'Confidence in the analysis (0-1)'
+            },
+            strategy: {
+              type: 'string',
+              description: 'Current solving strategy being used'
+            },
+            findings: { 
+              type: 'array', 
+              items: { type: 'string' },
+              description: 'Key findings from the analysis'
+            },
             next_commands: {
               type: 'array',
               items: {
@@ -110,14 +212,29 @@ ${(command_history as CommandOutput[]).slice(-10).map((c) => {
                 },
                 required: ['tool', 'args', 'reason'],
               },
+              description: 'Next commands to execute'
             },
-            flag_candidates: { type: 'array', items: { type: 'string' } },
-            should_continue: { type: 'boolean' },
+            flag_candidates: { 
+              type: 'array', 
+              items: { type: 'string' },
+              description: 'Any flags found matching the expected format'
+            },
+            should_continue: { 
+              type: 'boolean',
+              description: 'Whether to continue analysis or stop'
+            },
+            alternative_approaches: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Alternative solving approaches if current one fails'
+            },
           },
-          required: ['analysis', 'category', 'confidence', 'findings', 'next_commands', 'flag_candidates', 'should_continue'],
+          required: ['analysis', 'category', 'confidence', 'strategy', 'findings', 'next_commands', 'flag_candidates', 'should_continue', 'alternative_approaches'],
         },
       },
     };
+
+    console.log(`[ai-analyze] Calling Lovable AI gateway...`);
 
     const gatewayResp = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -175,7 +292,10 @@ ${(command_history as CommandOutput[]).slice(-10).map((c) => {
     const response: AIAnalysisResponse = {
       ...parsed,
       rule_based: false,
+      playbook: playbook,
     };
+
+    console.log(`[ai-analyze] Success - Found ${parsed.flag_candidates?.length || 0} flags, ${parsed.next_commands?.length || 0} commands`);
 
     return new Response(JSON.stringify(response), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
