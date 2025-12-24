@@ -11,16 +11,26 @@ interface AuthContextType {
   retryBackendConnection: () => Promise<boolean>;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+// Default context value for safety
+const defaultAuthContext: AuthContextType = {
+  user: { isAuthenticated: false },
+  login: async () => false,
+  logout: () => {},
+  isLoading: true,
+  isBackendConnected: false,
+  retryBackendConnection: async () => false,
+};
+
+const AuthContext = createContext<AuthContextType>(defaultAuthContext);
 
 // Demo password for mock auth
 const DEMO_PASSWORD = 'admin';
 
 // Auto-retry intervals (in ms)
-const RETRY_INTERVALS = [5000, 10000, 30000, 60000]; // 5s, 10s, 30s, 1min
+const RETRY_INTERVALS = [5000, 10000, 30000, 60000];
 const MAX_RETRY_INTERVAL = 60000;
 
-// Check if backend is available (must return JSON, not HTML)
+// Check if backend is available
 async function checkBackend(): Promise<boolean> {
   try {
     const response = await fetch('/api/health', { method: 'GET' });
@@ -42,23 +52,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isBackendConnected, setIsBackendConnected] = useState(false);
   const retryCountRef = useRef(0);
   const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isMountedRef = useRef(true);
 
-  // Retry backend connection with exponential backoff
+  // Retry backend connection
   const retryBackendConnection = useCallback(async (): Promise<boolean> => {
     const backendAvailable = await checkBackend();
     
+    if (!isMountedRef.current) return false;
+    
     if (backendAvailable) {
       setIsBackendConnected(true);
-      retryCountRef.current = 0; // Reset retry count on success
+      retryCountRef.current = 0;
       
-      // Check if we have a valid session
       try {
         const session = await api.checkSession();
-        if (session.authenticated) {
+        if (isMountedRef.current && session.authenticated) {
           setUser({ isAuthenticated: true, username: 'admin' });
         }
       } catch {
-        // Not authenticated, but backend is available
+        // Not authenticated
       }
       return true;
     }
@@ -66,7 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return false;
   }, []);
 
-  // Auto-retry logic when backend is not connected
+  // Auto-retry logic
   useEffect(() => {
     if (isBackendConnected || isLoading) return;
 
@@ -75,11 +87,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const interval = RETRY_INTERVALS[retryIndex] || MAX_RETRY_INTERVAL;
       
       retryTimeoutRef.current = setTimeout(async () => {
+        if (!isMountedRef.current) return;
+        
         const connected = await retryBackendConnection();
         
-        if (!connected) {
+        if (!connected && isMountedRef.current) {
           retryCountRef.current++;
-          scheduleRetry(); // Schedule next retry
+          scheduleRetry();
         }
       }, interval);
     };
@@ -93,16 +107,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [isBackendConnected, isLoading, retryBackendConnection]);
 
-  // Check session on mount
+  // Initialize auth on mount
   useEffect(() => {
+    isMountedRef.current = true;
+    
     const initAuth = async () => {
       const backendAvailable = await checkBackend();
+      
+      if (!isMountedRef.current) return;
+      
       setIsBackendConnected(backendAvailable);
       
       if (backendAvailable) {
         try {
           const session = await api.checkSession();
-          if (session.authenticated) {
+          if (isMountedRef.current && session.authenticated) {
             setUser({ isAuthenticated: true, username: 'admin' });
           }
         } catch {
@@ -110,10 +129,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
       
-      setIsLoading(false);
+      if (isMountedRef.current) {
+        setIsLoading(false);
+      }
     };
     
     initAuth();
+    
+    return () => {
+      isMountedRef.current = false;
+    };
   }, []);
 
   const login = useCallback(async (password: string): Promise<boolean> => {
@@ -150,32 +175,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         await api.logout();
       } catch {
-        // Ignore logout errors
+        // Ignore
       }
     }
     setUser({ isAuthenticated: false });
   }, [isBackendConnected]);
 
-  const value: AuthContextType = {
+  const contextValue: AuthContextType = {
     user,
     login,
     logout,
     isLoading,
     isBackendConnected,
-    retryBackendConnection
+    retryBackendConnection,
   };
 
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );
 }
 
+// useAuth hook - now always returns a valid context (never throws)
 export function useAuth(): AuthContextType {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
+  return useContext(AuthContext);
 }
