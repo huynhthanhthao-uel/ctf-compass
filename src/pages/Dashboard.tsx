@@ -1,16 +1,20 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, RefreshCw, LayoutGrid, List, Search, Filter } from 'lucide-react';
+import { Plus, RefreshCw, LayoutGrid, List, Search, Wifi, WifiOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { JobCard } from '@/components/jobs/JobCard';
 import { useJobs } from '@/hooks/use-jobs';
+import { useJobsWithWebSocket } from '@/hooks/use-websocket';
 import { cn } from '@/lib/utils';
+import { Job } from '@/lib/types';
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { jobs, isLoading, fetchJobs, runJob } = useJobs();
+  const { jobs, isLoading, fetchJobs, runJob, isBackendConnected } = useJobs();
+  const { isConnected: wsConnected, getJobUpdate } = useJobsWithWebSocket();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -18,17 +22,37 @@ export default function Dashboard() {
     fetchJobs();
   }, [fetchJobs]);
 
-  const filteredJobs = jobs.filter(job => 
+  // Merge WebSocket updates with job data
+  const getEnhancedJobs = useCallback((): Job[] => {
+    return jobs.map(job => {
+      const wsUpdate = getJobUpdate(job.id);
+      if (!wsUpdate) return job;
+      
+      // Apply WebSocket updates
+      return {
+        ...job,
+        status: wsUpdate.status === 'completed' ? 'done' : 
+                wsUpdate.status === 'pending' ? 'queued' : 
+                (wsUpdate.status as Job['status']) || job.status,
+        progress: wsUpdate.progress ?? job.progress,
+        errorMessage: wsUpdate.error_message || job.errorMessage,
+      };
+    });
+  }, [jobs, getJobUpdate]);
+
+  const enhancedJobs = getEnhancedJobs();
+
+  const filteredJobs = enhancedJobs.filter(job => 
     job.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
     job.description.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const stats = {
-    total: jobs.length,
-    queued: jobs.filter(j => j.status === 'queued').length,
-    running: jobs.filter(j => j.status === 'running').length,
-    done: jobs.filter(j => j.status === 'done').length,
-    failed: jobs.filter(j => j.status === 'failed').length,
+    total: enhancedJobs.length,
+    queued: enhancedJobs.filter(j => j.status === 'queued').length,
+    running: enhancedJobs.filter(j => j.status === 'running').length,
+    done: enhancedJobs.filter(j => j.status === 'done').length,
+    failed: enhancedJobs.filter(j => j.status === 'failed').length,
   };
 
   return (
@@ -37,7 +61,29 @@ export default function Dashboard() {
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold text-foreground">Dashboard</h1>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-semibold text-foreground">Dashboard</h1>
+              {isBackendConnected && (
+                <Badge variant="outline" className={cn(
+                  "text-xs",
+                  wsConnected 
+                    ? "border-success/50 text-success" 
+                    : "border-warning/50 text-warning"
+                )}>
+                  {wsConnected ? (
+                    <>
+                      <Wifi className="h-3 w-3 mr-1" />
+                      Live
+                    </>
+                  ) : (
+                    <>
+                      <WifiOff className="h-3 w-3 mr-1" />
+                      Polling
+                    </>
+                  )}
+                </Badge>
+              )}
+            </div>
             <p className="text-muted-foreground mt-1">
               Manage and monitor your CTF challenge analyses
             </p>
