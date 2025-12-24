@@ -1,12 +1,13 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, RefreshCw, LayoutGrid, List, Search, Wifi, WifiOff } from 'lucide-react';
+import { Plus, RefreshCw, LayoutGrid, List, Search, Wifi, WifiOff, Radio } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { JobCard } from '@/components/jobs/JobCard';
 import { useJobs } from '@/hooks/use-jobs';
+import { useAuth } from '@/hooks/use-auth';
 import { useJobsWithWebSocket } from '@/hooks/use-websocket';
 import { cn } from '@/lib/utils';
 import { Job } from '@/lib/types';
@@ -14,13 +15,21 @@ import { Job } from '@/lib/types';
 export default function Dashboard() {
   const navigate = useNavigate();
   const { jobs, isLoading, fetchJobs, runJob, isBackendConnected } = useJobs();
+  const { retryBackendConnection } = useAuth();
   const { isConnected: wsConnected, getJobUpdate } = useJobsWithWebSocket();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
+  const [isRetrying, setIsRetrying] = useState(false);
 
   useEffect(() => {
     fetchJobs();
   }, [fetchJobs]);
+
+  const handleRetryConnection = async () => {
+    setIsRetrying(true);
+    await retryBackendConnection();
+    setIsRetrying(false);
+  };
 
   // Merge WebSocket updates with job data
   const getEnhancedJobs = useCallback((): Job[] => {
@@ -61,31 +70,57 @@ export default function Dashboard() {
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <h1 className="text-2xl font-semibold text-foreground">Dashboard</h1>
-              {isBackendConnected && (
-                <Badge variant="outline" className={cn(
-                  "text-xs",
-                  wsConnected 
-                    ? "border-success/50 text-success" 
-                    : "border-warning/50 text-warning"
-                )}>
+              
+              {/* Connection Status Badge */}
+              {isBackendConnected ? (
+                <Badge 
+                  variant="outline" 
+                  className={cn(
+                    "text-xs gap-1.5 cursor-default",
+                    wsConnected 
+                      ? "border-emerald-600/30 text-emerald-600 bg-emerald-500/10" 
+                      : "border-amber-600/30 text-amber-600 bg-amber-500/10"
+                  )}
+                >
                   {wsConnected ? (
                     <>
-                      <Wifi className="h-3 w-3 mr-1" />
+                      <Radio className="h-3 w-3 animate-pulse" />
                       Live
                     </>
                   ) : (
                     <>
-                      <WifiOff className="h-3 w-3 mr-1" />
-                      Polling
+                      <Wifi className="h-3 w-3" />
+                      Connected
+                    </>
+                  )}
+                </Badge>
+              ) : (
+                <Badge 
+                  variant="outline" 
+                  className="text-xs gap-1.5 border-amber-600/30 text-amber-600 bg-amber-500/10 cursor-pointer hover:bg-amber-500/20 transition-colors"
+                  onClick={handleRetryConnection}
+                >
+                  {isRetrying ? (
+                    <>
+                      <RefreshCw className="h-3 w-3 animate-spin" />
+                      Connecting...
+                    </>
+                  ) : (
+                    <>
+                      <WifiOff className="h-3 w-3" />
+                      Demo Mode
                     </>
                   )}
                 </Badge>
               )}
             </div>
             <p className="text-muted-foreground mt-1">
-              Manage and monitor your CTF challenge analyses
+              {isBackendConnected 
+                ? 'Manage and monitor your CTF challenge analyses'
+                : 'Running in demo mode • Click badge to retry connection'
+              }
             </p>
           </div>
           <Button onClick={() => navigate('/jobs/new')} size="lg">
