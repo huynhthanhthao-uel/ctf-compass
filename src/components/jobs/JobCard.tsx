@@ -204,21 +204,6 @@ export function JobCard({ job, onRun, onStop, onDelete }: JobCardProps) {
                 {formatDistanceToNow(new Date(job.createdAt), { addSuffix: true })}
               </span>
               
-              {job.status === 'queued' && (
-                <Button 
-                  size="sm" 
-                  className="h-7 text-xs gap-1.5"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    // Navigate to job detail with autostart param to trigger Full Autopilot
-                    navigate(`/jobs/${job.id}?autostart=true`);
-                  }}
-                >
-                  <PlayCircle className="h-3.5 w-3.5" />
-                  Solve
-                </Button>
-              )}
-              
               {job.status === 'running' && onStop && (
                 <Button 
                   size="sm" 
