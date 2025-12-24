@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, 
@@ -12,7 +12,9 @@ import {
   Folder,
   Flag,
   FileText,
-  Copy
+  Copy,
+  Wifi,
+  WifiOff
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -25,6 +27,7 @@ import { ArtifactList } from '@/components/jobs/ArtifactList';
 import { FlagCandidates } from '@/components/jobs/FlagCandidates';
 import { WriteupView } from '@/components/jobs/WriteupView';
 import { useJobDetail } from '@/hooks/use-jobs';
+import { useJobWebSocket, JobUpdate } from '@/hooks/use-websocket';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -39,6 +42,36 @@ export default function JobDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { jobDetail, isLoading, fetchJobDetail } = useJobDetail(id || '');
+  
+  // Real-time updates
+  const [realtimeProgress, setRealtimeProgress] = useState<number | null>(null);
+  const [realtimeStatus, setRealtimeStatus] = useState<string | null>(null);
+  const [realtimeLogs, setRealtimeLogs] = useState<string[]>([]);
+  
+  const handleJobUpdate = useCallback((update: JobUpdate) => {
+    if (update.type === 'job_update' && update.job_id === id) {
+      if (update.data.progress !== undefined) {
+        setRealtimeProgress(update.data.progress);
+      }
+      if (update.data.status) {
+        const mappedStatus = update.data.status === 'completed' ? 'done' : 
+                            update.data.status === 'pending' ? 'queued' : update.data.status;
+        setRealtimeStatus(mappedStatus);
+        
+        // Refresh job detail when completed
+        if (update.data.completed) {
+          fetchJobDetail();
+        }
+      }
+    } else if (update.type === 'job_log' && update.job_id === id) {
+      setRealtimeLogs(prev => [...prev, `[${update.data.level}] ${update.data.message}`]);
+    }
+  }, [id, fetchJobDetail]);
+  
+  const { isConnected: wsConnected } = useJobWebSocket({
+    jobId: id,
+    onJobUpdate: handleJobUpdate,
+  });
 
   useEffect(() => {
     if (id) {
@@ -56,7 +89,11 @@ export default function JobDetail() {
     );
   }
 
-  const status = statusConfig[jobDetail.status];
+  // Use realtime status/progress if available
+  const currentStatus = (realtimeStatus as keyof typeof statusConfig) || jobDetail.status;
+  const currentProgress = realtimeProgress ?? jobDetail.progress;
+  
+  const status = statusConfig[currentStatus];
   const StatusIcon = status.icon;
 
   return (
@@ -77,8 +114,26 @@ export default function JobDetail() {
               <div className="flex items-center gap-3 flex-wrap">
                 <h1 className="text-xl font-semibold text-foreground">{jobDetail.title}</h1>
                 <Badge className={cn("text-xs", status.className)}>
-                  <StatusIcon className={cn("h-3 w-3 mr-1", jobDetail.status === 'running' && "animate-spin")} />
+                  <StatusIcon className={cn("h-3 w-3 mr-1", currentStatus === 'running' && "animate-spin")} />
                   {status.label}
+                </Badge>
+                <Badge variant="outline" className={cn(
+                  "text-xs",
+                  wsConnected 
+                    ? "border-success/50 text-success" 
+                    : "border-muted text-muted-foreground"
+                )}>
+                  {wsConnected ? (
+                    <>
+                      <Wifi className="h-3 w-3 mr-1" />
+                      Live
+                    </>
+                  ) : (
+                    <>
+                      <WifiOff className="h-3 w-3 mr-1" />
+                      Offline
+                    </>
+                  )}
                 </Badge>
               </div>
               <p className="text-muted-foreground mt-1">{jobDetail.description}</p>
@@ -96,13 +151,13 @@ export default function JobDetail() {
           </div>
 
           <div className="flex items-center gap-2 shrink-0 ml-12 lg:ml-0">
-            {jobDetail.status === 'queued' && (
+            {currentStatus === 'queued' && (
               <Button>
                 <PlayCircle className="h-4 w-4 mr-2" />
                 Start Analysis
               </Button>
             )}
-            {jobDetail.status === 'done' && (
+            {currentStatus === 'done' && (
               <>
                 <Button variant="outline">
                   <Download className="h-4 w-4 mr-2" />
@@ -118,17 +173,29 @@ export default function JobDetail() {
         </div>
 
         {/* Progress */}
-        {(jobDetail.status === 'running' || jobDetail.status === 'failed') && jobDetail.progress !== undefined && (
+        {(currentStatus === 'running' || currentStatus === 'failed') && currentProgress !== undefined && (
           <Card>
             <CardContent className="py-4">
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Analysis Progress</span>
-                  <span className="font-medium text-foreground">{Math.round(jobDetail.progress)}%</span>
+                  <span className="text-muted-foreground">
+                    Analysis Progress
+                    {wsConnected && <span className="text-success ml-2">(Live)</span>}
+                  </span>
+                  <span className="font-medium text-foreground">{Math.round(currentProgress)}%</span>
                 </div>
-                <Progress value={jobDetail.progress} className="h-2" />
+                <Progress value={currentProgress} className="h-2" />
                 {jobDetail.errorMessage && (
                   <p className="text-sm text-destructive mt-2">{jobDetail.errorMessage}</p>
+                )}
+                
+                {/* Real-time logs */}
+                {realtimeLogs.length > 0 && (
+                  <div className="mt-3 max-h-32 overflow-y-auto bg-muted/50 rounded p-2 font-mono text-xs">
+                    {realtimeLogs.slice(-10).map((log, i) => (
+                      <div key={i} className="text-muted-foreground">{log}</div>
+                    ))}
+                  </div>
                 )}
               </div>
             </CardContent>
