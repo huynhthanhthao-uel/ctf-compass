@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   History, 
   Clock, 
@@ -14,7 +14,10 @@ import {
   TrendingUp,
   Award,
   Copy,
-  ExternalLink
+  ExternalLink,
+  Upload,
+  Download,
+  Share2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -24,6 +27,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
+import { toast } from 'sonner';
 import * as api from '@/lib/api';
 
 interface AnalysisHistoryProps {
@@ -44,10 +48,92 @@ export function AnalysisHistory({
   const [expandedSessions, setExpandedSessions] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('history');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     loadSessions();
   }, [jobId]);
+
+  // Export strategy as JSON
+  const exportStrategy = (session: api.SessionDetail) => {
+    const strategy = {
+      version: "1.0",
+      exportedAt: new Date().toISOString(),
+      name: session.session.name,
+      category: session.session.detected_category,
+      strategy: session.session.strategy,
+      tools: [...new Set(session.effective_tools.map(t => t.tool))],
+      toolSequence: session.commands.map(c => ({
+        tool: c.tool,
+        args: c.arguments,
+      })),
+      aiInsights: session.ai_insights,
+      summary: session.session.summary,
+      stats: {
+        totalCommands: session.session.total_commands,
+        successfulCommands: session.session.successful_commands,
+        flagsFound: session.session.flags_found_count,
+      }
+    };
+
+    const blob = new Blob([JSON.stringify(strategy, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ctf-strategy-${session.session.detected_category || 'unknown'}-${Date.now()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success('Strategy exported successfully');
+  };
+
+  // Import strategy from JSON
+  const importStrategy = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const strategy = JSON.parse(e.target?.result as string);
+        
+        if (!strategy.version || !strategy.tools) {
+          throw new Error('Invalid strategy file format');
+        }
+
+        toast.success(`Imported strategy: ${strategy.name || 'Unnamed'}`);
+        
+        // Apply the imported strategy
+        if (onApplyStrategy && strategy.tools.length > 0) {
+          onApplyStrategy(strategy.tools);
+        }
+      } catch (err) {
+        toast.error('Failed to import strategy: Invalid file format');
+        console.error('Import error:', err);
+      }
+    };
+    reader.readAsText(file);
+    
+    // Reset input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  // Copy strategy to clipboard for sharing
+  const shareStrategy = (session: api.SessionDetail) => {
+    const strategy = {
+      version: "1.0",
+      name: session.session.name,
+      category: session.session.detected_category,
+      tools: [...new Set(session.effective_tools.map(t => t.tool))],
+      summary: session.session.summary,
+    };
+
+    navigator.clipboard.writeText(JSON.stringify(strategy, null, 2));
+    toast.success('Strategy copied to clipboard');
+  };
 
   const loadSessions = async () => {
     setIsLoading(true);
@@ -154,10 +240,30 @@ export function AnalysisHistory({
         <TabsContent value="history">
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <History className="h-4 w-4" />
-                Analysis Sessions ({sessions.length})
-              </CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <History className="h-4 w-4" />
+                  Analysis Sessions ({sessions.length})
+                </CardTitle>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={importStrategy}
+                    accept=".json"
+                    className="hidden"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="gap-1"
+                  >
+                    <Upload className="h-3 w-3" />
+                    Import
+                  </Button>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
               {isLoading ? (
@@ -318,19 +424,36 @@ export function AnalysisHistory({
                                       </Badge>
                                     ))}
                                   </div>
-                                  {onApplyStrategy && (
+                                  <div className="flex flex-wrap gap-2 mt-2">
+                                    {onApplyStrategy && (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => onApplyStrategy(
+                                          [...new Set(selectedSession.effective_tools.map(t => t.tool))]
+                                        )}
+                                      >
+                                        <ExternalLink className="h-3 w-3 mr-1" />
+                                        Apply
+                                      </Button>
+                                    )}
                                     <Button
                                       size="sm"
                                       variant="outline"
-                                      className="mt-2"
-                                      onClick={() => onApplyStrategy(
-                                        [...new Set(selectedSession.effective_tools.map(t => t.tool))]
-                                      )}
+                                      onClick={() => exportStrategy(selectedSession)}
                                     >
-                                      <ExternalLink className="h-3 w-3 mr-1" />
-                                      Apply This Strategy
+                                      <Download className="h-3 w-3 mr-1" />
+                                      Export
                                     </Button>
-                                  )}
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => shareStrategy(selectedSession)}
+                                    >
+                                      <Share2 className="h-3 w-3 mr-1" />
+                                      Share
+                                    </Button>
+                                  </div>
                                 </div>
                               )}
                               
