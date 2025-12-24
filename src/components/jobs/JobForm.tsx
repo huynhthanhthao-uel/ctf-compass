@@ -1,16 +1,32 @@
 import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Upload, X, FileText, AlertCircle, FolderOpen } from 'lucide-react';
+import { Upload, X, FileText, AlertCircle, FolderOpen, Link } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 
+const CHALLENGE_CATEGORIES = [
+  { value: 'crypto', label: 'Crypto' },
+  { value: 'pwn', label: 'Pwn' },
+  { value: 'web', label: 'Web' },
+  { value: 'rev', label: 'Reverse Engineering' },
+  { value: 'forensics', label: 'Forensics' },
+  { value: 'misc', label: 'Misc' },
+] as const;
+
 interface JobFormProps {
-  onSubmit: (title: string, description: string, flagFormat: string, files: File[]) => Promise<void>;
+  onSubmit: (title: string, description: string, flagFormat: string, files: File[], category?: string, challengeUrl?: string) => Promise<void>;
   isLoading?: boolean;
 }
 
@@ -18,6 +34,8 @@ export function JobForm({ onSubmit, isLoading }: JobFormProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [flagFormat, setFlagFormat] = useState('CTF{[a-zA-Z0-9_]+}');
+  const [category, setCategory] = useState<string>('');
+  const [challengeUrl, setChallengeUrl] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,7 +62,15 @@ export function JobForm({ onSubmit, isLoading }: JobFormProps) {
       return;
     }
 
-    // Files are optional - some CTF challenges don't require file uploads
+    // Validate URL if provided
+    if (challengeUrl.trim()) {
+      try {
+        new URL(challengeUrl);
+      } catch {
+        setError('Invalid challenge URL format');
+        return;
+      }
+    }
 
     try {
       new RegExp(flagFormat);
@@ -53,7 +79,7 @@ export function JobForm({ onSubmit, isLoading }: JobFormProps) {
       return;
     }
 
-    await onSubmit(title, description, flagFormat, files);
+    await onSubmit(title, description, flagFormat, files, category || undefined, challengeUrl.trim() || undefined);
   };
 
   const formatFileSize = (bytes: number) => {
@@ -82,13 +108,31 @@ export function JobForm({ onSubmit, isLoading }: JobFormProps) {
               <Label htmlFor="title">Challenge Title *</Label>
               <Input
                 id="title"
-                placeholder="e.g., Crypto - RSA Basics"
+                placeholder="e.g., RSA Basics"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 disabled={isLoading}
               />
             </div>
 
+            <div className="space-y-2">
+              <Label htmlFor="category">Category</Label>
+              <Select value={category} onValueChange={setCategory} disabled={isLoading}>
+                <SelectTrigger id="category" className="bg-background">
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent className="bg-popover z-50">
+                  {CHALLENGE_CATEGORIES.map((cat) => (
+                    <SelectItem key={cat.value} value={cat.value}>
+                      {cat.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="flagFormat">Flag Format (Regex)</Label>
               <Input
@@ -99,6 +143,21 @@ export function JobForm({ onSubmit, isLoading }: JobFormProps) {
                 className="font-mono text-sm"
                 disabled={isLoading}
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="challengeUrl">Challenge URL</Label>
+              <div className="relative">
+                <Link className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="challengeUrl"
+                  placeholder="https://ctf.example.com/challenge"
+                  value={challengeUrl}
+                  onChange={(e) => setChallengeUrl(e.target.value)}
+                  className="pl-9"
+                  disabled={isLoading}
+                />
+              </div>
             </div>
           </div>
 

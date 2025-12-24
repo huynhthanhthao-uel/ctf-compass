@@ -61,18 +61,22 @@ export function useJobs() {
     title: string,
     description: string,
     flagFormat: string,
-    files: File[]
+    files: File[],
+    category?: string,
+    challengeUrl?: string
   ): Promise<Job> => {
     setIsLoading(true);
     
     if (useApi) {
       try {
-        const response = await api.createJob(title, description, flagFormat, files);
+        const response = await api.createJob(title, description, flagFormat, files, category, challengeUrl);
         const newJob: Job = {
           id: response.id,
           title: response.title,
           description,
           flagFormat,
+          category,
+          challengeUrl,
           status: 'queued',
           createdAt: response.created_at,
           progress: 0,
@@ -94,6 +98,8 @@ export function useJobs() {
       title,
       description,
       flagFormat,
+      category,
+      challengeUrl,
       status: 'queued',
       createdAt: new Date().toISOString(),
       progress: 0,

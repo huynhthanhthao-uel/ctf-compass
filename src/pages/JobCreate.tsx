@@ -15,10 +15,12 @@ export default function JobCreate() {
     title: string,
     description: string,
     flagFormat: string,
-    files: File[]
+    files: File[],
+    category?: string,
+    challengeUrl?: string
   ) => {
     try {
-      const job = await createJob(title, description, flagFormat, files);
+      const job = await createJob(title, description, flagFormat, files, category, challengeUrl);
       toast({
         title: 'Analysis Created',
         description: `Job "${title}" has been queued for analysis.`,

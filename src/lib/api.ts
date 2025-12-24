@@ -140,12 +140,16 @@ export async function createJob(
   title: string,
   description: string,
   flagFormat: string,
-  files: File[]
+  files: File[],
+  category?: string,
+  challengeUrl?: string
 ): Promise<Job> {
   const formData = new FormData();
   formData.append('title', title);
   formData.append('description', description);
   formData.append('flag_format', flagFormat);
+  if (category) formData.append('category', category);
+  if (challengeUrl) formData.append('challenge_url', challengeUrl);
   files.forEach((file) => formData.append('files', file));
   
   const csrfToken = getCsrfToken();
@@ -161,12 +165,18 @@ export async function createJob(
     headers,
   });
   
+  // Check for HTML response (backend not available)
+  const text = await response.text();
+  if (isHtmlResponse(text)) {
+    throw new Error('Backend API not available. Using mock mode.');
+  }
+  
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+    const error = text ? JSON.parse(text) : { detail: 'Unknown error' };
     throw new Error(error.detail || `HTTP ${response.status}`);
   }
   
-  return response.json();
+  return JSON.parse(text);
 }
 
 export async function runJob(jobId: string): Promise<void> {
