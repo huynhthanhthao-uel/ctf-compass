@@ -136,10 +136,10 @@ export function JobCard({ job, onRun, onStop, onDelete }: JobCardProps) {
                   <ExternalLink className="h-4 w-4 mr-2" />
                   View Details
                 </DropdownMenuItem>
-                {job.status === 'queued' && onRun && (
-                  <DropdownMenuItem onSelect={() => onRun(job.id)}>
+                {job.status === 'queued' && (
+                  <DropdownMenuItem onSelect={() => navigate(`/jobs/${job.id}?autostart=true`)}>
                     <PlayCircle className="h-4 w-4 mr-2" />
-                    Run Analysis
+                    Run Full Autopilot
                   </DropdownMenuItem>
                 )}
                 {job.status === 'running' && onStop && (
@@ -204,13 +204,14 @@ export function JobCard({ job, onRun, onStop, onDelete }: JobCardProps) {
                 {formatDistanceToNow(new Date(job.createdAt), { addSuffix: true })}
               </span>
               
-              {job.status === 'queued' && onRun && (
+              {job.status === 'queued' && (
                 <Button 
                   size="sm" 
                   className="h-7 text-xs gap-1.5"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onRun(job.id);
+                    // Navigate to job detail with autostart param to trigger Full Autopilot
+                    navigate(`/jobs/${job.id}?autostart=true`);
                   }}
                 >
                   <PlayCircle className="h-3.5 w-3.5" />

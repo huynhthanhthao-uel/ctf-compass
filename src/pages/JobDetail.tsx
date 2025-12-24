@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { 
   ArrowLeft, 
   Download, 
@@ -57,7 +57,12 @@ const statusConfig = {
 export default function JobDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { jobDetail, isLoading, fetchJobDetail } = useJobDetail(id || '');
+  
+  // Ref for Full Autopilot auto-start
+  const autopilotStartRef = useRef<(() => void) | null>(null);
+  const hasAutoStarted = useRef(false);
   
   // Real-time updates
   const [realtimeProgress, setRealtimeProgress] = useState<number | null>(null);
@@ -100,6 +105,29 @@ export default function JobDetail() {
       fetchJobDetail();
     }
   }, [id, fetchJobDetail]);
+
+  // Auto-start Full Autopilot if ?autostart=true in URL
+  useEffect(() => {
+    if (
+      searchParams.get('autostart') === 'true' && 
+      jobDetail && 
+      !hasAutoStarted.current &&
+      !isLoading
+    ) {
+      hasAutoStarted.current = true;
+      // Remove the param so refresh doesn't restart
+      setSearchParams({});
+      // Switch to analysis tab
+      setActiveTab('analysis');
+      // Trigger autopilot start via ref after a small delay to ensure component is mounted
+      setTimeout(() => {
+        if (autopilotStartRef.current) {
+          autopilotStartRef.current();
+          toast.info('Full Autopilot started automatically');
+        }
+      }, 500);
+    }
+  }, [searchParams, setSearchParams, jobDetail, isLoading]);
 
   // Poll for updates when job is running (for mock mode without WebSocket)
   useEffect(() => {
@@ -888,6 +916,9 @@ if __name__ == "__main__":
                 if (success && flags.length > 0) {
                   toast.success(`🎉 Autopilot found ${flags.length} flag(s)!`);
                 }
+              }}
+              onStartRef={(startFn) => {
+                autopilotStartRef.current = startFn;
               }}
             />
             
