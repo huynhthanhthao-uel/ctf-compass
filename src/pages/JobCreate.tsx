@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { JobForm } from '@/components/jobs/JobForm';
@@ -20,8 +20,8 @@ export default function JobCreate() {
     try {
       const job = await createJob(title, description, flagFormat, files);
       toast({
-        title: 'Job Created',
-        description: `Analysis job "${title}" has been queued.`,
+        title: 'Analysis Created',
+        description: `Job "${title}" has been queued for analysis.`,
       });
       navigate(`/jobs/${job.id}`);
     } catch (error) {
@@ -35,15 +35,19 @@ export default function JobCreate() {
 
   return (
     <AppLayout>
-      <div className="p-6 max-w-3xl mx-auto space-y-6 animate-fade-in">
+      <div className="p-6 lg:p-8 max-w-3xl mx-auto space-y-6 animate-fade-in">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')}>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={() => navigate('/dashboard')}
+          >
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
-            <h1 className="text-2xl font-bold">New Analysis</h1>
-            <p className="text-muted-foreground">
-              Upload challenge files and start automated analysis
+            <h1 className="text-xl font-semibold text-foreground">New Analysis</h1>
+            <p className="text-muted-foreground mt-1">
+              Upload challenge files to start automated analysis
             </p>
           </div>
         </div>
