@@ -1,18 +1,19 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Shield, Lock, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { Shield, Lock, AlertCircle, Eye, EyeOff, Wifi, WifiOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/use-auth';
 
 export default function Login() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { login, isLoading } = useAuth();
+  const { login, isLoading, isBackendConnected } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -108,9 +109,27 @@ export default function Login() {
             </Button>
           </form>
 
-          <div className="mt-6 pt-4 border-t border-border">
+          <div className="mt-6 pt-4 border-t border-border space-y-3">
+            {/* Backend connection indicator */}
+            <div className="flex justify-center">
+              {isBackendConnected ? (
+                <Badge variant="outline" className="gap-1.5 text-emerald-600 border-emerald-600/30 bg-emerald-500/10">
+                  <Wifi className="h-3 w-3" />
+                  Backend Connected
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="gap-1.5 text-amber-600 border-amber-600/30 bg-amber-500/10">
+                  <WifiOff className="h-3 w-3" />
+                  Demo Mode
+                </Badge>
+              )}
+            </div>
+            
             <p className="text-xs text-center text-muted-foreground">
-              Demo: use password <code className="font-mono px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground">admin</code>
+              {isBackendConnected 
+                ? 'Connected to production backend' 
+                : <>Demo: use password <code className="font-mono px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground">admin</code></>
+              }
             </p>
           </div>
         </CardContent>
