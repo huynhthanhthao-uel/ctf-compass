@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react';
 import { User } from '@/lib/types';
 import * as api from '@/lib/api';
 
@@ -8,12 +8,17 @@ interface AuthContextType {
   logout: () => void;
   isLoading: boolean;
   isBackendConnected: boolean;
+  retryBackendConnection: () => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
 // Demo password for mock auth
 const DEMO_PASSWORD = 'admin';
+
+// Auto-retry intervals (in ms)
+const RETRY_INTERVALS = [5000, 10000, 30000, 60000]; // 5s, 10s, 30s, 1min
+const MAX_RETRY_INTERVAL = 60000;
 
 // Check if backend is available (must return JSON, not HTML)
 async function checkBackend(): Promise<boolean> {
@@ -35,6 +40,58 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User>({ isAuthenticated: false });
   const [isLoading, setIsLoading] = useState(true);
   const [isBackendConnected, setIsBackendConnected] = useState(false);
+  const retryCountRef = useRef(0);
+  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Retry backend connection with exponential backoff
+  const retryBackendConnection = useCallback(async (): Promise<boolean> => {
+    const backendAvailable = await checkBackend();
+    
+    if (backendAvailable) {
+      setIsBackendConnected(true);
+      retryCountRef.current = 0; // Reset retry count on success
+      
+      // Check if we have a valid session
+      try {
+        const session = await api.checkSession();
+        if (session.authenticated) {
+          setUser({ isAuthenticated: true, username: 'admin' });
+        }
+      } catch {
+        // Not authenticated, but backend is available
+      }
+      return true;
+    }
+    
+    return false;
+  }, []);
+
+  // Auto-retry logic when backend is not connected
+  useEffect(() => {
+    if (isBackendConnected || isLoading) return;
+
+    const scheduleRetry = () => {
+      const retryIndex = Math.min(retryCountRef.current, RETRY_INTERVALS.length - 1);
+      const interval = RETRY_INTERVALS[retryIndex] || MAX_RETRY_INTERVAL;
+      
+      retryTimeoutRef.current = setTimeout(async () => {
+        const connected = await retryBackendConnection();
+        
+        if (!connected) {
+          retryCountRef.current++;
+          scheduleRetry(); // Schedule next retry
+        }
+      }, interval);
+    };
+
+    scheduleRetry();
+
+    return () => {
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+      }
+    };
+  }, [isBackendConnected, isLoading, retryBackendConnection]);
 
   // Check session on mount
   useEffect(() => {
@@ -100,7 +157,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [isBackendConnected]);
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isLoading, isBackendConnected }}>
+    <AuthContext.Provider value={{ user, login, logout, isLoading, isBackendConnected, retryBackendConnection }}>
       {children}
     </AuthContext.Provider>
   );
