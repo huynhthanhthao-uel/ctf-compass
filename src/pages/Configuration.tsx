@@ -1037,25 +1037,88 @@ export default function Configuration() {
             </CardContent>
           </Card>
 
-          {/* Allowed Tools */}
+          {/* Allowed Tools - Categorized */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Wrench className="h-5 w-5 text-primary" />
-                Sandbox Tools
+                Sandbox Tools ({config.allowedTools.length} tools)
               </CardTitle>
               <CardDescription>
-                Only these tools can be executed in the sandbox environment
+                Full CTF toolkit available in sandbox. Includes code execution (Python, Node, etc.) for writing solve scripts.
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-2">
-                {config.allowedTools.map((tool) => (
-                  <Badge key={tool} variant="outline" className="font-mono">
-                    {tool}
-                  </Badge>
-                ))}
-              </div>
+            <CardContent className="space-y-4">
+              {/* Tool Categories */}
+              {(() => {
+                const toolCategories: Record<string, string[]> = {
+                  'Core Analysis': ['file', 'strings', 'xxd', 'hexdump', 'od'],
+                  'Binary/RE': ['readelf', 'objdump', 'nm', 'ldd', 'checksec', 'radare2', 'r2', 'rabin2', 'rahash2', 'rafind2', 'gdb', 'ltrace', 'strace', 'retdec-decompiler', 'ghidra-headless', 'ropper', 'ROPgadget', 'one_gadget', 'patchelf', 'upx'],
+                  'Crypto': ['openssl', 'gpg', 'hashcat', 'john', 'hash-identifier', 'base64', 'base32', 'name-that-hash', 'factordb-cli', 'rsatool', 'RsaCtfTool', 'xortool', 'ciphey'],
+                  'Steganography': ['exiftool', 'binwalk', 'foremost', 'scalpel', 'steghide', 'stegseek', 'stegsolve', 'zsteg', 'stegcracker', 'pngcheck', 'pngchunks', 'identify', 'convert', 'sox', 'ffmpeg', 'ffprobe', 'audacity-cli'],
+                  'Network': ['tshark', 'tcpdump', 'nmap', 'masscan', 'netcat', 'nc', 'socat', 'curl', 'wget', 'dnsrecon', 'dig', 'host', 'whois', 'sslyze', 'sslscan'],
+                  'Web': ['sqlmap', 'nikto', 'gobuster', 'dirb', 'dirbuster', 'wfuzz', 'ffuf', 'hydra', 'jwt_tool', 'jwt-cracker'],
+                  'Forensics': ['volatility', 'volatility3', 'vol3', 'sleuthkit', 'fls', 'icat', 'mmls', 'fsstat', 'autopsy', 'photorec', 'testdisk', 'bulk_extractor', 'pdf-parser', 'pdftotext', 'pdfinfo', 'pdfimages'],
+                  'Archives': ['unzip', 'zip', 'tar', 'gzip', 'gunzip', 'bzip2', '7z', '7za', 'unrar', 'rar', 'fcrackzip', 'zip2john', 'rar2john'],
+                  'Code Execution': ['python3', 'python', 'pip3', 'pip', 'node', 'npm', 'npx', 'ruby', 'perl', 'php', 'gcc', 'g++', 'clang', 'make', 'cmake', 'go', 'rustc', 'cargo', 'java', 'javac'],
+                  'Scripting': ['bash', 'sh', 'zsh', 'grep', 'egrep', 'awk', 'sed', 'cut', 'sort', 'uniq', 'find', 'locate', 'xargs', 'tee', 'cat', 'head', 'tail', 'less', 'more', 'wc', 'diff', 'cmp', 'md5sum', 'sha256sum', 'sha1sum', 'tr', 'rev', 'fold', 'column'],
+                  'PWN': ['pwntools', 'pwn', 'cyclic', 'shellcraft', 'msfvenom', 'msfconsole', 'ropgadget'],
+                };
+                
+                const categoryColors: Record<string, string> = {
+                  'Core Analysis': 'bg-blue-500/10 text-blue-500 border-blue-500/30',
+                  'Binary/RE': 'bg-red-500/10 text-red-500 border-red-500/30',
+                  'Crypto': 'bg-yellow-500/10 text-yellow-500 border-yellow-500/30',
+                  'Steganography': 'bg-purple-500/10 text-purple-500 border-purple-500/30',
+                  'Network': 'bg-cyan-500/10 text-cyan-500 border-cyan-500/30',
+                  'Web': 'bg-orange-500/10 text-orange-500 border-orange-500/30',
+                  'Forensics': 'bg-indigo-500/10 text-indigo-500 border-indigo-500/30',
+                  'Archives': 'bg-gray-500/10 text-gray-400 border-gray-500/30',
+                  'Code Execution': 'bg-green-500/10 text-green-500 border-green-500/30',
+                  'Scripting': 'bg-teal-500/10 text-teal-500 border-teal-500/30',
+                  'PWN': 'bg-pink-500/10 text-pink-500 border-pink-500/30',
+                };
+                
+                return (
+                  <ScrollArea className="h-[400px]">
+                    <div className="space-y-4 pr-4">
+                      {Object.entries(toolCategories).map(([category, tools]) => {
+                        const availableTools = tools.filter(t => config.allowedTools.includes(t));
+                        if (availableTools.length === 0) return null;
+                        
+                        return (
+                          <div key={category} className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <Badge className={`${categoryColors[category]} border font-medium`}>
+                                {category}
+                              </Badge>
+                              <span className="text-xs text-muted-foreground">
+                                {availableTools.length} tools
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5 pl-2">
+                              {availableTools.map((tool) => (
+                                <Badge key={tool} variant="outline" className="font-mono text-xs">
+                                  {tool}
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </ScrollArea>
+                );
+              })()}
+              
+              {/* Code Execution Note */}
+              <Alert className="border-success/30 bg-success/5">
+                <CheckCircle className="h-4 w-4 text-success" />
+                <AlertTitle className="text-success">Code Execution Enabled</AlertTitle>
+                <AlertDescription className="text-sm">
+                  AI can write and execute Python/Node.js scripts to solve challenges. Scripts run in isolated sandbox with no network access.
+                </AlertDescription>
+              </Alert>
             </CardContent>
           </Card>
 
