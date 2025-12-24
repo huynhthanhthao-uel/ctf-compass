@@ -197,6 +197,11 @@ export function JobCard({ job, onRun, onStop, onDelete }: JobCardProps) {
                 )} />
                 {status.label}
               </Badge>
+              {job.status === 'queued' && (
+                <Badge className="text-xs bg-primary/15 text-primary border-primary/30 hover:bg-primary/20">
+                  Ready to Solve
+                </Badge>
+              )}
             </div>
             
             <div className="flex items-center gap-2">
