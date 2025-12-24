@@ -19,7 +19,10 @@ import {
   Target,
   Code2,
   FileCode,
-  Zap
+  Zap,
+  Eye,
+  EyeOff,
+  MessageSquare
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -30,6 +33,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { cn } from '@/lib/utils';
 import { detectFlags } from '@/lib/ctf-tools';
 import * as api from '@/lib/api';
+import { toast } from 'sonner';
 
 // Workflow phases
 type Phase = 
@@ -64,6 +68,18 @@ interface AIInsight {
   confidence: number;
   findings: string[];
   isRuleBased: boolean;
+}
+
+// AI Trace log entry for debugging
+interface AITraceEntry {
+  id: string;
+  timestamp: Date;
+  type: 'request' | 'response' | 'error';
+  functionName: string;
+  payload?: unknown;
+  response?: unknown;
+  error?: string;
+  duration?: number;
 }
 
 interface FullAutopilotProps {
@@ -275,6 +291,18 @@ export function FullAutopilot({
   const scrollRef = useRef<HTMLDivElement>(null);
   const commandHistoryRef = useRef<api.CommandOutput[]>([]);
 
+  // AI Trace for debugging Cloud Mode
+  const [aiTrace, setAiTrace] = useState<AITraceEntry[]>([]);
+  const [showAiTrace, setShowAiTrace] = useState(false);
+
+  const addTraceEntry = useCallback((entry: Omit<AITraceEntry, 'id' | 'timestamp'>) => {
+    setAiTrace(prev => [...prev, {
+      ...entry,
+      id: `trace-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      timestamp: new Date(),
+    }]);
+  }, []);
+
   // Auto-scroll
   useEffect(() => {
     if (scrollRef.current) {
@@ -418,7 +446,24 @@ export function FullAutopilot({
     });
 
     try {
+      const requestPayload = { files, file_outputs: fileOutputs, strings_outputs: stringsOutputs };
+      const startTime = Date.now();
+      
+      addTraceEntry({
+        type: 'request',
+        functionName: 'detect-category',
+        payload: requestPayload,
+      });
+
       const result = await api.detectCategory(files, fileOutputs, stringsOutputs);
+
+      addTraceEntry({
+        type: 'response',
+        functionName: 'detect-category',
+        response: result,
+        duration: Date.now() - startTime,
+      });
+
       setDetectedCategory(result.category);
 
       updateStep(stepId, {
@@ -427,7 +472,21 @@ export function FullAutopilot({
       });
 
       return result;
-    } catch {
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+      
+      addTraceEntry({
+        type: 'error',
+        functionName: 'detect-category',
+        error: errorMsg,
+      });
+
+      // Show toast for rate-limit / payment errors
+      if (err instanceof api.RateLimitError) {
+        toast.error('Rate limit exceeded', { description: 'Please wait a moment and try again.' });
+      } else if (err instanceof api.PaymentRequiredError) {
+        toast.error('AI credits exhausted', { description: 'Please add funds to your Lovable workspace.' });
+      }
       // Fallback: guess from description
       let category = 'misc';
       const lowerDesc = description.toLowerCase();
@@ -451,7 +510,7 @@ export function FullAutopilot({
 
       return { category, confidence: 0.5 };
     }
-  }, [files, description, addStep, updateStep]);
+  }, [files, description, addStep, updateStep, addTraceEntry]);
 
   // PHASE 3: AI Analysis Loop
   const runAIAnalysis = useCallback(async (
@@ -473,6 +532,23 @@ export function FullAutopilot({
       setPhaseMessage(`🤖 AI analyzing... (attempt ${attempts + 1}/${maxAttempts})`);
       setProgress(40 + (attempts / maxAttempts) * 30);
 
+      const requestPayload = {
+        job_id: jobId,
+        files,
+        command_history: commandHistoryRef.current,
+        description,
+        flag_format: expectedFormat,
+        current_category: category,
+        attempt_number: attempts + 1,
+      };
+      const startTime = Date.now();
+
+      addTraceEntry({
+        type: 'request',
+        functionName: 'ai-analyze',
+        payload: requestPayload,
+      });
+
       try {
         const aiResponse = await api.analyzeWithAI(
           jobId,
@@ -483,6 +559,13 @@ export function FullAutopilot({
           category,
           attempts + 1
         );
+
+        addTraceEntry({
+          type: 'response',
+          functionName: 'ai-analyze',
+          response: aiResponse,
+          duration: Date.now() - startTime,
+        });
 
         latestInsight = {
           analysis: aiResponse.analysis,
@@ -516,9 +599,9 @@ export function FullAutopilot({
             aiAnalysis: cmd.reason,
           });
 
-          const startTime = Date.now();
+          const cmdStartTime = Date.now();
           const result = await executeCommand(cmd.tool, cmd.args);
-          const duration = Date.now() - startTime;
+          const duration = Date.now() - cmdStartTime;
 
           if (result.flags.length > 0) {
             localFlags.push(...result.flags);
@@ -537,6 +620,24 @@ export function FullAutopilot({
           await new Promise(resolve => setTimeout(resolve, 200));
         }
       } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+        
+        addTraceEntry({
+          type: 'error',
+          functionName: 'ai-analyze',
+          error: errorMsg,
+          duration: Date.now() - startTime,
+        });
+
+        // Show toast for rate-limit / payment errors
+        if (err instanceof api.RateLimitError) {
+          toast.error('Rate limit exceeded', { description: 'Please wait a moment and try again.' });
+          break; // stop loop on rate limit
+        } else if (err instanceof api.PaymentRequiredError) {
+          toast.error('AI credits exhausted', { description: 'Please add funds to your Lovable workspace.' });
+          break; // stop loop on payment error
+        }
+
         console.error('AI analysis error:', err);
       }
 
@@ -545,7 +646,7 @@ export function FullAutopilot({
     }
 
     return { flagsFound: localFlags, insights: latestInsight };
-  }, [jobId, files, description, expectedFormat, maxAttempts, addStep, updateStep, executeCommand, onFlagFound]);
+  }, [jobId, files, description, expectedFormat, maxAttempts, addStep, updateStep, executeCommand, onFlagFound, addTraceEntry]);
 
   // PHASE 4: Script Generation
   const generateSolveScript = useCallback(async (
@@ -1091,6 +1192,98 @@ ${insight ? `# AI Analysis: ${insight.analysis.slice(0, 200)}` : ''}
               </div>
             </ScrollArea>
           </CardContent>
+        </Card>
+      )}
+
+      {/* AI Trace Panel for Cloud Mode Debugging */}
+      {aiTrace.length > 0 && (
+        <Card className="border-dashed border-muted-foreground/30">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2 text-muted-foreground">
+                <MessageSquare className="h-4 w-4" />
+                AI Trace ({aiTrace.length} calls)
+              </CardTitle>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowAiTrace(!showAiTrace)}
+                className="text-xs"
+              >
+                {showAiTrace ? (
+                  <>
+                    <EyeOff className="h-3 w-3 mr-1" />
+                    Hide
+                  </>
+                ) : (
+                  <>
+                    <Eye className="h-3 w-3 mr-1" />
+                    Show
+                  </>
+                )}
+              </Button>
+            </div>
+          </CardHeader>
+          {showAiTrace && (
+            <CardContent>
+              <ScrollArea className="h-[300px]">
+                <div className="space-y-3 pr-4">
+                  {aiTrace.map((entry) => (
+                    <div
+                      key={entry.id}
+                      className={cn(
+                        'p-3 rounded-lg text-xs font-mono border',
+                        entry.type === 'request' && 'bg-blue-500/5 border-blue-500/20',
+                        entry.type === 'response' && 'bg-green-500/5 border-green-500/20',
+                        entry.type === 'error' && 'bg-red-500/5 border-red-500/20'
+                      )}
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            'text-[10px]',
+                            entry.type === 'request' && 'border-blue-500/40 text-blue-600',
+                            entry.type === 'response' && 'border-green-500/40 text-green-600',
+                            entry.type === 'error' && 'border-red-500/40 text-red-600'
+                          )}
+                        >
+                          {entry.type.toUpperCase()}
+                        </Badge>
+                        <span className="font-semibold">{entry.functionName}</span>
+                        {entry.duration && (
+                          <span className="text-muted-foreground ml-auto">
+                            {entry.duration}ms
+                          </span>
+                        )}
+                        <span className="text-muted-foreground">
+                          {entry.timestamp.toLocaleTimeString()}
+                        </span>
+                      </div>
+
+                      {entry.type === 'request' && entry.payload && (
+                        <pre className="bg-muted/50 p-2 rounded text-[10px] overflow-x-auto whitespace-pre-wrap max-h-32">
+                          {JSON.stringify(entry.payload, null, 2).slice(0, 1000)}
+                        </pre>
+                      )}
+
+                      {entry.type === 'response' && entry.response && (
+                        <pre className="bg-muted/50 p-2 rounded text-[10px] overflow-x-auto whitespace-pre-wrap max-h-32">
+                          {JSON.stringify(entry.response, null, 2).slice(0, 1000)}
+                        </pre>
+                      )}
+
+                      {entry.type === 'error' && entry.error && (
+                        <div className="text-red-600 bg-red-500/10 p-2 rounded">
+                          {entry.error}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            </CardContent>
+          )}
         </Card>
       )}
     </div>
