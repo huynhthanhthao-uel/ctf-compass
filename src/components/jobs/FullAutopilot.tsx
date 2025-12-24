@@ -945,6 +945,19 @@ ${insight ? `# AI Analysis: ${insight.analysis.slice(0, 200)}` : ''}
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {/* Solve Again button - shows when completed or failed */}
+              {!isRunning && (currentPhase === 'completed' || currentPhase === 'failed' || currentPhase === 'cancelled') && (
+                <Button 
+                  onClick={() => {
+                    handleReset();
+                    setTimeout(() => runFullAutopilot(), 100);
+                  }}
+                  className="gap-2"
+                >
+                  <Zap className="h-4 w-4" />
+                  Solve Again
+                </Button>
+              )}
               {isRunning && (
                 <>
                   {isPaused ? (
