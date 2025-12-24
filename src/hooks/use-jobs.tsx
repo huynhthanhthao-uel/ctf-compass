@@ -7,7 +7,25 @@ import * as api from '@/lib/api';
 async function isBackendAvailable(): Promise<boolean> {
   try {
     const response = await fetch('/api/health', { method: 'GET' });
-    return response.ok;
+    const contentType = response.headers.get('content-type') || '';
+    const text = await response.text();
+
+    if (!response.ok) return false;
+
+    // Vite/dev preview often serves index.html for unknown routes (looks "OK" but it's not an API)
+    const isHtml = text.trimStart().startsWith('<!') || text.trimStart().startsWith('<html');
+    if (isHtml) return false;
+
+    // Expect JSON from a real backend health endpoint
+    if (!contentType.includes('application/json')) {
+      try {
+        JSON.parse(text);
+      } catch {
+        return false;
+      }
+    }
+
+    return true;
   } catch {
     return false;
   }
@@ -47,6 +65,8 @@ export function useJobs() {
         setJobs(mappedJobs);
       } catch (error) {
         console.error('Failed to fetch jobs:', error);
+        // If the backend isn't actually available, switch to mock mode
+        setUseApi(false);
         setJobs(mockJobs);
       }
     } else {
@@ -85,8 +105,19 @@ export function useJobs() {
         setIsLoading(false);
         return newJob;
       } catch (error) {
-        setIsLoading(false);
-        throw error;
+        const message = error instanceof Error ? error.message : String(error);
+        const backendDown =
+          /Backend API not available/i.test(message) ||
+          /Failed to fetch/i.test(message) ||
+          /HTTP 404/i.test(message);
+
+        if (!backendDown) {
+          setIsLoading(false);
+          throw error;
+        }
+
+        // Backend isn't reachable in this environment; switch to mock mode and continue below
+        setUseApi(false);
       }
     }
     
@@ -105,6 +136,7 @@ export function useJobs() {
       progress: 0,
     };
     
+    mockJobs.unshift(newJob);
     setJobs(prev => [newJob, ...prev]);
     setIsLoading(false);
     return newJob;
