@@ -17,21 +17,21 @@ LABEL version="1.0.0"
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Install analysis tools
+# Note: 'strings' is part of binutils, 'awk' is virtual - use gawk
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    # Binary analysis
+    # Binary analysis (binutils includes strings, objdump, nm, etc.)
     binutils \
     binwalk \
     file \
     xxd \
-    # Text processing
-    strings \
+    # Text processing (gawk is the GNU implementation of awk)
+    gawk \
     grep \
     sed \
-    awk \
     # Document analysis
     poppler-utils \
     # Image/media analysis
-    exiftool \
+    libimage-exiftool-perl \
     imagemagick \
     # Network analysis
     tshark \
@@ -51,6 +51,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Additional utilities
     jq \
     less \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
