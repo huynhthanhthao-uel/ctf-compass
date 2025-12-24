@@ -7,6 +7,8 @@ export interface Job {
   title: string;
   description: string;
   flagFormat: string;
+  category?: string;
+  challengeUrl?: string;
   status: JobStatus;
   createdAt: string;
   startedAt?: string;
