@@ -1,3 +1,5 @@
+import { supabase } from "@/integrations/supabase/client";
+
 /**
  * API client for CTF Autopilot backend
  */
@@ -21,12 +23,12 @@ async function apiFetch<T>(
   options: RequestInit = {}
 ): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
-  
+
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
     ...options.headers,
   };
-  
+
   // Add CSRF token for mutating requests
   if (['POST', 'PATCH', 'DELETE'].includes(options.method || '')) {
     const csrfToken = getCsrfToken();
@@ -34,31 +36,40 @@ async function apiFetch<T>(
       (headers as Record<string, string>)['X-CSRF-Token'] = csrfToken;
     }
   }
-  
+
   const response = await fetch(url, {
     ...options,
     headers,
     credentials: 'include',
   });
-  
+
   // Handle response text first to check for HTML
   const text = await response.text();
-  
+
   // Check if we got HTML instead of JSON (backend not running)
   if (isHtmlResponse(text)) {
     throw new Error('Backend API not available. Please deploy the backend first.');
   }
-  
+
   if (!response.ok) {
-    const error = text ? JSON.parse(text) : { detail: 'Unknown error' };
-    throw new Error(error.detail || `HTTP ${response.status}`);
+    let detail = `HTTP ${response.status}`;
+    if (text) {
+      try {
+        const parsed = JSON.parse(text);
+        detail = parsed?.detail || parsed?.error || detail;
+      } catch {
+        detail = text;
+      }
+    }
+    throw new Error(detail);
   }
-  
+
   // Handle empty responses
   if (!text) return {} as T;
-  
+
   return JSON.parse(text);
 }
+
 
 // ============ Auth API ============
 
@@ -300,33 +311,26 @@ export interface TerminalCommandResult {
   duration_ms?: number;
 }
 
-// Edge function URL for sandbox terminal (Lovable Cloud fallback)
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+async function invokeEdgeFunction<T>(functionName: string, body: unknown): Promise<T> {
+  const { data, error } = await supabase.functions.invoke(functionName, { body });
+  if (error) {
+    throw new Error(error.message || 'Edge function error');
+  }
+  return data as T;
+}
 
 async function executeViaEdgeFunction(
   jobId: string,
   tool: string,
   args: string[]
 ): Promise<TerminalCommandResult> {
-  if (!SUPABASE_URL) {
-    throw new Error('Supabase URL not configured');
-  }
-  
-  const response = await fetch(`${SUPABASE_URL}/functions/v1/sandbox-terminal`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ job_id: jobId, tool, args }),
+  return invokeEdgeFunction<TerminalCommandResult>('sandbox-terminal', {
+    job_id: jobId,
+    tool,
+    args,
   });
-  
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Edge function error' }));
-    throw new Error(error.error || `HTTP ${response.status}`);
-  }
-  
-  return response.json();
 }
+
 
 export async function executeTerminalCommand(
   jobId: string,
@@ -404,18 +408,39 @@ export async function analyzeWithAI(
   currentCategory: string = "unknown",
   attemptNumber: number = 1
 ): Promise<AIAnalysisResponse> {
-  return apiFetch('/ai/analyze', {
-    method: 'POST',
-    body: JSON.stringify({
-      job_id: jobId,
-      files,
-      command_history: commandHistory,
-      description,
-      flag_format: flagFormat,
-      current_category: currentCategory,
-      attempt_number: attemptNumber,
-    }),
-  });
+  try {
+    return await apiFetch('/ai/analyze', {
+      method: 'POST',
+      body: JSON.stringify({
+        job_id: jobId,
+        files,
+        command_history: commandHistory,
+        description,
+        flag_format: flagFormat,
+        current_category: currentCategory,
+        attempt_number: attemptNumber,
+      }),
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : '';
+    if (
+      message.includes('Backend API not available') ||
+      message.includes('HTTP 404') ||
+      message.toLowerCase().includes('not found')
+    ) {
+      console.log('[API] AI backend unavailable, using Lovable Cloud function');
+      return invokeEdgeFunction<AIAnalysisResponse>('ai-analyze', {
+        job_id: jobId,
+        files,
+        command_history: commandHistory,
+        description,
+        flag_format: flagFormat,
+        current_category: currentCategory,
+        attempt_number: attemptNumber,
+      });
+    }
+    throw err;
+  }
 }
 
 export interface DetectCategoryResponse {
@@ -428,15 +453,33 @@ export async function detectCategory(
   fileOutputs: Record<string, string> = {},
   stringsOutputs: Record<string, string> = {}
 ): Promise<DetectCategoryResponse> {
-  return apiFetch('/ai/detect-category', {
-    method: 'POST',
-    body: JSON.stringify({
-      files,
-      file_outputs: fileOutputs,
-      strings_outputs: stringsOutputs,
-    }),
-  });
+  try {
+    return await apiFetch('/ai/detect-category', {
+      method: 'POST',
+      body: JSON.stringify({
+        files,
+        file_outputs: fileOutputs,
+        strings_outputs: stringsOutputs,
+      }),
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : '';
+    if (
+      message.includes('Backend API not available') ||
+      message.includes('HTTP 404') ||
+      message.toLowerCase().includes('not found')
+    ) {
+      console.log('[API] detect-category backend unavailable, using Lovable Cloud function');
+      return invokeEdgeFunction<DetectCategoryResponse>('detect-category', {
+        files,
+        file_outputs: fileOutputs,
+        strings_outputs: stringsOutputs,
+      });
+    }
+    throw err;
+  }
 }
+
 
 // ============ History API ============
 
