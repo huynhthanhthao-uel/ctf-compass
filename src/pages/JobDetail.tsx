@@ -17,13 +17,15 @@ import {
   TerminalSquare,
   Brain,
   History,
-  Archive
+  Archive,
+  FileDown
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { CommandLog } from '@/components/jobs/CommandLog';
 import { ArtifactList } from '@/components/jobs/ArtifactList';
@@ -35,6 +37,7 @@ import { AnalysisHistory } from '@/components/jobs/AnalysisHistory';
 import { useJobDetail } from '@/hooks/use-jobs';
 import { useJobWebSocket, JobUpdate } from '@/hooks/use-websocket';
 import { cn } from '@/lib/utils';
+import { generatePDFReport } from '@/lib/pdf-report';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
 
@@ -107,40 +110,38 @@ export default function JobDetail() {
     setActiveTab('analysis');
   }, []);
 
-  // Download All - downloads all artifacts as a zip
+  // Download All - uses backend ZIP endpoint for fast batch download
   const [isDownloadingAll, setIsDownloadingAll] = useState(false);
   const handleDownloadAll = useCallback(async () => {
     if (!jobDetail) return;
     
     setIsDownloadingAll(true);
     try {
-      // Create a simple combined download by triggering individual downloads
-      const artifacts = jobDetail.artifacts;
-      if (artifacts.length === 0) {
+      if (jobDetail.artifacts.length === 0) {
         toast.error('No artifacts to download');
         return;
       }
 
-      // Download all artifacts
-      for (const artifact of artifacts) {
-        const response = await fetch(`/api/jobs/${jobDetail.id}/artifacts/${encodeURIComponent(artifact.path)}`, {
-          credentials: 'include',
-        });
-        
-        if (response.ok) {
-          const blob = await response.blob();
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = artifact.name;
-          document.body.appendChild(a);
-          a.click();
-          window.URL.revokeObjectURL(url);
-          document.body.removeChild(a);
-        }
+      // Use backend ZIP bundle endpoint
+      const response = await fetch(`/api/jobs/${jobDetail.id}/download/bundle`, {
+        credentials: 'include',
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Download failed: ${response.status}`);
       }
       
-      toast.success(`Downloaded ${artifacts.length} artifacts`);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `job_${jobDetail.id}_bundle.zip`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      toast.success(`Downloaded all artifacts as ZIP`);
     } catch (err) {
       console.error('Download error:', err);
       toast.error('Failed to download artifacts');
@@ -149,9 +150,9 @@ export default function JobDetail() {
     }
   }, [jobDetail]);
 
-  // Export Report - generates a comprehensive report
+  // Export Report - JSON format
   const [isExportingReport, setIsExportingReport] = useState(false);
-  const handleExportReport = useCallback(async () => {
+  const handleExportJSON = useCallback(async () => {
     if (!jobDetail) return;
     
     setIsExportingReport(true);
@@ -171,7 +172,7 @@ export default function JobDetail() {
           flagsFound: [...foundFlags, ...jobDetail.flagCandidates.map(c => c.value)],
         },
         flags: [
-          ...foundFlags.map((f, i) => ({ 
+          ...foundFlags.map((f) => ({ 
             value: f, 
             confidence: 1, 
             source: 'AI Analysis' 
@@ -210,12 +211,32 @@ export default function JobDetail() {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
       
-      toast.success('Report exported successfully');
+      toast.success('JSON report exported successfully');
     } catch (err) {
       console.error('Export error:', err);
       toast.error('Failed to export report');
     } finally {
       setIsExportingReport(false);
+    }
+  }, [jobDetail, foundFlags]);
+
+  // Export Report - PDF format
+  const [isExportingPDF, setIsExportingPDF] = useState(false);
+  const handleExportPDF = useCallback(async () => {
+    if (!jobDetail) return;
+    
+    setIsExportingPDF(true);
+    try {
+      generatePDFReport({
+        job: jobDetail,
+        foundFlags,
+      });
+      toast.success('PDF report exported successfully');
+    } catch (err) {
+      console.error('PDF export error:', err);
+      toast.error('Failed to export PDF report');
+    } finally {
+      setIsExportingPDF(false);
     }
   }, [jobDetail, foundFlags]);
 
@@ -306,20 +327,31 @@ export default function JobDetail() {
                 ) : (
                   <Archive className="h-4 w-4" />
                 )}
-                Download All ({jobDetail.artifacts.length})
+                Download ZIP
               </Button>
-              <Button 
-                className="gap-2"
-                onClick={handleExportReport}
-                disabled={isExportingReport}
-              >
-                {isExportingReport ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <FileText className="h-4 w-4" />
-                )}
-                Export Report
-              </Button>
+              
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button className="gap-2" disabled={isExportingReport || isExportingPDF}>
+                    {(isExportingReport || isExportingPDF) ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <FileDown className="h-4 w-4" />
+                    )}
+                    Export Report
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={handleExportPDF} className="gap-2">
+                    <FileText className="h-4 w-4" />
+                    Export as PDF
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleExportJSON} className="gap-2">
+                    <FileText className="h-4 w-4" />
+                    Export as JSON
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           )}
         </div>
