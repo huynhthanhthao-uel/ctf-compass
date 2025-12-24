@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react';
 import {
   Rocket,
   Pause,
@@ -73,6 +73,7 @@ interface FullAutopilotProps {
   expectedFormat?: string;
   onFlagFound?: (flag: string) => void;
   onComplete?: (success: boolean, flags: string[]) => void;
+  onStartRef?: (startFn: () => void) => void;
 }
 
 // Category-specific solve strategies
@@ -253,6 +254,7 @@ export function FullAutopilot({
   expectedFormat = "CTF{...}",
   onFlagFound,
   onComplete,
+  onStartRef,
 }: FullAutopilotProps) {
   const [isRunning, setIsRunning] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -748,6 +750,17 @@ ${insight ? `# AI Analysis: ${insight.analysis.slice(0, 200)}` : ''}
 
     setIsRunning(false);
   }, [runReconnaissance, detectCategoryPhase, runAIAnalysis, generateSolveScript, executeSolveScript, onComplete]);
+
+  // Expose start function to parent via callback
+  useEffect(() => {
+    if (onStartRef) {
+      onStartRef(() => {
+        if (!isRunning && files.length > 0) {
+          runFullAutopilot();
+        }
+      });
+    }
+  }, [onStartRef, isRunning, files.length, runFullAutopilot]);
 
   const handlePause = () => {
     setIsPaused(true);
