@@ -1,10 +1,13 @@
-import { File, FileText, FileImage, FileArchive, Download, Folder } from 'lucide-react';
+import { File, FileText, FileImage, FileArchive, Download, Folder, Loader2 } from 'lucide-react';
 import { Artifact } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { toast } from 'sonner';
+import { useState } from 'react';
 
 interface ArtifactListProps {
   artifacts: Artifact[];
+  jobId?: string;
 }
 
 const getFileIcon = (type: string) => {
@@ -20,7 +23,45 @@ const formatFileSize = (bytes: number) => {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
-export function ArtifactList({ artifacts }: ArtifactListProps) {
+export function ArtifactList({ artifacts, jobId }: ArtifactListProps) {
+  const [downloading, setDownloading] = useState<string | null>(null);
+
+  const handleDownload = async (artifact: Artifact) => {
+    if (!jobId) {
+      toast.error('Cannot download: Job ID not available');
+      return;
+    }
+
+    setDownloading(artifact.path);
+    
+    try {
+      const response = await fetch(`/api/jobs/${jobId}/artifacts/${encodeURIComponent(artifact.path)}`, {
+        credentials: 'include',
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Download failed: ${response.status}`);
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = artifact.name;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      toast.success(`Downloaded ${artifact.name}`);
+    } catch (err) {
+      console.error('Download error:', err);
+      toast.error(`Failed to download ${artifact.name}`);
+    } finally {
+      setDownloading(null);
+    }
+  };
+
   if (artifacts.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
@@ -35,6 +76,7 @@ export function ArtifactList({ artifacts }: ArtifactListProps) {
       <div className="space-y-1 p-1">
         {artifacts.map((artifact) => {
           const Icon = getFileIcon(artifact.type);
+          const isDownloading = downloading === artifact.path;
           
           return (
             <div
@@ -59,15 +101,16 @@ export function ArtifactList({ artifacts }: ArtifactListProps) {
                   <p className="text-xs">{artifact.type}</p>
                 </div>
                 <Button
-                  variant="ghost"
+                  variant="secondary"
                   size="icon"
-                  className="opacity-0 group-hover:opacity-100 transition-opacity"
-                  onClick={() => {
-                    // Mock download - in production this calls the API
-                    console.log('Download:', artifact.path);
-                  }}
+                  disabled={isDownloading}
+                  onClick={() => handleDownload(artifact)}
                 >
-                  <Download className="h-4 w-4" />
+                  {isDownloading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Download className="h-4 w-4" />
+                  )}
                 </Button>
               </div>
             </div>

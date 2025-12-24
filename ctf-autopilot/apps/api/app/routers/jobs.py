@@ -364,3 +364,61 @@ async def execute_terminal_command(
             error=str(e),
             duration_ms=(time.time() - start_time) * 1000,
         )
+
+
+# ============ Artifact Download API ============
+
+@router.get("/{job_id}/artifacts/{artifact_path:path}")
+async def download_artifact(
+    job_id: UUID,
+    artifact_path: str,
+    db: AsyncSession = Depends(get_db),
+    _session = Depends(get_current_session),
+):
+    """Download a specific artifact file."""
+    # Verify job exists
+    result = await db.execute(select(Job).where(Job.id == job_id))
+    job = result.scalar_one_or_none()
+    
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    file_service = FileService()
+    job_dir = file_service.get_job_dir(job_id)
+    
+    # Security: prevent path traversal
+    safe_path = Path(artifact_path).name if "/" not in artifact_path else artifact_path
+    
+    # Try different locations
+    possible_paths = [
+        job_dir / "output" / safe_path,
+        job_dir / "extracted" / safe_path,
+        job_dir / "input" / safe_path,
+        job_dir / safe_path,
+    ]
+    
+    file_path = None
+    for p in possible_paths:
+        try:
+            # Resolve and check it's within job_dir
+            resolved = p.resolve()
+            if resolved.exists() and resolved.is_file() and str(resolved).startswith(str(job_dir.resolve())):
+                file_path = resolved
+                break
+        except Exception:
+            continue
+    
+    if not file_path:
+        raise HTTPException(status_code=404, detail="Artifact not found")
+    
+    # Determine content type
+    import mimetypes
+    content_type, _ = mimetypes.guess_type(str(file_path))
+    if not content_type:
+        content_type = "application/octet-stream"
+    
+    return FileResponse(
+        path=file_path,
+        filename=file_path.name,
+        media_type=content_type,
+    )

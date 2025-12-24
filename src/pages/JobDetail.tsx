@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, 
@@ -19,7 +19,7 @@ import {
   Brain,
   Pause,
   Square,
-  Zap
+  History
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -33,6 +33,7 @@ import { FlagValidator } from '@/components/jobs/FlagValidator';
 import { WriteupView } from '@/components/jobs/WriteupView';
 import { SandboxTerminal } from '@/components/jobs/SandboxTerminal';
 import { AutopilotPanel } from '@/components/jobs/AutopilotPanel';
+import { AnalysisHistory } from '@/components/jobs/AnalysisHistory';
 import { useJobDetail } from '@/hooks/use-jobs';
 import { useJobWebSocket, JobUpdate } from '@/hooks/use-websocket';
 import { cn } from '@/lib/utils';
@@ -57,14 +58,9 @@ export default function JobDetail() {
   const [realtimeStatus, setRealtimeStatus] = useState<string | null>(null);
   const [realtimeLogs, setRealtimeLogs] = useState<string[]>([]);
   
-  // AI Analysis state
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
-  const [analysisPhase, setAnalysisPhase] = useState<string>('');
+  // AI Analysis state - managed by AutopilotPanel
   const [foundFlags, setFoundFlags] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState('analysis');
-  
-  const autopilotRef = useRef<{ start: () => void; pause: () => void; resume: () => void; stop: () => void } | null>(null);
   
   const handleJobUpdate = useCallback((update: JobUpdate) => {
     if (update.type === 'job_update' && update.job_id === id) {
@@ -107,32 +103,11 @@ export default function JobDetail() {
     });
   }, []);
 
-  // Start AI Analysis
-  const handleStartAnalysis = useCallback(() => {
-    setIsAnalyzing(true);
-    setIsPaused(false);
+  // Apply strategy from history
+  const handleApplyStrategy = useCallback((tools: string[]) => {
+    toast.info(`Applying strategy with ${tools.length} tools: ${tools.slice(0, 3).join(', ')}...`);
     setActiveTab('analysis');
-    setAnalysisPhase('Starting AI analysis...');
-    // Autopilot will auto-start when rendered
-  }, []);
-
-  // Pause/Resume
-  const handlePauseResume = useCallback(() => {
-    if (isPaused) {
-      setIsPaused(false);
-      autopilotRef.current?.resume();
-    } else {
-      setIsPaused(true);
-      autopilotRef.current?.pause();
-    }
-  }, [isPaused]);
-
-  // Stop Analysis
-  const handleStopAnalysis = useCallback(() => {
-    setIsAnalyzing(false);
-    setIsPaused(false);
-    autopilotRef.current?.stop();
-    setAnalysisPhase('Analysis stopped');
+    // The strategy tools will be passed to autopilot
   }, []);
 
   if (isLoading || !jobDetail) {
@@ -146,14 +121,12 @@ export default function JobDetail() {
   }
 
   // Determine display status
-  const displayStatus = isAnalyzing ? 'analyzing' : 
-    (realtimeStatus as keyof typeof statusConfig) || jobDetail.status;
+  const currentStatus = (realtimeStatus as keyof typeof statusConfig) || jobDetail.status;
   const currentProgress = realtimeProgress ?? jobDetail.progress;
   
-  const status = statusConfig[displayStatus] || statusConfig.queued;
+  const status = statusConfig[currentStatus] || statusConfig.queued;
   const StatusIcon = status.icon;
 
-  const canStartAnalysis = !isAnalyzing && (jobDetail.inputFiles?.length || 0) > 0;
   const hasFoundFlags = foundFlags.length > 0 || jobDetail.flagCandidates.length > 0;
 
   return (
@@ -174,7 +147,7 @@ export default function JobDetail() {
               <div className="flex items-center gap-3 flex-wrap">
                 <h1 className="text-xl font-semibold text-foreground">{jobDetail.title}</h1>
                 <Badge className={cn("text-xs", status.className)}>
-                  <StatusIcon className={cn("h-3 w-3 mr-1", (displayStatus === 'running' || displayStatus === 'analyzing') && "animate-spin")} />
+                  <StatusIcon className={cn("h-3 w-3 mr-1", currentStatus === 'running' && "animate-spin")} />
                   {status.label}
                 </Badge>
                 <Badge variant="outline" className={cn(
@@ -210,50 +183,19 @@ export default function JobDetail() {
             </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center gap-2 shrink-0 ml-12 lg:ml-0">
-            {canStartAnalysis && (
-              <Button onClick={handleStartAnalysis} className="gap-2">
-                <Zap className="h-4 w-4" />
-                Start AI Analysis
+          {/* Action Buttons - Only show Download/Export when flags found */}
+          {hasFoundFlags && (
+            <div className="flex items-center gap-2 shrink-0 ml-12 lg:ml-0">
+              <Button variant="secondary" className="gap-2">
+                <Download className="h-4 w-4" />
+                Download All
               </Button>
-            )}
-            
-            {isAnalyzing && (
-              <>
-                <Button variant="outline" onClick={handlePauseResume} className="gap-2">
-                  {isPaused ? (
-                    <>
-                      <PlayCircle className="h-4 w-4" />
-                      Resume
-                    </>
-                  ) : (
-                    <>
-                      <Pause className="h-4 w-4" />
-                      Pause
-                    </>
-                  )}
-                </Button>
-                <Button variant="destructive" onClick={handleStopAnalysis} className="gap-2">
-                  <Square className="h-4 w-4" />
-                  Stop
-                </Button>
-              </>
-            )}
-            
-            {hasFoundFlags && (
-              <>
-                <Button variant="outline">
-                  <Download className="h-4 w-4 mr-2" />
-                  Download
-                </Button>
-                <Button>
-                  <FileText className="h-4 w-4 mr-2" />
-                  Export Report
-                </Button>
-              </>
-            )}
-          </div>
+              <Button className="gap-2">
+                <FileText className="h-4 w-4" />
+                Export Report
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Found Flags Banner */}
@@ -280,22 +222,18 @@ export default function JobDetail() {
         )}
 
         {/* Progress */}
-        {(displayStatus === 'running' || displayStatus === 'analyzing' || displayStatus === 'failed') && (
+        {(currentStatus === 'running' || currentStatus === 'failed') && currentProgress !== undefined && (
           <Card>
             <CardContent className="py-4">
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">
-                    {isAnalyzing ? analysisPhase : 'Analysis Progress'}
+                    Analysis Progress
                     {wsConnected && <span className="text-success ml-2">(Live)</span>}
                   </span>
-                  {currentProgress !== undefined && (
-                    <span className="font-medium text-foreground">{Math.round(currentProgress)}%</span>
-                  )}
+                  <span className="font-medium text-foreground">{Math.round(currentProgress)}%</span>
                 </div>
-                {currentProgress !== undefined && (
-                  <Progress value={currentProgress} className="h-2" />
-                )}
+                <Progress value={currentProgress} className="h-2" />
                 {jobDetail.errorMessage && (
                   <p className="text-sm text-destructive mt-2">{jobDetail.errorMessage}</p>
                 )}
@@ -377,6 +315,10 @@ export default function JobDetail() {
               <Brain className="h-4 w-4" />
               AI Analysis
             </TabsTrigger>
+            <TabsTrigger value="history" className="flex items-center gap-2 data-[state=active]:bg-background">
+              <History className="h-4 w-4" />
+              History
+            </TabsTrigger>
             <TabsTrigger value="terminal" className="flex items-center gap-2 data-[state=active]:bg-background">
               <TerminalSquare className="h-4 w-4" />
               Terminal
@@ -406,6 +348,13 @@ export default function JobDetail() {
               description={jobDetail.description}
               expectedFormat={jobDetail.flagFormat}
               onFlagFound={handleFlagFound}
+            />
+          </TabsContent>
+
+          <TabsContent value="history">
+            <AnalysisHistory
+              jobId={jobDetail.id}
+              onApplyStrategy={handleApplyStrategy}
             />
           </TabsContent>
 
@@ -440,7 +389,7 @@ export default function JobDetail() {
                 <CardTitle className="text-base">Extracted Artifacts</CardTitle>
               </CardHeader>
               <CardContent className="pt-4">
-                <ArtifactList artifacts={jobDetail.artifacts} />
+                <ArtifactList artifacts={jobDetail.artifacts} jobId={jobDetail.id} />
               </CardContent>
             </Card>
           </TabsContent>
