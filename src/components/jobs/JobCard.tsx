@@ -215,7 +215,7 @@ export function JobCard({ job, onRun, onStop, onDelete }: JobCardProps) {
                   }}
                 >
                   <PlayCircle className="h-3.5 w-3.5" />
-                  Run
+                  Solve
                 </Button>
               )}
               
