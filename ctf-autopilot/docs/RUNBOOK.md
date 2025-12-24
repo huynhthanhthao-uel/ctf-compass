@@ -1,8 +1,20 @@
-# Runbook
+# CTF Compass - Operations Runbook
 
-Operations and troubleshooting guide for CTF Compass.
+Operations and maintenance guide for CTF Compass.
 
 **GitHub:** [github.com/huynhtrungcipp/ctf-compass](https://github.com/huynhtrungcipp/ctf-compass)
+
+---
+
+## Table of Contents
+1. [Installation](#installation)
+2. [Configuration](#configuration)
+3. [Operations](#operations)
+4. [Maintenance](#maintenance)
+5. [Backup & Recovery](#backup--recovery)
+6. [TLS Configuration](#tls-configuration)
+7. [Troubleshooting](#troubleshooting)
+8. [Security Checklist](#security-checklist)
 
 ---
 
@@ -13,7 +25,7 @@ Operations and troubleshooting guide for CTF Compass.
 - Ubuntu 24.04 LTS
 - Docker Engine 24.0+
 - Docker Compose v2.20+
-- 4GB RAM minimum
+- 4GB RAM minimum (8GB recommended)
 - 20GB disk space
 
 ### Quick Install
@@ -26,13 +38,8 @@ curl -fsSL https://raw.githubusercontent.com/huynhtrungcipp/ctf-compass/main/ctf
 ### Clean Install (Remove Old First)
 
 ```bash
-# Stop and cleanup old installation
-sudo docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml down -v 2>/dev/null || true
-sudo rm -rf /opt/ctf-compass /opt/ctf-compass-backups
-sudo docker system prune -af
-
-# Fresh install
-curl -fsSL https://raw.githubusercontent.com/huynhtrungcipp/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash
+# Use --clean flag to remove previous installation
+curl -fsSL https://raw.githubusercontent.com/huynhtrungcipp/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --clean
 ```
 
 ### Manual Install
@@ -42,35 +49,225 @@ curl -fsSL https://raw.githubusercontent.com/huynhtrungcipp/ctf-compass/main/ctf
 git clone https://github.com/huynhtrungcipp/ctf-compass.git
 cd ctf-compass
 
-# Install Docker
+# Install Docker if not installed
 curl -fsSL https://get.docker.com | bash
 sudo usermod -aG docker $USER
 newgrp docker
 
 # Configure environment
 cp ctf-autopilot/.env.example .env
-nano .env  # Set MEGALLM_API_KEY
+nano .env  # Set required values
 
 # Start services
 ./ctf-autopilot/infra/scripts/prod_up.sh
 ```
 
+### Post-Installation
+
+1. Access Web UI at `http://YOUR_SERVER_IP:3000`
+2. Login with admin password from `CREDENTIALS.txt`
+3. Go to **Configuration** page to set MegaLLM API key
+4. Start analyzing CTF challenges!
+
 ---
 
 ## Configuration
 
-### Required Environment Variables
+### Required Settings
 
-```bash
-# .env (in project root)
-MEGALLM_API_KEY=your-api-key-here
-ADMIN_PASSWORD=strong-password-here
-POSTGRES_PASSWORD=database-password-here
-```
+| Variable | Description | Set Via |
+|----------|-------------|---------|
+| `MEGALLM_API_KEY` | AI API key | Web UI Configuration page |
+| `ADMIN_PASSWORD` | Admin login | Auto-generated during install |
+| `POSTGRES_PASSWORD` | Database password | Auto-generated during install |
 
 ### Optional Settings
 
-See `ctf-autopilot/.env.example` for all available options.
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SECRET_KEY` | Auto-generated | JWT signing key |
+| `MAX_UPLOAD_SIZE_MB` | 200 | Maximum file upload size |
+| `SANDBOX_TIMEOUT_SECONDS` | 60 | Per-command timeout |
+| `MEGALLM_MODEL` | llama3.3-70b-instruct | AI model to use |
+| `ENVIRONMENT` | production | production/development |
+| `DEBUG` | false | Enable debug mode |
+
+### Configuration Files
+
+```
+/opt/ctf-compass/
+├── .env                    # Main configuration
+├── CREDENTIALS.txt         # Generated credentials
+└── ctf-autopilot/
+    └── infra/
+        └── .env            # Copy for docker-compose
+```
+
+---
+
+## Operations
+
+### Service Management
+
+```bash
+# Start all services
+docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml up -d
+
+# Stop all services
+docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml down
+
+# Restart all services
+docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml restart
+
+# Restart specific service
+docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml restart api
+docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml restart worker
+
+# Check status
+docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml ps
+```
+
+### Viewing Logs
+
+```bash
+# All services (follow mode)
+docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml logs -f
+
+# Specific service
+docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml logs -f api
+docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml logs -f worker
+docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml logs -f web
+
+# Last N lines
+docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml logs --tail=100
+
+# Since time
+docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml logs --since=1h
+```
+
+### Health Checks
+
+```bash
+# Quick health check
+curl -sf http://localhost:8000/api/health && echo "API: OK"
+curl -sf http://localhost:3000 > /dev/null && echo "Web: OK"
+
+# Detailed check
+docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml ps
+
+# Container resource usage
+docker stats --no-stream
+```
+
+---
+
+## Maintenance
+
+### System Update
+
+```bash
+# Check for updates
+sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh --check
+
+# Perform update (includes cleanup)
+sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh
+
+# Force deep cleanup and update
+sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh --clean
+```
+
+### Docker Cleanup
+
+```bash
+# Remove stopped containers
+docker container prune -f
+
+# Remove dangling images
+docker image prune -f
+
+# Remove unused volumes (WARNING: may delete data)
+docker volume prune -f
+
+# Full cleanup (removes all unused resources)
+docker system prune -af
+
+# Show disk usage
+docker system df
+```
+
+### Uninstall
+
+```bash
+# Interactive uninstall
+sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/uninstall.sh
+
+# Force uninstall (no prompts)
+sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/uninstall.sh --force
+
+# Keep database data
+sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/uninstall.sh --keep-data
+```
+
+### Manual Cleanup
+
+```bash
+# Stop services and remove volumes
+docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml down -v
+
+# Remove installation directory
+sudo rm -rf /opt/ctf-compass
+sudo rm -rf /opt/ctf-compass-backups
+sudo rm -f /var/log/ctf-compass-*.log
+
+# Remove Docker images
+docker rmi $(docker images | grep -E 'ctf[-_]compass|ctf[-_]autopilot' | awk '{print $3}') 2>/dev/null || true
+```
+
+---
+
+## Backup & Recovery
+
+### Database Backup
+
+```bash
+# Backup to file
+docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml \
+  exec -T postgres pg_dump -U ctfautopilot ctfautopilot > backup_$(date +%Y%m%d).sql
+
+# Compressed backup
+docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml \
+  exec -T postgres pg_dump -U ctfautopilot ctfautopilot | gzip > backup_$(date +%Y%m%d).sql.gz
+```
+
+### Database Restore
+
+```bash
+# Restore from file
+docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml \
+  exec -T postgres psql -U ctfautopilot ctfautopilot < backup.sql
+
+# Restore from compressed file
+gunzip -c backup.sql.gz | docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml \
+  exec -T postgres psql -U ctfautopilot ctfautopilot
+```
+
+### Configuration Backup
+
+```bash
+# Backup configuration
+mkdir -p /opt/ctf-compass-backups
+cp /opt/ctf-compass/.env /opt/ctf-compass-backups/env_$(date +%Y%m%d)
+cp /opt/ctf-compass/CREDENTIALS.txt /opt/ctf-compass-backups/credentials_$(date +%Y%m%d)
+```
+
+### Full System Backup
+
+```bash
+# Create full backup archive
+cd /opt/ctf-compass
+tar -czf /opt/ctf-compass-backups/full_backup_$(date +%Y%m%d).tar.gz \
+  .env CREDENTIALS.txt data/
+```
 
 ---
 
@@ -88,207 +285,126 @@ ENABLE_TLS=true ./ctf-autopilot/infra/scripts/prod_up.sh
 
 ### Production (Let's Encrypt)
 
-1. Set domain in `.env`:
+1. Configure domain in `.env`:
    ```bash
    ENABLE_TLS=true
    TLS_DOMAIN=ctfcompass.example.com
    LETSENCRYPT_EMAIL=admin@example.com
    ```
 
-2. Ensure ports 80 and 443 are accessible
+2. Ensure ports 80 and 443 are accessible from internet
 
-3. Start with Let's Encrypt profile
+3. Start services:
+   ```bash
+   ./ctf-autopilot/infra/scripts/prod_up.sh
+   ```
 
----
+### Manual Nginx Configuration
 
-## Operations
+```nginx
+# /etc/nginx/sites-available/ctf-compass
+server {
+    listen 443 ssl http2;
+    server_name your-domain.com;
+    
+    ssl_certificate /etc/letsencrypt/live/your-domain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/your-domain.com/privkey.pem;
+    
+    # Security headers
+    add_header X-Frame-Options DENY;
+    add_header X-Content-Type-Options nosniff;
+    add_header X-XSS-Protection "1; mode=block";
+    
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+    }
+    
+    location /api {
+        proxy_pass http://localhost:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+    
+    location /ws {
+        proxy_pass http://localhost:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
 
-### Starting Services
-
-```bash
-# Production (from install directory)
-cd /opt/ctf-compass
-./ctf-autopilot/infra/scripts/prod_up.sh
-
-# Or using docker compose directly
-docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml up -d
-
-# Development
-./ctf-autopilot/infra/scripts/dev_up.sh
-```
-
-### Stopping Services
-
-```bash
-docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml down
-```
-
-### Viewing Logs
-
-```bash
-# All services
-docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml logs -f
-
-# Specific service
-docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml logs -f api
-docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml logs -f worker
-docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml logs -f web
-```
-
-### System Update
-
-```bash
-# Check for updates
-sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh --check
-
-# Perform update (includes cleanup)
-sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh
-```
-
-### Database Backup
-
-```bash
-# Backup
-docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml exec -T postgres pg_dump -U ctfautopilot ctfautopilot > backup.sql
-
-# Restore
-docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml exec -T postgres psql -U ctfautopilot ctfautopilot < backup.sql
-```
-
----
-
-## Cleanup & Maintenance
-
-### Remove Old Docker Resources
-
-```bash
-# Remove stopped containers
-docker container prune -f
-
-# Remove dangling images
-docker image prune -f
-
-# Remove unused volumes (WARNING: deletes data)
-docker volume prune -f
-
-# Full cleanup (removes all unused resources)
-docker system prune -af
-```
-
-### Complete Uninstall
-
-```bash
-# Stop services
-sudo docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml down -v
-
-# Remove installation
-sudo rm -rf /opt/ctf-compass
-sudo rm -rf /opt/ctf-compass-backups
-sudo rm -f /var/log/ctf-compass-*.log
-
-# Remove Docker images
-sudo docker rmi $(docker images | grep -E 'ctf-compass|ctf-autopilot' | awk '{print $3}') 2>/dev/null || true
-
-# Remove sandbox image
-sudo docker rmi ctf-compass-sandbox:latest 2>/dev/null || true
-sudo docker rmi ctf-autopilot-sandbox:latest 2>/dev/null || true
+server {
+    listen 80;
+    server_name your-domain.com;
+    return 301 https://$server_name$request_uri;
+}
 ```
 
 ---
 
 ## Troubleshooting
 
-### Build Errors
+### Common Issues
+
+| Issue | Solution |
+|-------|----------|
+| "Demo Mode" on login | Backend not running - `docker compose ps` |
+| Job stuck in "Queued" | Restart worker - `docker compose restart worker` |
+| API Key not saving | Check file permissions on `.env` |
+| Container keeps restarting | Check logs - `docker compose logs [service]` |
+| Port already in use | Change port in `.env` or kill existing process |
+
+### Diagnostic Commands
 
 ```bash
-# Clean Docker build cache
-docker builder prune -af
-
-# Rebuild from scratch
-docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml build --no-cache
-```
-
-### Job Stuck in "Running"
-
-```bash
-# Check worker logs
-docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml logs -f worker
-
-# Restart worker
-docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml restart worker
-```
-
-### Sandbox Container Not Starting
-
-```bash
-# Check Docker socket access
-docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml exec api docker ps
-
-# Rebuild sandbox image
-docker build -t ctf-compass-sandbox:latest -f /opt/ctf-compass/ctf-autopilot/sandbox/image/Dockerfile /opt/ctf-compass/ctf-autopilot/sandbox/image/
-```
-
-### Database Connection Error
-
-```bash
-# Check postgres is running
-docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml ps postgres
-
-# Check connection
-docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml exec postgres pg_isready
-```
-
-### Port Already in Use
-
-```bash
-# Check what's using the port
-sudo lsof -i :3000
-sudo lsof -i :8000
-
-# Kill process or change port in .env
-WEB_PORT=3001
-API_PORT=8001
-```
-
-### High Memory Usage
-
-```bash
-# Check container stats
-docker stats
-
-# Restart services to free memory
-docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml restart
-```
-
----
-
-## Monitoring
-
-### Health Check
-
-```bash
-curl http://localhost:8000/api/health
-```
-
-### Check All Services
-
-```bash
+# Check all services
 docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml ps
+
+# View recent errors
+docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml logs --tail=50 2>&1 | grep -i error
+
+# Check resource usage
+docker stats --no-stream
+
+# Check disk space
+df -h /
+
+# Check memory
+free -h
+```
+
+### Recovery Commands
+
+```bash
+# Restart all services
+docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml restart
+
+# Rebuild containers
+docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml up -d --build
+
+# Reset to clean state (DESTROYS DATA)
+docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml down -v
+docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml up -d --build
 ```
 
 ---
 
 ## Security Checklist
 
-### Before Going Live
+### Pre-Deployment
 
 - [ ] Changed `ADMIN_PASSWORD` from default
 - [ ] Set strong `POSTGRES_PASSWORD`
 - [ ] Configured `SECRET_KEY`
-- [ ] Enabled TLS
-- [ ] Configured firewall (only 80/443 exposed)
-- [ ] Reviewed rate limits
+- [ ] Set MegaLLM API key via Settings page
+- [ ] Enabled TLS (for production)
+- [ ] Configured firewall (UFW)
 - [ ] Tested file upload restrictions
+- [ ] Verified sandbox isolation
 
 ### Regular Maintenance
 
@@ -297,31 +413,27 @@ docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml ps
 - [ ] Review logs weekly
 - [ ] Test backups monthly
 - [ ] Cleanup Docker resources monthly
+- [ ] Security scan dependencies quarterly
 
----
-
-## Upgrading
-
-```bash
-# Update from GitHub (includes cleanup)
-sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh
-```
-
-## Rollback
+### Firewall Rules
 
 ```bash
-# Revert to previous version
-cd /opt/ctf-compass
-git checkout <previous-tag>
+# View current rules
+sudo ufw status verbose
 
-# Rebuild
-docker compose -f ctf-autopilot/infra/docker-compose.yml up -d --build
+# Recommended rules
+sudo ufw allow ssh
+sudo ufw allow 3000/tcp  # Web UI
+sudo ufw allow 8000/tcp  # API (optional)
+sudo ufw enable
 ```
 
 ---
 
 ## Getting Help
 
-- **Documentation:** [ctf-autopilot/docs/](.)
 - **Debug Guide:** [DEBUG.md](DEBUG.md)
+- **User Guide:** [USAGE.md](USAGE.md)
+- **Security:** [SECURITY.md](SECURITY.md)
+- **Architecture:** [ARCHITECTURE.md](ARCHITECTURE.md)
 - **GitHub Issues:** [github.com/huynhtrungcipp/ctf-compass/issues](https://github.com/huynhtrungcipp/ctf-compass/issues)
