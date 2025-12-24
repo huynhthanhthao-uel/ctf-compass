@@ -30,8 +30,9 @@ CTF Compass is a monorepo containing a React/Vite frontend, FastAPI backend, and
 │                   │               │                           │
 │ • Dashboard       │    REST/WS    │ • Auth Service            │
 │ • Job Create      │◄─────────────►│ • Job Service             │
-│ • Configuration   │               │ • System Service          │
-│ • Job Detail      │               │ • WebSocket Handler       │
+│ • Job Detail      │               │ • System Service          │
+│ • Configuration   │               │ • WebSocket Handler       │
+│ • Notifications   │               │                           │
 └───────────────────┘               └─────────────┬─────────────┘
                                                   │
                                     ┌─────────────┴─────────────┐
@@ -71,19 +72,38 @@ CTF Compass is a monorepo containing a React/Vite frontend, FastAPI backend, and
 **Key Features:**
 - Job creation wizard with drag-and-drop file upload
 - Real-time job status updates via WebSocket
+- Job management: run, stop, delete with confirmation
 - Configuration page for API key and model settings
 - System update management from UI
 - Connection status indicator (Live/Demo Mode)
+- Notification center with mark-as-read
 - Auto-retry backend connection
+- Demo mode with mock data fallback
 
 **Pages:**
 | Route | Component | Description |
 |-------|-----------|-------------|
 | `/login` | Login.tsx | Authentication |
-| `/dashboard` | Dashboard.tsx | Job list and stats |
+| `/dashboard` | Dashboard.tsx | Job list, stats, management |
 | `/jobs/new` | JobCreate.tsx | Create new analysis |
 | `/jobs/:id` | JobDetail.tsx | Job details and results |
 | `/config` | Configuration.tsx | Settings management |
+
+**Key Components:**
+| Component | Description |
+|-----------|-------------|
+| `AppLayout` | Main layout with navigation |
+| `JobCard` | Job display with actions |
+| `BackendStatus` | Demo/Connected indicator |
+| `NotificationDropdown` | Alert center |
+
+**Hooks:**
+| Hook | Description |
+|------|-------------|
+| `useJobs` | Job CRUD with mock fallback |
+| `useJobDetail` | Single job details |
+| `useAuth` | Authentication state |
+| `useJobWebSocket` | Real-time updates |
 
 ### Backend API (FastAPI)
 
@@ -237,6 +257,31 @@ CTF Compass is a monorepo containing a React/Vite frontend, FastAPI backend, and
 8. Final WebSocket notification
 ```
 
+### Job Stop/Delete Flow
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ User clicks Stop/Delete button                                │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│ Frontend (use-jobs.tsx)                                       │
+│ • Clear any pending mock intervals                           │
+│ • Clear WebSocket update cache for job                       │
+│ • Update local state immediately                             │
+│ • (Delete only) Remove from mock data array                  │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│ If Backend Connected:                                         │
+│ • Send API request (DELETE/PATCH)                            │
+│ • Wait for confirmation                                      │
+│ • Update database                                            │
+└─────────────────────────────────────────────────────────────┘
+```
+
 ### Configuration Flow
 
 ```
@@ -263,6 +308,32 @@ CTF Compass is a monorepo containing a React/Vite frontend, FastAPI backend, and
 │ • .env file (persistent)                                     │
 │ • update.sh script execution                                 │
 └─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Frontend Demo Mode
+
+When backend is unavailable, frontend operates in Demo Mode:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ isBackendAvailable() check                                    │
+│ • Fetch /api/health                                          │
+│ • Verify response is JSON (not HTML fallback)                │
+│ • Check status field                                         │
+└─────────────────────────────────────────────────────────────┘
+                              │
+          ┌───────────────────┴───────────────────┐
+          │                                       │
+┌─────────▼─────────┐               ┌─────────────▼─────────────┐
+│  Backend Connected │               │      Demo Mode            │
+│  useApi = true    │               │      useApi = false       │
+│                   │               │                           │
+│  • Real API calls │               │  • Mock data              │
+│  • Real WebSocket │               │  • Simulated progress     │
+│  • Real jobs      │               │  • Local state only       │
+└───────────────────┘               └───────────────────────────┘
 ```
 
 ---
@@ -297,8 +368,16 @@ CTF Compass is a monorepo containing a React/Vite frontend, FastAPI backend, and
 │       ├── image/                  # Sandbox Dockerfile
 │       └── profiles/               # Seccomp/AppArmor
 ├── src/                            # React frontend source
-│   ├── components/                 # UI components
-│   ├── hooks/                      # React hooks
+│   ├── components/
+│   │   ├── jobs/                   # JobCard, JobForm, etc.
+│   │   ├── layout/                 # AppLayout
+│   │   ├── ui/                     # shadcn/ui
+│   │   ├── BackendStatus.tsx
+│   │   └── NotificationDropdown.tsx
+│   ├── hooks/
+│   │   ├── use-jobs.tsx           # Job CRUD + mock
+│   │   ├── use-auth.tsx
+│   │   └── use-websocket.ts
 │   ├── pages/                      # Page components
 │   └── lib/                        # Utilities
 ├── data/
@@ -350,6 +429,7 @@ CTF Compass is a monorepo containing a React/Vite frontend, FastAPI backend, and
 | Layer | Technology |
 |-------|------------|
 | **Frontend** | React 18, Vite, TypeScript, Tailwind CSS, shadcn/ui |
+| **State** | React Query, React Context, useState/useCallback |
 | **Backend** | Python 3.12, FastAPI, SQLAlchemy, Pydantic v2 |
 | **Database** | PostgreSQL 16 |
 | **Cache/Queue** | Redis 7 |
@@ -374,6 +454,7 @@ CTF Compass is a monorepo containing a React/Vite frontend, FastAPI backend, and
 - **Connection Pooling:** SQLAlchemy connection pool
 - **Async I/O:** FastAPI with async database operations
 - **Lazy Loading:** Frontend uses React Query for data fetching
+- **Mock Fallback:** Demo mode reduces backend load
 
 ### Future Considerations
 

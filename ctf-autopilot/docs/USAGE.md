@@ -10,12 +10,15 @@ Complete guide for using CTF Compass. This document covers the web interface, jo
 
 1. [Getting Started](#getting-started)
 2. [Web Interface Overview](#web-interface-overview)
-3. [Configuration](#configuration)
-4. [Creating Analysis Jobs](#creating-analysis-jobs)
-5. [Understanding Results](#understanding-results)
-6. [Working with Writeups](#working-with-writeups)
-7. [Best Practices](#best-practices)
-8. [FAQ](#faq)
+3. [Dashboard Features](#dashboard-features)
+4. [Configuration](#configuration)
+5. [Creating Analysis Jobs](#creating-analysis-jobs)
+6. [Managing Jobs](#managing-jobs)
+7. [Understanding Results](#understanding-results)
+8. [Working with Writeups](#working-with-writeups)
+9. [Demo Mode](#demo-mode)
+10. [Best Practices](#best-practices)
+11. [FAQ](#faq)
 
 ---
 
@@ -44,8 +47,9 @@ Complete guide for using CTF Compass. This document covers the web interface, jo
    - Free/cheap models are marked with green checkmarks
 
 3. **Verify System Status**:
-   - Check that current version is displayed
-   - "Check Updates" button should work
+   - Check the backend status badge in the header
+   - "Connected" = Backend is running
+   - "Demo Mode" = Using mock data (click to retry)
 
 ---
 
@@ -60,14 +64,52 @@ CTF Compass uses a modern top navigation bar:
 | **Logo** | Top left | Click to go to Dashboard |
 | **Dashboard** | Top nav | View all jobs and statistics |
 | **New Analysis** | Top nav | Create a new analysis job |
+| **Backend Status** | Top right | Shows Demo Mode / Connected |
+| **Notifications** | Top right (🔔) | View alerts and updates |
 | **Settings** | Top right (⚙️) | System configuration |
 | **User Menu** | Top right | Profile, logout options |
 
-### Dashboard Elements
+### Status Indicators
 
-- **Statistics Cards**: Total jobs, running, completed, failed
-- **Recent Jobs**: List of recent analysis jobs with status
-- **Quick Actions**: Create new job, view details
+| Badge | Meaning |
+|-------|---------|
+| `Demo Mode` (amber) | Backend not connected, using mock data |
+| `Connected` (blue) | Backend API is available |
+| `Live` (green + pulse) | WebSocket connected, real-time updates |
+
+---
+
+## Dashboard Features
+
+### Statistics Cards
+
+The dashboard shows real-time job statistics:
+
+| Card | Description |
+|------|-------------|
+| **Total Jobs** | All jobs in the system |
+| **Queued** | Jobs waiting to run |
+| **Running** | Currently executing jobs |
+| **Completed** | Successfully finished jobs |
+| **Failed** | Jobs that encountered errors |
+
+### Job List
+
+- **Grid View**: Card-based layout (default)
+- **List View**: Compact table format
+- **Search**: Filter jobs by title or description
+- **Refresh**: Manually reload job list
+
+### Job Cards
+
+Each job card shows:
+- **Category Badge**: Crypto, Pwn, Web, Rev, Forensics, Misc
+- **Title**: Job name (click to view details)
+- **Description**: Brief summary
+- **Status Badge**: Queued, Running, Completed, Failed
+- **Progress Bar**: For running jobs
+- **Timestamp**: Time since creation
+- **Actions Menu** (⋮): View, Run, Stop, Delete
 
 ---
 
@@ -78,7 +120,7 @@ CTF Compass uses a modern top navigation bar:
 The API key can be configured in two ways:
 
 **1. Via Web Interface (Recommended):**
-- Go to Settings page
+- Go to Settings page (⚙️ icon)
 - Enter your MegaLLM API key
 - Click "Test Connection" then "Save Changes"
 - Key is automatically synced to backend
@@ -128,7 +170,9 @@ sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh
 |-------|-------------|---------|
 | **Title** | Descriptive name | "picoCTF 2024 - forensics_corruption" |
 | **Description** | Challenge description, hints | Full challenge text from CTF |
+| **Category** | Challenge type | Crypto, Pwn, Web, Rev, Forensics, Misc |
 | **Flag Format** | Regex pattern for flags | `picoCTF\{[^}]+\}` |
+| **Challenge URL** | (Optional) Link to challenge | `https://play.picoctf.org/...` |
 
 ### Step 2: File Upload
 
@@ -155,6 +199,37 @@ Upload challenge files by:
 ```
 QUEUED → RUNNING → ANALYZING → EXTRACTING → GENERATING → COMPLETED
 ```
+
+---
+
+## Managing Jobs
+
+### Running Jobs
+
+- Click **Run** button on a queued job card
+- Or select "Run Analysis" from the actions menu (⋮)
+- Progress bar shows real-time completion percentage
+
+### Stopping Jobs
+
+To cancel a running analysis:
+1. Click **Stop** button on the job card
+2. Or select "Stop Analysis" from the actions menu
+3. Job status changes to "Failed" with "Cancelled by user" message
+
+### Deleting Jobs
+
+To remove a job:
+1. Click the actions menu (⋮) on the job card
+2. Select "Delete Job"
+3. Confirm deletion in the dialog
+4. Job and all associated data are removed
+
+### Bulk Actions (Coming Soon)
+
+- Select multiple jobs
+- Delete all selected
+- Cancel all running
 
 ---
 
@@ -206,6 +281,31 @@ After analysis completes:
 
 ---
 
+## Demo Mode
+
+When the backend is unavailable, the frontend operates in **Demo Mode**:
+
+### What Works in Demo Mode
+- ✅ Create new jobs (mock data)
+- ✅ Run analysis (simulated progress)
+- ✅ Stop running jobs
+- ✅ Delete jobs
+- ✅ View notifications
+- ✅ Navigate all pages
+
+### Demo Mode Indicators
+- Amber "Demo Mode" badge in header
+- "Running in demo mode" message on dashboard
+- Click badge to retry backend connection
+
+### Why Demo Mode?
+- Preview environment (no backend)
+- Backend container is starting
+- Network connectivity issues
+- API configuration problems
+
+---
+
 ## Best Practices
 
 ### For Better Results
@@ -226,6 +326,20 @@ After analysis completes:
    - Complex challenges: Use larger models
    - Simple challenges: Fast models work fine
 
+### Performance Tips
+
+1. **Monitor Job Status**
+   - Check running jobs periodically
+   - Stop stuck jobs and retry
+
+2. **Clean Up Old Jobs**
+   - Delete completed jobs you no longer need
+   - Free up disk space
+
+3. **Update Regularly**
+   - Check for updates weekly
+   - New features and bug fixes
+
 ---
 
 ## FAQ
@@ -241,9 +355,16 @@ After analysis completes:
 
 **A:** Check:
 1. File type is supported
-2. File size within limits
+2. File size within limits (200MB)
 3. API key is configured correctly
 4. Check job error message for details
+
+### Q: Why am I seeing "Demo Mode"?
+
+**A:** The frontend couldn't connect to the backend:
+1. Backend container may still be starting
+2. Check if services are running: `docker compose ps`
+3. Click the "Demo Mode" badge to retry
 
 ### Q: Can I use this during a live CTF?
 
@@ -258,6 +379,13 @@ After analysis completes:
 - Files stored on your server only
 - No data sent to cloud (except MegaLLM API for AI features)
 - You control data retention
+
+### Q: How do I stop a stuck job?
+
+**A:** Multiple options:
+1. Click Stop button on the job card
+2. Select "Stop Analysis" from menu
+3. Restart worker: `docker compose restart worker`
 
 ### Q: How do I update the system?
 

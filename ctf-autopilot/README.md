@@ -3,10 +3,32 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Ubuntu 24.04](https://img.shields.io/badge/Ubuntu-24.04%20LTS-E95420?logo=ubuntu)](https://ubuntu.com/)
 [![Docker](https://img.shields.io/badge/Docker-Required-2496ED?logo=docker)](https://www.docker.com/)
+[![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)](https://reactjs.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-Python-009688?logo=fastapi)](https://fastapi.tiangolo.com/)
 
 A production-grade, security-first, local-only CTF challenge analyzer and writeup generator. This tool ingests challenge descriptions and attached files, runs deterministic offline analysis in an isolated Docker sandbox, extracts evidence and candidate flags, and generates professional writeups.
 
 **Repository:** [github.com/huynhtrungcipp/ctf-compass](https://github.com/huynhtrungcipp/ctf-compass)
+
+---
+
+## ✨ Key Features
+
+### Frontend (React + TypeScript)
+- **Modern Dashboard**: Real-time job statistics with grid/list views
+- **Job Management**: Create, run, stop, and delete analysis jobs
+- **Live Updates**: WebSocket-based progress tracking
+- **Demo Mode**: Full UI functionality without backend connection
+- **Notification Center**: Real-time alerts with mark-as-read functionality
+- **Backend Status**: Visual indicator (Demo Mode / Connected)
+- **Responsive Design**: Works on desktop and mobile devices
+
+### Backend (FastAPI + Celery)
+- **Secure Analysis**: Sandboxed Docker containers with network isolation
+- **AI Integration**: MegaLLM API for intelligent analysis and writeup generation
+- **Real-time WebSocket**: Live job updates pushed to clients
+- **RESTful API**: Complete job and configuration management
+- **Background Processing**: Celery workers for async job execution
 
 ---
 
@@ -109,6 +131,9 @@ All analysis runs in isolated Docker containers with:
 │  │  Dashboard  │  │  Job Create │  │   Config    │          │
 │  │    Page     │  │    Page     │  │    Page     │          │
 │  └─────────────┘  └─────────────┘  └─────────────┘          │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐          │
+│  │ Notifications│ │Backend Status│ │  Job Detail │          │
+│  └─────────────┘  └─────────────┘  └─────────────┘          │
 └─────────────────────┬───────────────────────────────────────┘
                       │ HTTP/WebSocket
 ┌─────────────────────▼───────────────────────────────────────┐
@@ -168,6 +193,26 @@ ctf-compass/
 │       ├── USAGE.md
 │       └── RUNBOOK.md
 ├── src/                         # React frontend source
+│   ├── components/
+│   │   ├── jobs/                # Job-related components
+│   │   ├── layout/              # AppLayout, navigation
+│   │   ├── ui/                  # shadcn/ui components
+│   │   ├── BackendStatus.tsx    # Demo/Connected indicator
+│   │   └── NotificationDropdown.tsx
+│   ├── hooks/
+│   │   ├── use-auth.tsx
+│   │   ├── use-jobs.tsx         # Job CRUD with mock fallback
+│   │   └── use-websocket.ts
+│   ├── pages/
+│   │   ├── Dashboard.tsx
+│   │   ├── JobCreate.tsx
+│   │   ├── JobDetail.tsx
+│   │   ├── Configuration.tsx
+│   │   └── Login.tsx
+│   └── lib/
+│       ├── api.ts
+│       ├── mock-data.ts
+│       └── types.ts
 ├── package.json
 └── README.md
 ```
@@ -209,7 +254,7 @@ After installation:
 # Start development environment
 ./ctf-autopilot/infra/scripts/dev_up.sh
 
-# Run frontend with Vite
+# Run frontend with Vite (hot reload)
 npm run dev
 
 # Run backend tests
@@ -219,17 +264,24 @@ cd ctf-autopilot/apps/api && pytest
 cd ctf-autopilot/apps/api && ruff check .
 ```
 
+### Frontend Development
+
+The frontend supports **Demo Mode** - when backend is unavailable:
+- Jobs use mock data
+- Analysis runs with simulated progress
+- All UI features work (stop, delete, notifications)
+
 ---
 
 ## 📖 Documentation
 
 | Document | Description |
 |----------|-------------|
-| [ARCHITECTURE.md](ctf-autopilot/docs/ARCHITECTURE.md) | System design overview |
-| [SECURITY.md](ctf-autopilot/docs/SECURITY.md) | Security controls |
-| [DEBUG.md](ctf-autopilot/docs/DEBUG.md) | Troubleshooting guide |
-| [USAGE.md](ctf-autopilot/docs/USAGE.md) | User guide |
-| [RUNBOOK.md](ctf-autopilot/docs/RUNBOOK.md) | Operations guide |
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | System design overview |
+| [SECURITY.md](docs/SECURITY.md) | Security controls |
+| [DEBUG.md](docs/DEBUG.md) | Troubleshooting guide |
+| [USAGE.md](docs/USAGE.md) | User guide |
+| [RUNBOOK.md](docs/RUNBOOK.md) | Operations guide |
 
 ---
 
