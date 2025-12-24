@@ -43,6 +43,7 @@ import { useJobDetail } from '@/hooks/use-jobs';
 import { useJobWebSocket, JobUpdate } from '@/hooks/use-websocket';
 import { cn } from '@/lib/utils';
 import { generatePDFReport } from '@/lib/pdf-report';
+import { updateMockJobStatus } from '@/lib/mock-data';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
 
@@ -919,6 +920,13 @@ if __name__ == "__main__":
               onComplete={(success, flags) => {
                 if (success && flags.length > 0) {
                   toast.success(`🎉 Autopilot found ${flags.length} flag(s)!`);
+                  // Update job status to done in mock data
+                  updateMockJobStatus(jobDetail.id, 'done', 100);
+                  // Update local state
+                  setRealtimeStatus('done');
+                  setRealtimeProgress(100);
+                  // Refresh job detail to get updated state
+                  fetchJobDetail();
                 }
               }}
               onStartRef={(startFn) => {

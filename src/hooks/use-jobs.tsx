@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Job, JobDetail } from '@/lib/types';
-import { mockJobs, mockJobDetail, mockJob003Commands, mockJob003Artifacts, mockJob003Flags, mockJob003Writeup } from '@/lib/mock-data';
+import { mockJobs, mockJobDetail, mockJob003Commands, mockJob003Artifacts, mockJob003Flags, mockJob003Writeup, updateMockJobStatus } from '@/lib/mock-data';
 import * as api from '@/lib/api';
 import { useNotifications } from './use-notifications';
 
@@ -367,6 +367,25 @@ export function useJobs() {
     }
   }, []);
 
+  // Update job status manually (used when autopilot completes)
+  const updateJobStatus = useCallback((jobId: string, status: Job['status'], progress?: number) => {
+    setJobs(prev =>
+      prev.map(job =>
+        job.id === jobId
+          ? { 
+              ...job, 
+              status, 
+              progress: progress ?? (status === 'done' ? 100 : job.progress),
+              completedAt: status === 'done' ? new Date().toISOString() : job.completedAt
+            }
+          : job,
+      ),
+    );
+
+    // Update mock data too using the helper function
+    updateMockJobStatus(jobId, status, progress);
+  }, []);
+
   return {
     jobs,
     isLoading,
@@ -375,6 +394,7 @@ export function useJobs() {
     runJob,
     stopJob,
     deleteJob,
+    updateJobStatus,
     isBackendConnected: useApi,
   };
 }
