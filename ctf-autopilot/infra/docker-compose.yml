@@ -1,7 +1,14 @@
 # CTF Compass - Docker Compose Configuration
 # Production-ready multi-service deployment
 #
-# GitHub: https://github.com/huynhtrungcipp/ctf-compass
+# GitHub: https://github.com/HaryLya/ctf-compass
+# Version: 1.1.0 (2025-12-25)
+#
+# FEATURES:
+#   - Full Autopilot AI analysis
+#   - Netcat terminal for PWN challenges
+#   - AI Solve Script generation
+#   - Cloud Mode fallback
 #
 # USAGE:
 #   # Start services
@@ -49,7 +56,8 @@ services:
       start_period: 10s
     labels:
       - "com.ctf-compass.service=web"
-      - "com.ctf-compass.version=1.0.0"
+      - "com.ctf-compass.version=1.1.0"
+      - "com.ctf-compass.features=autopilot,netcat,ai-scripts"
 
   # =============================================================================
   # Backend API - FastAPI Application
@@ -101,7 +109,8 @@ services:
       start_period: 60s
     labels:
       - "com.ctf-compass.service=api"
-      - "com.ctf-compass.version=1.0.0"
+      - "com.ctf-compass.version=1.1.0"
+      - "com.ctf-compass.features=autopilot,netcat,ai-scripts"
 
   # =============================================================================
   # Celery Worker - Background Job Processing
@@ -143,7 +152,7 @@ services:
       - backend
     labels:
       - "com.ctf-compass.service=worker"
-      - "com.ctf-compass.version=1.0.0"
+      - "com.ctf-compass.version=1.1.0"
 
   # =============================================================================
   # PostgreSQL Database
@@ -167,7 +176,7 @@ services:
       - backend
     labels:
       - "com.ctf-compass.service=postgres"
-      - "com.ctf-compass.version=1.0.0"
+      - "com.ctf-compass.version=1.1.0"
 
   # =============================================================================
   # Redis - Message Broker & Cache
@@ -191,7 +200,7 @@ services:
       - backend
     labels:
       - "com.ctf-compass.service=redis"
-      - "com.ctf-compass.version=1.0.0"
+      - "com.ctf-compass.version=1.1.0"
 
   # =============================================================================
   # Nginx Reverse Proxy (Production)
@@ -215,7 +224,7 @@ services:
       - frontend
     labels:
       - "com.ctf-compass.service=nginx"
-      - "com.ctf-compass.version=1.0.0"
+      - "com.ctf-compass.version=1.1.0"
 
 # =============================================================================
 # Named Volumes - Persistent Data Storage

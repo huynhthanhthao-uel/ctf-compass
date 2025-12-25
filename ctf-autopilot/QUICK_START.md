@@ -100,6 +100,19 @@ docker compose ps
 
 ---
 
+## 🎯 PWN/Remote Challenges (Netcat)
+
+For challenges requiring `nc host port`:
+
+1. Create a new job
+2. Toggle **"Remote Connection (nc)"** to ON
+3. Enter **Host** and **Port**
+4. Submit job and go to the **Netcat** tab
+5. Click **Connect** to start interaction
+6. Use **Generate AI Solve Script** for pwntools code
+
+---
+
 ## 🧪 Sandbox Tools
 
 The sandbox includes 50+ CTF analysis tools:
@@ -107,10 +120,11 @@ The sandbox includes 50+ CTF analysis tools:
 | Category | Tools |
 |----------|-------|
 | **Binary** | binwalk, file, strings, xxd, radare2, gdb, checksec |
-| **Crypto** | openssl, hashcat, john |
+| **Crypto** | openssl, hashcat, john, pwntools |
 | **Forensics** | tshark, volatility3, exiftool, foremost |
 | **Stego** | zsteg, stegcracker, steghide |
 | **Reverse** | retdec, objdump, nm, pwntools |
+| **PWN** | pwntools, ROPgadget, one_gadget |
 
 ---
 

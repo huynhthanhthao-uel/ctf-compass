@@ -184,7 +184,23 @@ Full Autopilot is the primary way to analyze CTF challenges. It automates the en
 | **Flag Format** | Regex pattern for flags | `picoCTF\{[^}]+\}` |
 | **Challenge URL** | (Optional) Link to challenge | `https://play.picoctf.org/...` |
 
-### Step 2: File Upload
+### Step 2: Remote Connection (Netcat)
+
+For PWN or remote challenges that require `nc`:
+
+1. Toggle **"Remote Connection (nc)"** switch to ON
+2. Enter connection details:
+
+| Field | Description | Example |
+|-------|-------------|---------|
+| **Host** | Server hostname or IP | `pwn.example.com` |
+| **Port** | Service port | `9999` |
+
+The form will show the resulting command: `nc pwn.example.com 9999`
+
+**Auto-detection**: If your description contains `nc host port`, the form will automatically enable netcat and fill in the host/port fields.
+
+### Step 3: File Upload
 
 Upload challenge files by:
 - **Drag & Drop**: Drag files onto the upload zone
@@ -199,12 +215,13 @@ Upload challenge files by:
 - Network: `.pcap`, `.pcapng`
 - Code: `.py`, `.c`, `.cpp`, `.java`, `.js`
 
-### Step 3: Submit & Analyze
+### Step 4: Submit & Analyze
 
 1. Click **Create Job**
 2. Job appears on Dashboard
 3. Click on job to open detail page
 4. Click **Solve Challenge** to start Full Autopilot
+5. For netcat challenges, use the **Netcat** tab for interactive connections
 
 ---
 
@@ -239,34 +256,49 @@ To remove a job:
 
 After analysis completes, you'll see several tabs:
 
-#### 1. Autopilot Tab
+#### 1. AI Analysis Tab
 - **Solve Challenge** button for Full Autopilot
 - **Found Flags** with copy functionality
 - **Solve Script** with download option
 - **Analysis Progress** visualization
 
-#### 2. Commands Tab
+#### 2. History Tab
+- Previous analysis runs
+- Apply successful strategies to new jobs
+
+#### 3. Terminal Tab
+- Interactive sandbox terminal
+- Execute CTF tools manually
+- Command autocomplete
+
+#### 4. Commands Tab
 - List of executed tools with output
 - Exit codes and execution time
 - Searchable command history
 
-#### 3. Artifacts Tab
+#### 5. Artifacts Tab
 - `strings_output.txt`: Extracted strings
 - `file_info.txt`: File type identification
 - `checksec_output.txt`: Binary security features
 - `solve_script.py`: Generated solve script
 
-#### 4. Flags Tab
+#### 6. Flags Tab
 - Extracted flag candidates
 - Confidence scores
 - Source context for each candidate
 
-#### 5. Writeup Tab
+#### 7. Writeup Tab
 - AI-generated writeup with:
   - Challenge overview
   - Step-by-step solution
   - Flag extraction
   - Learning points
+
+#### 8. Netcat Tab (for remote challenges)
+- **Connect**: Enter host:port and connect
+- **Interactive Terminal**: Send/receive messages
+- **AI Solve Script**: Generate pwntools script from interactions
+- **Copy Script**: Export to clipboard or file
 
 ---
 

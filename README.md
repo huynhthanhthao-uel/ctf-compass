@@ -13,11 +13,15 @@
 
 ## ✨ Features
 
-- **AI-Powered Analysis**: Automated CTF challenge analysis using MegaLLM API
+- **AI-Powered Analysis**: Automated CTF challenge analysis using Lovable AI / MegaLLM API
+- **Full Autopilot**: One-click "Solve Challenge" with 4-phase automated solving
+- **Netcat Terminal**: Interactive `nc` connections for PWN/remote challenges
+- **AI Solve Scripts**: Auto-generate pwntools scripts for netcat challenges
 - **Sandboxed Execution**: Secure Docker containers with network isolation
 - **Modern Web UI**: React 18 + TypeScript + Tailwind CSS + shadcn/ui
 - **Real-time Updates**: WebSocket-based live job status and progress
 - **Job Management**: Create, run, stop, and delete analysis jobs
+- **Cloud Mode**: Seamless Lovable Cloud Edge Functions when backend unavailable
 - **Demo Mode**: Full UI functionality without backend (mock data)
 - **Notification System**: Real-time alerts for job completions and system events
 - **Professional Writeups**: AI-generated CTF writeups with step-by-step solutions
@@ -84,14 +88,21 @@ curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopi
 ### Dashboard
 - **Statistics Cards**: Total jobs, running, completed, failed counts
 - **Job List**: Grid/list view with search functionality
-- **Status Badges**: Real-time job status with Live/Demo mode indicator
+- **Status Badges**: Real-time job status with Live/Cloud/Demo mode indicator
 - **Quick Actions**: Run, stop, delete jobs directly from cards
 
 ### Job Management
-- **Create**: Upload files, set flag format, add descriptions
+- **Create**: Upload files, set flag format, add descriptions, configure netcat
+- **Remote Connection (nc)**: Enter host:port for PWN/remote challenges
 - **Monitor**: Real-time progress with WebSocket updates
 - **Stop**: Cancel running analyses instantly
 - **Delete**: Remove completed/failed jobs with confirmation
+
+### Netcat Terminal
+- **Interactive Connection**: Connect to remote CTF servers
+- **Send/Receive**: Real-time message exchange
+- **AI Solve Scripts**: Auto-generate pwntools scripts from interactions
+- **Flag Detection**: Automatic flag extraction from responses
 
 ### Notifications
 - **Real-time Alerts**: Job completions, errors, system updates
@@ -311,7 +322,8 @@ curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopi
 | **Backend** | Python 3.12, FastAPI, Celery, SQLAlchemy |
 | **Database** | PostgreSQL 16, Redis 7 |
 | **Infrastructure** | Docker, Docker Compose, Nginx |
-| **AI** | MegaLLM API |
+| **AI** | Lovable AI (Gemini 2.5), MegaLLM API |
+| **Cloud** | Lovable Cloud Edge Functions (ai-analyze, sandbox-terminal, ai-solve-script) |
 
 ---
 
