@@ -1,11 +1,14 @@
-import { getBackendUrlHeaders } from "@/lib/backend-url";
+import { getBackendUrlHeaders, getBackendUrlFromStorage } from "@/lib/backend-url";
 
 /**
  * API client for CTF Autopilot backend
  * Supabase is loaded lazily only when needed (for Lovable Cloud fallback)
  */
 
-const API_BASE = '/api';
+function getApiBase(): string {
+  const backendUrl = getBackendUrlFromStorage();
+  return backendUrl ? `${backendUrl}/api` : "/api";
+}
 
 // Lazy-loaded Supabase client (only loaded when edge functions are needed)
 let supabaseClient: Awaited<typeof import("@/integrations/supabase/client")>["supabase"] | null = null;
@@ -45,7 +48,7 @@ async function apiFetch<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const url = `${API_BASE}${endpoint}`;
+  const url = `${getApiBase()}${endpoint}`;
 
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
@@ -192,7 +195,7 @@ export async function createJob(
     headers['X-CSRF-Token'] = csrfToken;
   }
   
-  const response = await fetch(`${API_BASE}/jobs`, {
+  const response = await fetch(`${getApiBase()}/jobs`, {
     method: 'POST',
     body: formData,
     credentials: 'include',
@@ -267,7 +270,7 @@ export async function performUpdate(): Promise<Response> {
     headers['X-CSRF-Token'] = csrfToken;
   }
   
-  return fetch(`${API_BASE}/system/update`, {
+  return fetch(`${getApiBase()}/system/update`, {
     method: 'POST',
     headers,
     credentials: 'include',

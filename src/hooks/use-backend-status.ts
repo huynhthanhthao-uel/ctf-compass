@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getSupabaseClient, isSupabaseConfigured } from '@/integrations/supabase/safe-client';
-import { getBackendUrlHeaders } from '@/lib/backend-url';
+import { getBackendUrlHeaders, getBackendUrlFromStorage } from '@/lib/backend-url';
 
 export type BackendMode = 'backend' | 'cloud' | 'demo';
 
@@ -14,27 +14,19 @@ interface BackendStatusResult {
 // Check if Docker backend is available
 async function checkDockerBackend(): Promise<boolean> {
   try {
-    const response = await fetch('/api/health', {
+    const backendUrl = getBackendUrlFromStorage();
+    if (!backendUrl) return false;
+
+    const response = await fetch(`${backendUrl}/api/health`, {
       method: 'GET',
+      headers: { 'Accept': 'application/json' },
       signal: AbortSignal.timeout(5000)
     });
 
     if (!response.ok) return false;
 
-    const text = await response.text();
-
-    // Vite returns HTML for unknown routes
-    if (text.trimStart().startsWith('<!') || text.trimStart().startsWith('<html')) {
-      return false;
-    }
-
-    // Try parsing JSON - real backend returns JSON
-    try {
-      JSON.parse(text);
-      return true;
-    } catch {
-      return false;
-    }
+    const data = await response.json().catch(() => null);
+    return data?.status === 'healthy';
   } catch {
     return false;
   }
