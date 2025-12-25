@@ -142,8 +142,9 @@ Edge Functions provide backend functionality when local backend is unavailable.
 | Function | Endpoint | Description |
 |----------|----------|-------------|
 | `ai-analyze` | `/functions/v1/ai-analyze` | AI-powered challenge analysis |
-| `sandbox-terminal` | `/functions/v1/sandbox-terminal` | Simulated terminal commands |
+| `sandbox-terminal` | `/functions/v1/sandbox-terminal` | Simulated terminal + netcat commands |
 | `detect-category` | `/functions/v1/detect-category` | Auto category detection |
+| `ai-solve-script` | `/functions/v1/ai-solve-script` | Generate pwntools solve scripts |
 
 #### ai-analyze Function
 
@@ -183,6 +184,8 @@ Simulates terminal execution for Cloud Mode:
 - Supports common CTF tools (ls, cat, strings, file, python3)
 - Job state tracking for realistic progression
 - Python script execution simulation
+- **Netcat support**: `nc` and `nc_interact` commands for remote challenges
+- PWN/Crypto/Quiz challenge simulations
 
 ### Backend API (FastAPI)
 

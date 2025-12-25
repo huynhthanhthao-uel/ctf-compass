@@ -17,7 +17,10 @@ A production-grade, security-first, local-only CTF challenge analyzer and writeu
 ### Frontend (React + TypeScript)
 - **Modern Dashboard**: Real-time job statistics with grid/list views
 - **Full Autopilot**: One-click "Solve Challenge" button with AI-powered analysis
+- **Netcat Terminal**: Interactive `nc host:port` connections for PWN challenges
+- **AI Solve Scripts**: Auto-generate pwntools scripts using Lovable AI
 - **Job Management**: Create, run, stop, and delete analysis jobs
+- **Remote Connection**: Configure netcat host:port during job creation
 - **Live Updates**: WebSocket-based progress tracking with animations
 - **Cloud Mode**: Seamless fallback to Lovable Cloud Edge Functions when backend unavailable
 - **Demo Mode**: Full UI functionality with mock data
@@ -28,15 +31,16 @@ A production-grade, security-first, local-only CTF challenge analyzer and writeu
 ### Backend (FastAPI + Celery + Cloud)
 - **Hybrid Architecture**: Local backend with Cloud fallback
 - **Secure Analysis**: Sandboxed Docker containers with network isolation
-- **AI Integration**: Lovable AI / MegaLLM API for intelligent analysis
+- **AI Integration**: Lovable AI (Gemini 2.5) / MegaLLM API for intelligent analysis
 - **Real-time WebSocket**: Live job updates pushed to clients
 - **RESTful API**: Complete job and configuration management
 - **Background Processing**: Celery workers for async job execution
 
 ### Cloud Edge Functions
 - **`ai-analyze`**: AI-powered CTF challenge analysis with category-specific playbooks
-- **`sandbox-terminal`**: Simulated terminal for challenge file exploration
+- **`sandbox-terminal`**: Simulated terminal for challenge file exploration + netcat
 - **`detect-category`**: Automatic challenge categorization (Crypto, Pwn, Web, Rev, Forensics)
+- **`ai-solve-script`**: Generate pwntools solve scripts from netcat interactions
 
 ---
 
@@ -286,6 +290,7 @@ ctf-compass/
 │   │   │   ├── FullAutopilot.tsx    # One-click solve component
 │   │   │   ├── AutopilotPanel.tsx   # Manual autopilot controls
 │   │   │   ├── SandboxTerminal.tsx  # Interactive terminal
+│   │   │   ├── NetcatPanel.tsx      # Netcat terminal with AI scripts
 │   │   │   ├── SolveScriptGenerator.tsx  # AI script generation
 │   │   │   └── JobCard.tsx
 │   │   ├── layout/              # AppLayout, navigation
@@ -295,23 +300,25 @@ ctf-compass/
 │   ├── hooks/
 │   │   ├── use-auth.tsx
 │   │   ├── use-jobs.tsx         # Job CRUD with mock fallback
+│   │   ├── use-backend-status.ts # Unified mode detection
 │   │   └── use-websocket.ts
 │   ├── pages/
 │   │   ├── Dashboard.tsx
-│   │   ├── JobCreate.tsx
-│   │   ├── JobDetail.tsx        # Full Autopilot integration
+│   │   ├── JobCreate.tsx        # Job form with netcat support
+│   │   ├── JobDetail.tsx        # Full Autopilot + Netcat tab
 │   │   ├── Configuration.tsx
 │   │   └── Login.tsx
 │   └── lib/
-│       ├── api.ts
+│       ├── api.ts               # API + netcat functions
 │       ├── mock-data.ts
 │       ├── ctf-tools.ts         # Tool definitions
 │       └── types.ts
 ├── supabase/
 │   ├── functions/
 │   │   ├── ai-analyze/          # AI analysis edge function
-│   │   ├── sandbox-terminal/    # Terminal simulation
-│   │   └── detect-category/     # Auto category detection
+│   │   ├── sandbox-terminal/    # Terminal + netcat simulation
+│   │   ├── detect-category/     # Auto category detection
+│   │   └── ai-solve-script/     # AI pwntools script generator
 │   └── config.toml
 ├── package.json
 └── README.md

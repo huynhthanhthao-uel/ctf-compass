@@ -2,9 +2,16 @@
 #===============================================================================
 # CTF Compass - Production Installation Script
 # Ubuntu 24.04 LTS Only
+# Version: 1.1.0 (2025-12-25)
 #===============================================================================
 #
 # GitHub Repository: https://github.com/HaryLya/ctf-compass.git
+#
+# FEATURES:
+#   - Full Autopilot AI analysis
+#   - Netcat terminal for PWN/remote challenges
+#   - AI Solve Script generation (pwntools)
+#   - Cloud Mode with Lovable Edge Functions
 #
 # USAGE:
 #   # Fresh install
