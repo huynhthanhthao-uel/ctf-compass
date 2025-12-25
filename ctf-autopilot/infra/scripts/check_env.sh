@@ -4,17 +4,17 @@
 # Checks system requirements and installs missing dependencies
 #===============================================================================
 #
-# GitHub: https://github.com/HaryLya/ctf-compass.git
+# GitHub: https://github.com/huynhtrungpc01/ctf-compass.git
 #
 # USAGE:
 #   # Quick check (one-liner)
-#   curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/check_env.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf-autopilot/infra/scripts/check_env.sh | bash
 #
 #   # Check only (no install)
-#   curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/check_env.sh | bash -s -- --check-only
+#   curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf-autopilot/infra/scripts/check_env.sh | bash -s -- --check-only
 #
 #   # Auto-install missing dependencies
-#   curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/check_env.sh | sudo bash -s -- --install
+#   curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf-autopilot/infra/scripts/check_env.sh | sudo bash -s -- --install
 #
 # OPTIONS:
 #   --check-only   Only check, don't install anything
@@ -33,7 +33,7 @@ MIN_MEMORY_MB=3072
 MIN_DISK_GB=15
 MIN_DOCKER_VERSION="24.0.0"
 MIN_COMPOSE_VERSION="2.20.0"
-GITHUB_REPO="https://github.com/HaryLya/ctf-compass.git"
+GITHUB_REPO="https://github.com/huynhtrungpc01/ctf-compass.git"
 
 # Flags
 CHECK_ONLY=false
@@ -71,7 +71,7 @@ for arg in "$@"; do
             echo "  --help         Show this help message"
             echo ""
             echo "One-liner usage:"
-            echo "  curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/check_env.sh | bash"
+            echo "  curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf-autopilot/infra/scripts/check_env.sh | bash"
             exit 0
             ;;
     esac
@@ -338,7 +338,7 @@ main() {
         echo ""
         echo -e "${CYAN}╔═══════════════════════════════════════════════════════════════════╗${NC}"
         echo -e "${CYAN}║              CTF Compass - Environment Checker                    ║${NC}"
-        echo -e "${CYAN}║            github.com/HaryLya/ctf-compass                         ║${NC}"
+        echo -e "${CYAN}║            github.com/huynhtrungpc01/ctf-compass                   ║${NC}"
         echo -e "${CYAN}╚═══════════════════════════════════════════════════════════════════╝${NC}"
         echo ""
     fi
@@ -399,18 +399,18 @@ main() {
             echo -e "${GREEN}${BOLD}✓ All checks passed! System is ready for CTF Compass.${NC}"
             echo ""
             echo "Install CTF Compass with:"
-            echo -e "  ${CYAN}curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash${NC}"
+            echo -e "  ${CYAN}curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash${NC}"
         elif [[ $errors -eq 0 ]]; then
             echo -e "${YELLOW}${BOLD}⚠ Checks passed with $warnings warning(s). System should work.${NC}"
             echo ""
             echo "Install CTF Compass with:"
-            echo -e "  ${CYAN}curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash${NC}"
+            echo -e "  ${CYAN}curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash${NC}"
         else
             echo -e "${RED}${BOLD}✗ $errors error(s) and $warnings warning(s) found.${NC}"
             echo ""
             if [[ "$CHECK_ONLY" != "true" ]]; then
                 echo "Auto-install missing dependencies with:"
-                echo -e "  ${CYAN}curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/check_env.sh | sudo bash -s -- --install${NC}"
+                echo -e "  ${CYAN}curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf-autopilot/infra/scripts/check_env.sh | sudo bash -s -- --install${NC}"
             fi
         fi
         echo ""

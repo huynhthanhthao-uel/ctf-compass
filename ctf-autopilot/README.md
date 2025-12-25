@@ -8,7 +8,7 @@
 
 A production-grade, security-first, local-only CTF challenge analyzer and writeup generator. This tool ingests challenge descriptions and attached files, runs deterministic offline analysis in an isolated Docker sandbox, extracts evidence and candidate flags, and generates professional writeups.
 
-**Repository:** [github.com/HaryLya/ctf-compass](https://github.com/HaryLya/ctf-compass)
+**Repository:** [github.com/huynhtrungpc01/ctf-compass](https://github.com/huynhtrungpc01/ctf-compass)
 
 ---
 
@@ -49,7 +49,7 @@ A production-grade, security-first, local-only CTF challenge analyzer and writeu
 ### 🚀 One-Line Deploy (Simplest)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/deploy.sh | bash
+curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf-autopilot/infra/scripts/deploy.sh | bash
 ```
 
 **Default password: `admin`**
@@ -57,17 +57,17 @@ curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopi
 ### Ubuntu 24.04 Full Installation
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash
 ```
 
 ### Installation Options
 
 ```bash
 # Clean install (remove old installation first)
-curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --clean
+curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --clean
 
 # Force install (skip confirmation prompts)
-curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --force
+curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --force
 ```
 
 | Option | Description |
@@ -150,10 +150,10 @@ sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/uninstall.sh --force --pu
 
 ```bash
 # Uninstall only (no reinstall)
-curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --clean-only
+curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --clean-only
 
 # Uninstall and purge backups
-curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --clean-only --purge
+curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --clean-only --purge
 ```
 
 ### What Gets Cleaned
@@ -577,4 +577,4 @@ This tool is intended for:
 
 Contributions are welcome! Please read our contributing guidelines before submitting a PR.
 
-**GitHub:** [github.com/HaryLya/ctf-compass](https://github.com/HaryLya/ctf-compass)
+**GitHub:** [github.com/huynhtrungpc01/ctf-compass](https://github.com/huynhtrungpc01/ctf-compass)

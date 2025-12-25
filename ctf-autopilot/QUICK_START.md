@@ -3,7 +3,7 @@
 ## 🚀 One-Line Deploy
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/deploy.sh | bash
+curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf-autopilot/infra/scripts/deploy.sh | bash
 ```
 
 **🔑 Password: `admin`**
@@ -14,14 +14,14 @@ curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopi
 
 ### Full Install (Ubuntu 24.04)
 ```bash
-curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash
 ```
 
 ### Manual Deploy
 ```bash
 # Clone repo
 cd /opt
-sudo git clone https://github.com/HaryLya/ctf-compass.git
+sudo git clone https://github.com/huynhtrungpc01/ctf-compass.git
 cd ctf-compass
 
 # Copy simple config

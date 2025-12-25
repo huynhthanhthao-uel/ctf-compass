@@ -4,7 +4,7 @@
 # Wrapper for install script with cleanup mode
 #===============================================================================
 #
-# GitHub: https://github.com/HaryLya/ctf-compass.git
+# GitHub: https://github.com/huynhtrungpc01/ctf-compass.git
 #
 # USAGE:
 #   sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/uninstall.sh
@@ -25,7 +25,7 @@ set -euo pipefail
 INSTALL_DIR="${INSTALL_DIR:-/opt/ctf-compass}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INSTALL_SCRIPT="$SCRIPT_DIR/install_ubuntu_24.04.sh"
-REMOTE_SCRIPT="https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh"
+REMOTE_SCRIPT="https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh"
 
 #-------------------------------------------------------------------------------
 # Colors
@@ -174,7 +174,7 @@ else
 fi
 echo -e "${GREEN}║                                                                   ║${NC}"
 echo -e "${GREEN}║  To reinstall:                                                   ║${NC}"
-echo -e "${GREEN}║  ${CYAN}curl -fsSL https://raw.githubusercontent.com/HaryLya/${NC}            ${GREEN}║${NC}"
+echo -e "${GREEN}║  ${CYAN}curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/${NC}       ${GREEN}║${NC}"
 echo -e "${GREEN}║  ${CYAN}  ctf-compass/main/ctf-autopilot/infra/scripts/${NC}                  ${GREEN}║${NC}"
 echo -e "${GREEN}║  ${CYAN}  install_ubuntu_24.04.sh | sudo bash${NC}                            ${GREEN}║${NC}"
 echo -e "${GREEN}║                                                                   ║${NC}"

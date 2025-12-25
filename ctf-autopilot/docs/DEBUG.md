@@ -2,7 +2,7 @@
 
 Complete debugging guide for CTF Compass. This document covers common issues, Cloud Mode debugging, and step-by-step troubleshooting procedures.
 
-**GitHub:** [github.com/HaryLya/ctf-compass](https://github.com/HaryLya/ctf-compass)
+**GitHub:** [github.com/huynhtrungpc01/ctf-compass](https://github.com/huynhtrungpc01/ctf-compass)
 
 ---
 
@@ -429,7 +429,7 @@ sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh
 ### Clean Reinstall
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --clean
+curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --clean
 ```
 
 ### Reset Frontend State
@@ -467,5 +467,5 @@ When debugging, follow this checklist:
 
 - **Install Logs:** `/var/log/ctf-compass-install.log`
 - **Update Logs:** `/var/log/ctf-compass-update.log`
-- **GitHub Issues:** [github.com/HaryLya/ctf-compass/issues](https://github.com/HaryLya/ctf-compass/issues)
+- **GitHub Issues:** [github.com/huynhtrungpc01/ctf-compass/issues](https://github.com/huynhtrungpc01/ctf-compass/issues)
 - **Documentation:** [ctf-autopilot/docs/](.)
