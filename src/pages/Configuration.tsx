@@ -8,7 +8,6 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useToast } from '@/hooks/use-toast';
-import { mockConfig } from '@/lib/mock-data';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -17,6 +16,14 @@ import { SolveScriptGenerator } from '@/components/jobs/SolveScriptGenerator';
 import { DeploymentInstructions } from '@/components/jobs/DeploymentInstructions';
 import * as api from '@/lib/api';
 import { getBackendUrlFromStorage, normalizeBackendUrl, setBackendUrlToStorage } from '@/lib/backend-url';
+
+// Default configuration when backend is not available
+const defaultConfig = {
+  maxUploadSizeMb: 200,
+  allowedExtensions: ['.zip', '.tar', '.gz', '.bin', '.elf', '.exe', '.py', '.txt', '.pcap', '.png', '.jpg'],
+  sandboxTimeout: 300,
+  allowedTools: ['file', 'strings', 'binwalk', 'exiftool', 'python3', 'objdump', 'gdb', 'strace'],
+};
 
 // Complete list of MegaLLM models with accurate pricing
 const ALL_MODELS = [
@@ -122,7 +129,7 @@ async function isBackendAvailable(): Promise<boolean> {
 
 export default function Configuration() {
   const { toast } = useToast();
-  const [config, setConfig] = useState(mockConfig);
+  const [config, setConfig] = useState(defaultConfig);
   const [isDirty, setIsDirty] = useState(false);
   const [apiKey, setApiKey] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
@@ -547,7 +554,7 @@ export default function Configuration() {
   };
 
   const handleReset = () => {
-    setConfig(mockConfig);
+    setConfig(defaultConfig);
     setApiKey('');
     setApiKeyValid(null);
     localStorage.removeItem('megallm_api_key');

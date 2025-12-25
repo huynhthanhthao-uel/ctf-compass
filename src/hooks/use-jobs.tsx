@@ -1,112 +1,36 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Job, JobDetail } from '@/lib/types';
-import { mockJobs, mockJobDetail, mockJob003Commands, mockJob003Artifacts, mockJob003Flags, mockJob003Writeup, mockJob006Commands, mockJob006Artifacts, mockJob006Flags, mockJob006Writeup, updateMockJobStatus } from '@/lib/mock-data';
 import * as api from '@/lib/api';
 import { useNotifications } from './use-notifications';
+import { getBackendUrlFromStorage } from '@/lib/backend-url';
 
-// Check if we're connected to a real backend
+// Check if Docker backend is reachable
 async function isBackendAvailable(): Promise<boolean> {
+  const backendUrl = getBackendUrlFromStorage();
+  if (!backendUrl) return false;
+
   try {
-    const response = await fetch('/api/health', { method: 'GET' });
-    const contentType = response.headers.get('content-type') || '';
-    const text = await response.text();
+    const response = await fetch(`${backendUrl}/api/health`, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+      signal: AbortSignal.timeout(5000),
+    });
 
     if (!response.ok) return false;
 
-    // Vite/dev preview often serves index.html for unknown routes (looks "OK" but it's not an API)
-    const isHtml = text.trimStart().startsWith('<!') || text.trimStart().startsWith('<html');
-    if (isHtml) return false;
-
-    // Expect JSON from a real backend health endpoint
-    if (!contentType.includes('application/json')) {
-      try {
-        JSON.parse(text);
-      } catch {
-        return false;
-      }
-    }
-
-    return true;
+    const data = await response.json();
+    return data?.status === 'healthy';
   } catch {
     return false;
   }
 }
 
-// Simulate running a mock analysis with progress updates
-function runMockAnalysis(
-  jobId: string,
-  setJobs: React.Dispatch<React.SetStateAction<Job[]>>,
-  mockIntervalsRef: React.MutableRefObject<Map<string, number>>,
-  onComplete?: (job: Job) => void,
-  onStart?: (job: Job) => void,
-): void {
-  // Ensure only one runner per job
-  const existing = mockIntervalsRef.current.get(jobId);
-  if (existing !== undefined) {
-    window.clearInterval(existing);
-    mockIntervalsRef.current.delete(jobId);
-  }
-
-  // Start running
-  setJobs(prev => {
-    const updated = prev.map(job =>
-      job.id === jobId
-        ? { ...job, status: 'running' as const, startedAt: new Date().toISOString(), progress: 0, errorMessage: undefined }
-        : job,
-    );
-    // Notify about start
-    const startedJob = updated.find(j => j.id === jobId);
-    if (startedJob && onStart) {
-      onStart(startedJob);
-    }
-    return updated;
-  });
-
-  let progress = 0;
-  const intervalId = window.setInterval(() => {
-    progress += 15 + Math.random() * 10;
-
-    if (progress >= 100) {
-      progress = 100;
-      window.clearInterval(intervalId);
-      mockIntervalsRef.current.delete(jobId);
-
-      setJobs(prev => {
-        const updated = prev.map(job =>
-          job.id === jobId
-            ? { ...job, status: 'done' as const, completedAt: new Date().toISOString(), progress: 100 }
-            : job,
-        );
-        // Notify about completion
-        const completedJob = updated.find(j => j.id === jobId);
-        if (completedJob && onComplete) {
-          onComplete(completedJob);
-        }
-        return updated;
-      });
-
-      // Also update mockJobs array
-      const idx = mockJobs.findIndex(j => j.id === jobId);
-      if (idx !== -1) {
-        mockJobs[idx] = { ...mockJobs[idx], status: 'done', completedAt: new Date().toISOString(), progress: 100 };
-      }
-
-      return;
-    }
-
-    setJobs(prev => prev.map(job => (job.id === jobId ? { ...job, progress: Math.floor(progress) } : job)));
-  }, 600);
-
-  mockIntervalsRef.current.set(jobId, intervalId);
-}
-
 export function useJobs() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [useApi, setUseApi] = useState<boolean | null>(null);
-
-  const mockIntervalsRef = useRef<Map<string, number>>(new Map());
-  const mockStartTimeoutRef = useRef<Map<string, number>>(new Map());
+  const [isBackendConnected, setIsBackendConnected] = useState<boolean | null>(null);
+  const [backendError, setBackendError] = useState<string | null>(null);
+  const pollingRef = useRef<Map<string, number>>(new Map());
 
   // Get notification functions - will be null if not wrapped in provider
   let addNotification: ((notification: { type: 'success' | 'error' | 'info' | 'warning'; title: string; message: string }) => void) | null = null;
@@ -117,67 +41,56 @@ export function useJobs() {
     // Not wrapped in NotificationProvider
   }
 
-  // Callbacks for mock job notifications
-  const handleMockJobComplete = useCallback((job: Job) => {
-    if (addNotification) {
-      addNotification({
-        type: 'success',
-        title: 'Analysis Complete',
-        message: `${job.title} finished successfully`,
-      });
-    }
-  }, [addNotification]);
-
-  const handleMockJobStart = useCallback((job: Job) => {
-    if (addNotification) {
-      addNotification({
-        type: 'info',
-        title: 'Analysis Started',
-        message: `${job.title} is now running`,
-      });
-    }
-  }, [addNotification]);
-
   // Check backend availability on mount
   useEffect(() => {
     isBackendAvailable().then(available => {
-      setUseApi(available);
+      setIsBackendConnected(available);
       if (!available) {
-        setJobs(mockJobs);
+        setBackendError('Docker backend not available. Configure it in Settings → Docker Backend URL.');
       }
     });
   }, []);
 
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      pollingRef.current.forEach(id => clearInterval(id));
+      pollingRef.current.clear();
+    };
+  }, []);
+
   const fetchJobs = useCallback(async () => {
-    setIsLoading(true);
-    
-    if (useApi) {
-      try {
-        const response = await api.listJobs();
-        const mappedJobs: Job[] = response.jobs.map(j => ({
-          id: j.id,
-          title: j.title,
-          description: '',
-          flagFormat: '',
-          status: j.status === 'completed' ? 'done' : j.status === 'pending' ? 'queued' : j.status,
-          createdAt: j.created_at,
-          completedAt: j.completed_at,
-          progress: j.status === 'completed' ? 100 : j.status === 'running' ? 50 : 0,
-        }));
-        setJobs(mappedJobs);
-      } catch (error) {
-        console.error('Failed to fetch jobs:', error);
-        // If the backend isn't actually available, switch to mock mode
-        setUseApi(false);
-        setJobs(mockJobs);
-      }
-    } else {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      setJobs(mockJobs);
+    if (!isBackendConnected) {
+      setJobs([]);
+      return;
     }
-    
-    setIsLoading(false);
-  }, [useApi]);
+
+    setIsLoading(true);
+    setBackendError(null);
+
+    try {
+      const response = await api.listJobs();
+      const mappedJobs: Job[] = response.jobs.map(j => ({
+        id: j.id,
+        title: j.title,
+        description: '',
+        flagFormat: '',
+        status: j.status === 'completed' ? 'done' : j.status === 'pending' ? 'queued' : j.status,
+        createdAt: j.created_at,
+        completedAt: j.completed_at,
+        progress: j.status === 'completed' ? 100 : j.status === 'running' ? 50 : 0,
+      }));
+      setJobs(mappedJobs);
+    } catch (error) {
+      console.error('Failed to fetch jobs:', error);
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      setBackendError(`Failed to fetch jobs: ${message}`);
+      setIsBackendConnected(false);
+      setJobs([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [isBackendConnected]);
 
   const createJob = useCallback(async (
     title: string,
@@ -187,203 +100,179 @@ export function useJobs() {
     category?: string,
     challengeUrl?: string
   ): Promise<Job> => {
-    setIsLoading(true);
-    
-    if (useApi) {
-      try {
-        const response = await api.createJob(title, description, flagFormat, files, category, challengeUrl);
-        const newJob: Job = {
-          id: response.id,
-          title: response.title,
-          description,
-          flagFormat,
-          category,
-          challengeUrl,
-          status: 'queued',
-          createdAt: response.created_at,
-          progress: 0,
-        };
-        setJobs(prev => [newJob, ...prev]);
-        setIsLoading(false);
-        return newJob;
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        const backendDown =
-          /Backend API not available/i.test(message) ||
-          /Failed to fetch/i.test(message) ||
-          /HTTP 404/i.test(message);
-
-        if (!backendDown) {
-          setIsLoading(false);
-          throw error;
-        }
-
-        // Backend isn't reachable in this environment; switch to mock mode and continue below
-        setUseApi(false);
-      }
+    if (!isBackendConnected) {
+      throw new Error('Backend not connected. Please configure Docker Backend URL in Settings.');
     }
-    
-    // Fallback to mock
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    const newJob: Job = {
-      id: `job-${Date.now()}`,
-      title,
-      description,
-      flagFormat,
-      category,
-      challengeUrl,
-      status: 'queued',
-      createdAt: new Date().toISOString(),
-      progress: 0,
-    };
-    
-    mockJobs.unshift(newJob);
-    setJobs(prev => [newJob, ...prev]);
-    setIsLoading(false);
 
-    // Auto-run analysis in mock mode after creation
-    const timeoutId = window.setTimeout(() => {
-      mockStartTimeoutRef.current.delete(newJob.id);
-      runMockAnalysis(newJob.id, setJobs, mockIntervalsRef, handleMockJobComplete, handleMockJobStart);
-    }, 500);
-    mockStartTimeoutRef.current.set(newJob.id, timeoutId);
+    setIsLoading(true);
+    setBackendError(null);
 
-    return newJob;
-  }, [useApi, handleMockJobComplete, handleMockJobStart]);
+    try {
+      const response = await api.createJob(title, description, flagFormat, files, category, challengeUrl);
+      const newJob: Job = {
+        id: response.id,
+        title: response.title,
+        description,
+        flagFormat,
+        category,
+        challengeUrl,
+        status: 'queued',
+        createdAt: response.created_at,
+        progress: 0,
+      };
+      setJobs(prev => [newJob, ...prev]);
+      return newJob;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setBackendError(message);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [isBackendConnected]);
 
   const runJob = useCallback(async (jobId: string) => {
-    // First check if job exists and is in queued status
+    if (!isBackendConnected) {
+      console.error('Cannot run job: backend not connected');
+      return;
+    }
+
     const job = jobs.find(j => j.id === jobId);
     if (!job) {
       console.error('Job not found:', jobId);
       return;
     }
-    
+
     if (job.status !== 'queued') {
       console.log('Job is not in queued status, cannot run:', job.status);
       return;
     }
 
-    if (useApi) {
-      try {
-        await api.runJob(jobId);
-        setJobs(prev => prev.map(job => 
-          job.id === jobId 
-            ? { ...job, status: 'running' as const, startedAt: new Date().toISOString(), progress: 0 }
-            : job
-        ));
-        
-        // Poll for status updates
-        const pollInterval = setInterval(async () => {
-          try {
-            const detail = await api.getJob(jobId);
-            const status = detail.status === 'completed' ? 'done' : detail.status === 'pending' ? 'queued' : detail.status;
-            
-            setJobs(prev => prev.map(job =>
-              job.id === jobId
-                ? { 
-                    ...job, 
-                    status: status as Job['status'],
-                    progress: detail.status === 'completed' ? 100 : detail.status === 'running' ? 50 : 0,
-                    completedAt: detail.completed_at,
-                  }
-                : job
-            ));
-            
-            if (detail.status === 'completed' || detail.status === 'failed') {
-              clearInterval(pollInterval);
-            }
-          } catch {
-            clearInterval(pollInterval);
-          }
-        }, 2000);
-        
-        return;
-      } catch (error) {
-        console.error('Failed to run job:', error);
-        // Fall through to mock mode
+    try {
+      await api.runJob(jobId);
+      setJobs(prev => prev.map(j =>
+        j.id === jobId
+          ? { ...j, status: 'running' as const, startedAt: new Date().toISOString(), progress: 0 }
+          : j
+      ));
+
+      if (addNotification) {
+        addNotification({
+          type: 'info',
+          title: 'Analysis Started',
+          message: `${job.title} is now running`,
+        });
       }
+
+      // Poll for status updates
+      const pollId = window.setInterval(async () => {
+        try {
+          const detail = await api.getJob(jobId);
+          const status = detail.status === 'completed' ? 'done' : detail.status === 'pending' ? 'queued' : detail.status;
+
+          setJobs(prev => prev.map(j =>
+            j.id === jobId
+              ? {
+                  ...j,
+                  status: status as Job['status'],
+                  progress: detail.status === 'completed' ? 100 : detail.status === 'running' ? 50 : 0,
+                  completedAt: detail.completed_at,
+                }
+              : j
+          ));
+
+          if (detail.status === 'completed' || detail.status === 'failed') {
+            clearInterval(pollId);
+            pollingRef.current.delete(jobId);
+
+            if (addNotification) {
+              addNotification({
+                type: detail.status === 'completed' ? 'success' : 'error',
+                title: detail.status === 'completed' ? 'Analysis Complete' : 'Analysis Failed',
+                message: job.title,
+              });
+            }
+          }
+        } catch {
+          clearInterval(pollId);
+          pollingRef.current.delete(jobId);
+        }
+      }, 2000);
+
+      pollingRef.current.set(jobId, pollId);
+    } catch (error) {
+      console.error('Failed to run job:', error);
+      setBackendError(error instanceof Error ? error.message : 'Failed to run job');
+    }
+  }, [isBackendConnected, jobs, addNotification]);
+
+  const stopJob = useCallback(async (jobId: string) => {
+    // Clear polling if exists
+    const pollId = pollingRef.current.get(jobId);
+    if (pollId) {
+      clearInterval(pollId);
+      pollingRef.current.delete(jobId);
     }
 
-    // Mock mode - always run simulation for queued jobs
-    const pendingStart = mockStartTimeoutRef.current.get(jobId);
-    if (pendingStart !== undefined) {
-      window.clearTimeout(pendingStart);
-      mockStartTimeoutRef.current.delete(jobId);
-    }
-
-    console.log('Running mock analysis for job:', jobId);
-    runMockAnalysis(jobId, setJobs, mockIntervalsRef, handleMockJobComplete, handleMockJobStart);
-  }, [useApi, jobs, handleMockJobComplete, handleMockJobStart]);
-
-  const stopJob = useCallback((jobId: string) => {
-    const pendingStart = mockStartTimeoutRef.current.get(jobId);
-    if (pendingStart !== undefined) {
-      window.clearTimeout(pendingStart);
-      mockStartTimeoutRef.current.delete(jobId);
-    }
-
-    const intervalId = mockIntervalsRef.current.get(jobId);
-    if (intervalId !== undefined) {
-      window.clearInterval(intervalId);
-      mockIntervalsRef.current.delete(jobId);
-    }
-
+    // Update local state
     setJobs(prev =>
       prev.map(job =>
         job.id === jobId
-          ? { ...job, status: 'failed' as const, errorMessage: 'Analysis cancelled by user', progress: job.progress }
-          : job,
-      ),
+          ? { ...job, status: 'failed' as const, errorMessage: 'Analysis cancelled by user' }
+          : job
+      )
     );
 
-    // Update mock data too
-    const idx = mockJobs.findIndex(j => j.id === jobId);
-    if (idx !== -1) {
-      mockJobs[idx] = { ...mockJobs[idx], status: 'failed', errorMessage: 'Analysis cancelled by user' };
-    }
+    // TODO: Call backend API to cancel job when implemented
+    // try {
+    //   await api.cancelJob(jobId);
+    // } catch (error) {
+    //   console.error('Failed to cancel job:', error);
+    // }
   }, []);
 
-  const deleteJob = useCallback((jobId: string) => {
-    const pendingStart = mockStartTimeoutRef.current.get(jobId);
-    if (pendingStart !== undefined) {
-      window.clearTimeout(pendingStart);
-      mockStartTimeoutRef.current.delete(jobId);
+  const deleteJob = useCallback(async (jobId: string) => {
+    // Clear polling if exists
+    const pollId = pollingRef.current.get(jobId);
+    if (pollId) {
+      clearInterval(pollId);
+      pollingRef.current.delete(jobId);
     }
 
-    const intervalId = mockIntervalsRef.current.get(jobId);
-    if (intervalId !== undefined) {
-      window.clearInterval(intervalId);
-      mockIntervalsRef.current.delete(jobId);
-    }
-
+    // Update local state
     setJobs(prev => prev.filter(job => job.id !== jobId));
 
-    // Remove from mock data too
-    const idx = mockJobs.findIndex(j => j.id === jobId);
-    if (idx !== -1) {
-      mockJobs.splice(idx, 1);
-    }
+    // TODO: Call backend API to delete job when implemented
+    // try {
+    //   await api.deleteJob(jobId);
+    // } catch (error) {
+    //   console.error('Failed to delete job:', error);
+    // }
   }, []);
 
-  // Update job status manually (used when autopilot completes)
   const updateJobStatus = useCallback((jobId: string, status: Job['status'], progress?: number) => {
     setJobs(prev =>
       prev.map(job =>
         job.id === jobId
-          ? { 
-              ...job, 
-              status, 
+          ? {
+              ...job,
+              status,
               progress: progress ?? (status === 'done' ? 100 : job.progress),
               completedAt: status === 'done' ? new Date().toISOString() : job.completedAt
             }
-          : job,
-      ),
+          : job
+      )
     );
+  }, []);
 
-    // Update mock data too using the helper function
-    updateMockJobStatus(jobId, status, progress);
+  const retryBackendConnection = useCallback(async () => {
+    setBackendError(null);
+    const available = await isBackendAvailable();
+    setIsBackendConnected(available);
+    if (!available) {
+      setBackendError('Docker backend not available. Configure it in Settings → Docker Backend URL.');
+    }
+    return available;
   }, []);
 
   return {
@@ -395,122 +284,87 @@ export function useJobs() {
     stopJob,
     deleteJob,
     updateJobStatus,
-    isBackendConnected: useApi,
+    isBackendConnected,
+    backendError,
+    retryBackendConnection,
   };
 }
 
 export function useJobDetail(jobId: string) {
   const [jobDetail, setJobDetail] = useState<JobDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [useApi, setUseApi] = useState<boolean | null>(null);
+  const [isBackendConnected, setIsBackendConnected] = useState<boolean | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    isBackendAvailable().then(setUseApi);
+    isBackendAvailable().then(setIsBackendConnected);
   }, []);
 
   const fetchJobDetail = useCallback(async () => {
-    setIsLoading(true);
-    
-    if (useApi) {
-      try {
-        const detail = await api.getJob(jobId);
-        const commands = await api.getJobCommands(jobId);
-        const artifacts = await api.getJobArtifacts(jobId);
-        
-        setJobDetail({
-          id: detail.id,
-          title: detail.title,
-          description: detail.description,
-          flagFormat: detail.flag_format,
-          status: detail.status === 'completed' ? 'done' : detail.status === 'pending' ? 'queued' : detail.status,
-          createdAt: detail.created_at,
-          startedAt: detail.started_at,
-          completedAt: detail.completed_at,
-          progress: detail.status === 'completed' ? 100 : detail.status === 'running' ? 50 : 0,
-          commands: commands.commands.map(c => ({
-            id: c.id,
-            jobId: jobId,
-            tool: c.tool,
-            args: c.arguments,
-            exitCode: c.exit_code ?? 0,
-            stdout: c.stdout,
-            stderr: c.stderr,
-            executedAt: c.started_at,
-            duration: c.completed_at ? new Date(c.completed_at).getTime() - new Date(c.started_at).getTime() : 0,
-          })),
-          artifacts: artifacts.artifacts.map(a => ({
-            name: a.path.split('/').pop() || a.path,
-            path: a.path,
-            size: a.size,
-            type: a.type,
-            createdAt: new Date().toISOString(),
-          })),
-          flagCandidates: detail.flag_candidates.map((f, i) => ({
-            id: `flag-${i}`,
-            value: f.value,
-            confidence: f.confidence,
-            source: f.source,
-            context: '',
-          })),
-        });
-      } catch (error) {
-        console.error('Failed to fetch job detail:', error);
-        // Fallback to mock
-        if (jobId === 'job-001') {
-          setJobDetail(mockJobDetail);
-        }
-      }
-    } else {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      if (jobId === 'job-001') {
-        setJobDetail(mockJobDetail);
-      } else if (jobId === 'job-003') {
-        const job = mockJobs.find(j => j.id === jobId);
-        if (job) {
-          // Check if job is completed (done) - show full analysis data
-          const isCompleted = job.status === 'done';
-          setJobDetail({
-            ...job,
-            inputFiles: ['challenge'],
-            commands: isCompleted ? mockJob003Commands : [],
-            artifacts: isCompleted ? mockJob003Artifacts : [],
-            flagCandidates: isCompleted ? mockJob003Flags : [],
-            writeup: isCompleted ? mockJob003Writeup : undefined,
-          });
-        }
-      } else if (jobId === 'job-006') {
-        const job = mockJobs.find(j => j.id === jobId);
-        if (job) {
-          const isCompleted = job.status === 'done';
-          setJobDetail({
-            ...job,
-            inputFiles: ['encoded.txt'],
-            commands: isCompleted ? mockJob006Commands : [],
-            artifacts: isCompleted ? mockJob006Artifacts : [],
-            flagCandidates: isCompleted ? mockJob006Flags : [],
-            writeup: isCompleted ? mockJob006Writeup : undefined,
-          });
-        }
-      } else {
-        const job = mockJobs.find(j => j.id === jobId);
-        if (job) {
-          setJobDetail({
-            ...job,
-            commands: [],
-            artifacts: [],
-            flagCandidates: [],
-          });
-        }
-      }
+    if (!isBackendConnected) {
+      setIsLoading(false);
+      setError('Backend not connected');
+      return;
     }
-    
-    setIsLoading(false);
-  }, [jobId, useApi]);
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const detail = await api.getJob(jobId);
+      const commands = await api.getJobCommands(jobId);
+      const artifacts = await api.getJobArtifacts(jobId);
+
+      setJobDetail({
+        id: detail.id,
+        title: detail.title,
+        description: detail.description,
+        flagFormat: detail.flag_format,
+        status: detail.status === 'completed' ? 'done' : detail.status === 'pending' ? 'queued' : detail.status,
+        createdAt: detail.created_at,
+        startedAt: detail.started_at,
+        completedAt: detail.completed_at,
+        progress: detail.status === 'completed' ? 100 : detail.status === 'running' ? 50 : 0,
+        commands: commands.commands.map(c => ({
+          id: c.id,
+          jobId: jobId,
+          tool: c.tool,
+          args: c.arguments,
+          exitCode: c.exit_code ?? 0,
+          stdout: c.stdout,
+          stderr: c.stderr,
+          executedAt: c.started_at,
+          duration: c.completed_at ? new Date(c.completed_at).getTime() - new Date(c.started_at).getTime() : 0,
+        })),
+        artifacts: artifacts.artifacts.map(a => ({
+          name: a.path.split('/').pop() || a.path,
+          path: a.path,
+          size: a.size,
+          type: a.type,
+          createdAt: new Date().toISOString(),
+        })),
+        flagCandidates: detail.flag_candidates.map((f, i) => ({
+          id: `flag-${i}`,
+          value: f.value,
+          confidence: f.confidence,
+          source: f.source,
+          context: '',
+        })),
+      });
+    } catch (err) {
+      console.error('Failed to fetch job detail:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load job details');
+      setJobDetail(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [jobId, isBackendConnected]);
 
   return {
     jobDetail,
     isLoading,
     fetchJobDetail,
+    isBackendConnected,
+    error,
   };
 }

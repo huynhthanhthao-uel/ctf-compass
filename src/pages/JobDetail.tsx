@@ -46,9 +46,12 @@ import { useJobDetail } from '@/hooks/use-jobs';
 import { useJobWebSocket, JobUpdate } from '@/hooks/use-websocket';
 import { cn } from '@/lib/utils';
 import { generatePDFReport } from '@/lib/pdf-report';
-import { updateMockJobStatus } from '@/lib/mock-data';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { AlertTriangle, Settings } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { getBackendUrlFromStorage } from '@/lib/backend-url';
 
 const statusConfig = {
   queued: { icon: Clock, label: 'Queued', className: 'bg-secondary text-secondary-foreground' },
@@ -163,101 +166,37 @@ export default function JobDetail() {
     if (!id || !jobDetail) return;
     const currentStatus = realtimeStatus || jobDetail.status;
     if (currentStatus !== 'queued') return;
-    
+
+    const backendUrl = getBackendUrlFromStorage();
+    if (!backendUrl) {
+      toast.error('Backend not configured. Go to Settings → Docker Backend URL.');
+      return;
+    }
+
     setIsStartingAnalysis(true);
     setRealtimeLogs([]);
-    
+
     try {
-      // Try API first
-      const response = await fetch(`/api/jobs/${id}/run`, {
+      const response = await fetch(`${backendUrl}/api/jobs/${id}/run`, {
         method: 'POST',
         credentials: 'include',
       });
-      
+
       if (response.ok) {
         setRealtimeStatus('running');
         setRealtimeProgress(0);
         toast.success('Analysis started');
       } else {
-        // Mock mode - simulate analysis with logs
-        setRealtimeStatus('running');
-        setRealtimeProgress(0);
-        toast.success('Analysis started');
-        
-        const mockLogs = [
-          '[info] Starting analysis...',
-          '[info] Detecting file type...',
-          '[info] Running checksec...',
-          '[info] Extracting strings...',
-          '[info] Analyzing binary structure...',
-          '[info] Running objdump disassembly...',
-          '[info] Searching for flag patterns...',
-          '[success] Flag candidate found!',
-          '[info] Generating writeup...',
-          '[success] Analysis complete!',
-        ];
-        
-        let progress = 0;
-        let logIndex = 0;
-        const interval = window.setInterval(() => {
-          progress += 10 + Math.random() * 5;
-          
-          // Add mock logs
-          if (logIndex < mockLogs.length && progress > (logIndex + 1) * 10) {
-            setRealtimeLogs(prev => [...prev, mockLogs[logIndex]]);
-            logIndex++;
-          }
-          
-          if (progress >= 100) {
-            progress = 100;
-            setRealtimeProgress(100);
-            setRealtimeStatus('done');
-            clearInterval(interval);
-            setAnalysisIntervalRef(null);
-            
-            // Update mock job status
-            const jobIdx = (window as any).__mockJobs?.findIndex((j: any) => j.id === id);
-            if (jobIdx !== undefined && jobIdx >= 0) {
-              (window as any).__mockJobs[jobIdx].status = 'done';
-            }
-            
-            // Refresh to get mock data
-            setTimeout(() => fetchJobDetail(), 500);
-            toast.success('Analysis completed! Flag found: CTF{r3v3rs3_3ng1n33r1ng_b4s1cs}');
-          } else {
-            setRealtimeProgress(Math.floor(progress));
-          }
-        }, 500);
-        
-        setAnalysisIntervalRef(interval);
+        const text = await response.text();
+        toast.error(`Failed to start analysis: ${text || response.status}`);
       }
-    } catch {
-      // Mock mode fallback - same as above
-      setRealtimeStatus('running');
-      setRealtimeProgress(0);
-      toast.success('Analysis started');
-      
-      let progress = 0;
-      const interval = window.setInterval(() => {
-        progress += 12 + Math.random() * 8;
-        if (progress >= 100) {
-          progress = 100;
-          setRealtimeProgress(100);
-          setRealtimeStatus('done');
-          clearInterval(interval);
-          setAnalysisIntervalRef(null);
-          setTimeout(() => fetchJobDetail(), 500);
-          toast.success('Analysis completed!');
-        } else {
-          setRealtimeProgress(Math.floor(progress));
-        }
-      }, 500);
-      
-      setAnalysisIntervalRef(interval);
+    } catch (err) {
+      console.error('Failed to start analysis:', err);
+      toast.error('Failed to start analysis. Check backend connection.');
     } finally {
       setIsStartingAnalysis(false);
     }
-  }, [id, jobDetail, realtimeStatus, fetchJobDetail]);
+  }, [id, jobDetail, realtimeStatus]);
 
   // Cancel running analysis
   const handleCancelAnalysis = useCallback(() => {
@@ -933,8 +872,6 @@ if __name__ == "__main__":
               onComplete={(success, flags) => {
                 if (success && flags.length > 0) {
                   toast.success(`🎉 Autopilot found ${flags.length} flag(s)!`);
-                  // Update job status to done in mock data
-                  updateMockJobStatus(jobDetail.id, 'done', 100);
                   // Update local state
                   setRealtimeStatus('done');
                   setRealtimeProgress(100);

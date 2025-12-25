@@ -32,12 +32,6 @@ import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
 import * as api from '@/lib/api';
-import { 
-  mockAnalysisSessions, 
-  mockSimilarSolves, 
-  mockToolRecommendations,
-  mockSessionDetails 
-} from '@/lib/mock-data';
 
 interface AnalysisHistoryProps {
   jobId: string;
@@ -150,13 +144,8 @@ export function AnalysisHistory({
       const response = await api.getJobSessions(jobId);
       setSessions(response.sessions);
     } catch (err) {
-      console.error('Failed to load sessions from API, using mock data:', err);
-      // Use mock data as fallback
-      const jobSessions = mockAnalysisSessions.filter(s => s.job_id === jobId);
-      setSessions(jobSessions as unknown as api.AnalysisSessionSummary[]);
-      // Also load mock similar solves and recommendations
-      setSimilarSolves(mockSimilarSolves as unknown as api.SimilarSolve[]);
-      setRecommendations(mockToolRecommendations as unknown as api.ToolRecommendation[]);
+      console.error('Failed to load sessions:', err);
+      setSessions([]);
     } finally {
       setIsLoading(false);
     }
@@ -168,13 +157,8 @@ export function AnalysisHistory({
       setSelectedSession(details);
       onSelectSession?.(sessionId);
     } catch (err) {
-      console.error('Failed to load session details from API, using mock data:', err);
-      // Use mock data as fallback
-      const mockDetails = mockSessionDetails[sessionId];
-      if (mockDetails) {
-        setSelectedSession(mockDetails as unknown as api.SessionDetail);
-        onSelectSession?.(sessionId);
-      }
+      console.error('Failed to load session details:', err);
+      setSelectedSession(null);
     }
   };
 
@@ -187,10 +171,9 @@ export function AnalysisHistory({
       setSimilarSolves(solves);
       setRecommendations(recs);
     } catch (err) {
-      console.error('Failed to load similar solves from API, using mock data:', err);
-      // Use mock data as fallback
-      setSimilarSolves(mockSimilarSolves as unknown as api.SimilarSolve[]);
-      setRecommendations(mockToolRecommendations as unknown as api.ToolRecommendation[]);
+      console.error('Failed to load similar solves:', err);
+      setSimilarSolves([]);
+      setRecommendations([]);
     }
   };
 
