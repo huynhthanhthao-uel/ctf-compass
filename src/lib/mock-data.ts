@@ -555,6 +555,190 @@ export const mockJobDetail: JobDetail = {
   inputFiles: ['challenge.py', 'output.bin'],
 };
 
+// Mock Analysis Sessions for History tab
+export const mockAnalysisSessions = [
+  {
+    id: 'session-006-001',
+    job_id: 'job-006',
+    name: 'Encoding Analysis Session',
+    strategy: 'auto',
+    detected_category: 'misc',
+    status: 'completed',
+    started_at: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
+    ended_at: new Date(Date.now() - 1000 * 60 * 2).toISOString(),
+    total_commands: 5,
+    successful_commands: 5,
+    flags_found_count: 1,
+    ai_suggestions_used: 3,
+    notes: 'Detected nested base64 encoding',
+    summary: 'Successfully decoded 3 layers of base64 encoding to reveal the flag.',
+  },
+  {
+    id: 'session-006-002',
+    job_id: 'job-006',
+    name: 'Initial Reconnaissance',
+    strategy: 'manual',
+    detected_category: 'misc',
+    status: 'stopped',
+    started_at: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
+    ended_at: new Date(Date.now() - 1000 * 60 * 12).toISOString(),
+    total_commands: 2,
+    successful_commands: 2,
+    flags_found_count: 0,
+    ai_suggestions_used: 0,
+    notes: null,
+    summary: 'Manual exploration of file structure.',
+  },
+  {
+    id: 'session-003-001',
+    job_id: 'job-003',
+    name: 'Binary Analysis Session',
+    strategy: 'auto',
+    detected_category: 'rev',
+    status: 'completed',
+    started_at: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
+    ended_at: new Date(Date.now() - 1000 * 60 * 25).toISOString(),
+    total_commands: 4,
+    successful_commands: 4,
+    flags_found_count: 1,
+    ai_suggestions_used: 2,
+    notes: 'Flag found in strings output',
+    summary: 'Extracted flag from binary using strings analysis.',
+  },
+];
+
+// Mock Similar Solves for AI Learning
+export const mockSimilarSolves = [
+  {
+    id: 'solve-001',
+    category: 'misc',
+    file_types: ['text/plain', 'ASCII'],
+    successful_tools: ['base64', 'bash', 'cat'],
+    tool_sequence: ['file', 'cat', 'base64 -d', 'base64 -d', 'base64 -d'],
+    time_to_solve_seconds: 180,
+    total_commands: 5,
+  },
+  {
+    id: 'solve-002',
+    category: 'misc',
+    file_types: ['text/plain'],
+    successful_tools: ['xxd', 'python3', 'tr'],
+    tool_sequence: ['file', 'xxd', 'python3 decode.py'],
+    time_to_solve_seconds: 240,
+    total_commands: 4,
+  },
+  {
+    id: 'solve-003',
+    category: 'crypto',
+    file_types: ['text/plain', 'application/octet-stream'],
+    successful_tools: ['openssl', 'base64', 'python3'],
+    tool_sequence: ['file', 'strings', 'base64 -d', 'openssl'],
+    time_to_solve_seconds: 420,
+    total_commands: 8,
+  },
+];
+
+// Mock AI Tool Recommendations
+export const mockToolRecommendations = [
+  {
+    tool: 'base64',
+    score: 95,
+    reason: 'Highly effective for encoding/decoding challenges - 90% success rate',
+  },
+  {
+    tool: 'file',
+    score: 88,
+    reason: 'Essential first step for file type detection',
+  },
+  {
+    tool: 'strings',
+    score: 82,
+    reason: 'Quick extraction of readable content from any file',
+  },
+  {
+    tool: 'xxd',
+    score: 75,
+    reason: 'Useful for hex analysis and binary inspection',
+  },
+  {
+    tool: 'python3',
+    score: 70,
+    reason: 'Versatile scripting for custom decode operations',
+  },
+];
+
+// Mock Session Details
+export const mockSessionDetails: Record<string, {
+  session: typeof mockAnalysisSessions[0];
+  commands: Array<{
+    id: string;
+    tool: string;
+    arguments: string[];
+    exit_code: number | null;
+    stdout_preview: string;
+    executed_at: string;
+    duration_ms: number;
+  }>;
+  flags: Array<{
+    id: string;
+    value: string;
+    confidence: number;
+    source: string | null;
+  }>;
+  ai_insights: Array<{
+    analysis: string;
+    category: string;
+    confidence: number;
+    findings: string[];
+    timestamp: string;
+  }>;
+  effective_tools: Array<{
+    tool: string;
+    context: string | null;
+    timestamp: string;
+  }>;
+}> = {
+  'session-006-001': {
+    session: mockAnalysisSessions[0],
+    commands: mockJob006Commands.map((cmd) => ({
+      id: cmd.id,
+      tool: cmd.tool,
+      arguments: cmd.args,
+      exit_code: cmd.exitCode,
+      stdout_preview: cmd.stdout.substring(0, 100),
+      executed_at: cmd.executedAt,
+      duration_ms: Math.round((cmd.duration || 0.05) * 1000),
+    })),
+    flags: mockJob006Flags.map(f => ({
+      id: f.id,
+      value: f.value,
+      confidence: f.confidence,
+      source: f.source,
+    })),
+    ai_insights: [
+      {
+        analysis: 'Detected multiple layers of base64 encoding in the input file.',
+        category: 'misc',
+        confidence: 0.92,
+        findings: ['Nested encoding detected', 'ASCII text content', '3+ encoding layers'],
+        timestamp: new Date(Date.now() - 1000 * 60 * 4).toISOString(),
+      },
+      {
+        analysis: 'Recommend iterative base64 decoding until readable output.',
+        category: 'misc',
+        confidence: 0.88,
+        findings: ['Use piped commands for efficiency'],
+        timestamp: new Date(Date.now() - 1000 * 60 * 3).toISOString(),
+      },
+    ],
+    effective_tools: [
+      { tool: 'base64', context: 'Primary decoding tool', timestamp: new Date().toISOString() },
+      { tool: 'bash', context: 'Command chaining', timestamp: new Date().toISOString() },
+      { tool: 'cat', context: 'File reading', timestamp: new Date().toISOString() },
+    ],
+  },
+};
+
 export const mockConfig: Config = {
   maxUploadSizeMb: 200,
   allowedExtensions: ['.txt', '.py', '.c', '.cpp', '.h', '.java', '.js', '.json', '.xml', '.html', '.css', '.md', '.pdf', '.png', '.jpg', '.jpeg', '.gif', '.zip', '.tar', '.gz', '.pcap', '.pcapng', '.elf', '.exe', '.dll', '.so', '.bin', '.wav', '.mp3', '.pem', '.key', '.mem', '.raw'],
