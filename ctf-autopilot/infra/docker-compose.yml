@@ -258,7 +258,3 @@ networks:
     name: ctf_compass_backend
     driver: bridge
     internal: true
-  # Monitoring network (used by Prometheus/Grafana stack)
-  monitoring:
-    name: ctf_compass_monitoring
-    driver: bridge
