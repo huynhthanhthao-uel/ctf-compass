@@ -26,7 +26,15 @@
 
 ## 🚀 Quick Deploy
 
-### One-Command Installation (Ubuntu 24.04)
+### One-Line Deploy (Simplest)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/deploy.sh | bash
+```
+
+**🔑 Default Password: `admin`**
+
+### Full Installation (Ubuntu 24.04)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash
@@ -40,9 +48,6 @@ curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopi
 
 # Complete purge and reinstall
 curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --clean --purge
-
-# Force install (no prompts)
-curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --force
 ```
 
 | Option | Description |
@@ -56,8 +61,8 @@ curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopi
 ### Post-Installation
 
 1. **Access Web UI:** `http://YOUR_SERVER_IP:3000`
-2. **Login** with the admin password shown during installation
-3. **Configure API Key:** Go to Configuration page and enter your MegaLLM API key
+2. **Login with password:** `admin`
+3. **Configure API Key (Optional):** Go to Configuration page for AI features
 4. **Start analyzing CTF challenges!**
 
 ---
@@ -237,12 +242,18 @@ curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopi
 - **Session-based Auth:** Secure session management with CSRF protection
 - **API Key Protection:** Keys stored securely, never exposed in logs or UI
 
+### Default Credentials
+
+| Credential | Default Value |
+|------------|---------------|
+| `ADMIN_PASSWORD` | `admin` |
+| `POSTGRES_PASSWORD` | `ctfautopilot` |
+| `POSTGRES_USER` | `ctfautopilot` |
+
 ### Security Checklist
 
-- [ ] Change `ADMIN_PASSWORD` from default
-- [ ] Configure `SECRET_KEY` for production
+- [ ] Change `ADMIN_PASSWORD` if deploying publicly
 - [ ] Enable TLS for public deployments
-- [ ] Set API key via Web UI (not environment)
 - [ ] Review firewall rules (UFW)
 
 ---

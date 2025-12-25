@@ -1,13 +1,23 @@
 # CTF Compass - Quick Start (Local Deployment)
 
-## 🚀 Quick Start
+## 🚀 One-Line Deploy
 
-### Option 1: Auto Install (Ubuntu 24.04)
+```bash
+curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/deploy.sh | bash
+```
+
+**🔑 Password: `admin`**
+
+---
+
+## 📋 Alternative Installation Methods
+
+### Full Install (Ubuntu 24.04)
 ```bash
 curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash
 ```
 
-### Option 2: Manual Deploy
+### Manual Deploy
 ```bash
 # Clone repo
 cd /opt
@@ -17,7 +27,7 @@ cd ctf-compass
 # Copy simple config
 cp ctf-autopilot/infra/.env.local ctf-autopilot/infra/.env
 
-# Build sandbox image
+# Build sandbox image (optional)
 docker build -t ctf-autopilot-sandbox:latest ctf-autopilot/sandbox/image/
 
 # Start services
@@ -29,14 +39,27 @@ sleep 30
 docker compose ps
 ```
 
-## 🔐 Login Credentials
+---
 
-**Password:** `admin`
+## 🔐 Default Credentials
+
+| Credential | Value |
+|------------|-------|
+| **Password** | `admin` |
+| **Database User** | `ctfautopilot` |
+| **Database Password** | `ctfautopilot` |
+
+---
 
 ## 📍 Access URLs
 
-- **Web UI:** http://YOUR_IP (or http://localhost:3000)
-- **API:** http://YOUR_IP:8000
+| Service | URL |
+|---------|-----|
+| **Web UI** | http://YOUR_IP:3000 |
+| **API** | http://YOUR_IP:8000 |
+| **API Docs** | http://YOUR_IP:8000/docs |
+
+---
 
 ## 🛠️ Common Commands
 
@@ -53,7 +76,12 @@ docker compose down
 # Clean reinstall
 docker compose down -v
 docker compose up -d --build
+
+# Check status
+docker compose ps
 ```
+
+---
 
 ## 🤖 Enable AI Analysis (Optional)
 
@@ -68,14 +96,23 @@ docker compose up -d --build
    docker compose restart
    ```
 
+> **Note:** Cloud Mode works without API key!
+
+---
+
 ## 🧪 Sandbox Tools
 
 The sandbox includes 50+ CTF analysis tools:
-- Binary analysis: binwalk, file, strings, xxd, radare2, gdb
-- Crypto: openssl, hashcat, john
-- Forensics: tshark, volatility3, exiftool
-- Steganography: zsteg, stegcracker
-- Reverse engineering: retdec, checksec, pwntools
+
+| Category | Tools |
+|----------|-------|
+| **Binary** | binwalk, file, strings, xxd, radare2, gdb, checksec |
+| **Crypto** | openssl, hashcat, john |
+| **Forensics** | tshark, volatility3, exiftool, foremost |
+| **Stego** | zsteg, stegcracker, steghide |
+| **Reverse** | retdec, objdump, nm, pwntools |
+
+---
 
 ## 💡 Troubleshooting
 
@@ -97,3 +134,12 @@ curl -X POST http://localhost:8000/api/auth/login \
 docker compose down -v --rmi local
 docker compose up -d --build
 ```
+
+---
+
+## 📚 More Documentation
+
+- [README.md](../README.md) - Full documentation
+- [docs/USAGE.md](docs/USAGE.md) - User guide
+- [docs/DEBUG.md](docs/DEBUG.md) - Troubleshooting
+- [docs/RUNBOOK.md](docs/RUNBOOK.md) - Operations guide

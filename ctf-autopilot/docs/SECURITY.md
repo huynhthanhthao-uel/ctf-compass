@@ -279,12 +279,18 @@ server {
 
 ## Security Checklist
 
-### Pre-Deployment
+### For Local-Only Deployment (Single User)
 
-- [ ] Changed `ADMIN_PASSWORD` from default
-- [ ] Set strong `POSTGRES_PASSWORD` (auto-generated is fine)
+Default credentials are acceptable:
+- `ADMIN_PASSWORD`: `admin`
+- `POSTGRES_PASSWORD`: `ctfautopilot`
+
+### For Public/Production Deployment
+
+- [ ] Changed `ADMIN_PASSWORD` from default `admin`
+- [ ] Set strong `POSTGRES_PASSWORD`
 - [ ] Configured unique `SECRET_KEY`
-- [ ] Set MegaLLM API key via Configuration page
+- [ ] Set MegaLLM API key via Configuration page (optional)
 - [ ] Enabled TLS for production deployment
 - [ ] Configured firewall (UFW)
 - [ ] Verified fail2ban is running
