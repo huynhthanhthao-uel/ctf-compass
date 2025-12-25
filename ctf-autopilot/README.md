@@ -40,9 +40,17 @@ A production-grade, security-first, local-only CTF challenge analyzer and writeu
 
 ---
 
-## ⚡ Quick Start (Ubuntu 24.04 LTS)
+## ⚡ Quick Start
 
-### One-Command Installation
+### 🚀 One-Line Deploy (Simplest)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/deploy.sh | bash
+```
+
+**Default password: `admin`**
+
+### Ubuntu 24.04 Full Installation
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash
@@ -56,12 +64,6 @@ curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopi
 
 # Force install (skip confirmation prompts)
 curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --force
-
-# Install without starting services
-curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --no-start
-
-# Complete purge and reinstall (removes backups too)
-curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --clean --purge
 ```
 
 | Option | Description |
@@ -75,11 +77,9 @@ curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopi
 ### Post-Installation
 
 1. **Access the Web UI:** `http://YOUR_SERVER_IP:3000`
-2. **Login** with the admin password shown during installation
-3. **Configure API Key:** Go to Configuration page and enter your MegaLLM API key (optional - Cloud Mode works without it)
+2. **Login with password:** `admin`
+3. **Configure API Key (Optional):** Go to Configuration page for AI features
 4. **Start analyzing!** Click "Solve Challenge" on any job
-
-> **Note:** API key can be configured directly in the Web UI. Cloud Mode provides AI analysis even without backend!
 
 ---
 
@@ -329,19 +329,25 @@ After installation:
 3. Enter your **MegaLLM API key** (optional for Cloud Mode)
 4. Configure model settings if needed
 
+### Default Credentials
+
+| Credential | Default Value |
+|------------|---------------|
+| `ADMIN_PASSWORD` | `admin` |
+| `POSTGRES_PASSWORD` | `ctfautopilot` |
+| `POSTGRES_USER` | `ctfautopilot` |
+
 ### Environment Variables
 
 | Variable | Description | Required |
 |----------|-------------|----------|
 | `MEGALLM_API_KEY` | API key from [ai.megallm.io](https://ai.megallm.io) | No (Cloud Mode fallback) |
-| `ADMIN_PASSWORD` | Admin login password | Auto-generated |
-| `POSTGRES_PASSWORD` | Database password | Auto-generated |
+| `ADMIN_PASSWORD` | Admin login password | Default: `admin` |
 
 ### Optional Settings
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `SECRET_KEY` | Auto-generated | JWT signing key |
 | `MAX_UPLOAD_SIZE_MB` | 200 | Maximum file upload size |
 | `SANDBOX_TIMEOUT_SECONDS` | 60 | Per-command timeout |
 | `MEGALLM_MODEL` | llama3.3-70b-instruct | AI model to use |
