@@ -1,6 +1,6 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Upload, X, AlertCircle, FolderOpen, Link, Sparkles, Loader2 } from 'lucide-react';
+import { Upload, X, AlertCircle, FolderOpen, Link, Sparkles, Loader2, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -19,6 +19,8 @@ import { FilePreview } from './FilePreview';
 import { useCategoryDetector } from '@/hooks/use-category-detector';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
+import { CategoryConfidenceChart } from './CategoryConfidenceChart';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 const CHALLENGE_CATEGORIES = [
   { value: 'crypto', label: 'Crypto' },
@@ -45,6 +47,8 @@ export function JobForm({ onSubmit, isLoading }: JobFormProps) {
   const [autoDetected, setAutoDetected] = useState(false);
   const [lastDetectedFiles, setLastDetectedFiles] = useState<string>('');
   const [lastDetectedDesc, setLastDetectedDesc] = useState<string>('');
+  const [showChart, setShowChart] = useState(false);
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
   const { detectFromFiles, isDetecting, result: detectionResult } = useCategoryDetector();
 
@@ -96,6 +100,37 @@ export function JobForm({ onSubmit, isLoading }: JobFormProps) {
     }
   }, [filesSignature, files, detectFromFiles, description, category, lastDetectedFiles]);
 
+  // Debounced detection when description changes
+  useEffect(() => {
+    if (description.trim().length > 20 && files.length > 0 && !isDetecting) {
+      // Clear previous timer
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+
+      // Set new debounced detection
+      debounceRef.current = setTimeout(() => {
+        if (description !== lastDetectedDesc) {
+          detectFromFiles(files, description).then(result => {
+            if (result) {
+              // Only update if result differs and confidence is good
+              if (result.category !== category && result.confidence > 0.6) {
+                setShowChart(true);
+                // Don't auto-change category, just show the chart
+              }
+            }
+          });
+        }
+      }, 800);
+    }
+
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+    };
+  }, [description, files, detectFromFiles, lastDetectedDesc, category, isDetecting]);
+
   // Check if re-detection might give different results
   const canRedetect = files.length > 0 || description.trim().length > 10;
   const hasChangedSinceLastDetect = filesSignature !== lastDetectedFiles || description !== lastDetectedDesc;
@@ -104,6 +139,13 @@ export function JobForm({ onSubmit, isLoading }: JobFormProps) {
   const handleCategoryChange = (value: string) => {
     setCategory(value);
     setAutoDetected(false);
+  };
+
+  // Handle category selection from chart
+  const handleChartCategorySelect = (cat: string) => {
+    setCategory(cat);
+    setAutoDetected(false);
+    toast.success(`Selected category: ${cat}`);
   };
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -226,8 +268,33 @@ export function JobForm({ onSubmit, isLoading }: JobFormProps) {
                       Changed
                     </Badge>
                   )}
+                  {detectionResult.allScores.length > 0 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-5 text-[10px] px-1.5 ml-auto"
+                      onClick={() => setShowChart(!showChart)}
+                    >
+                      <BarChart3 className="h-3 w-3 mr-1" />
+                      {showChart ? 'Hide' : 'Compare'}
+                    </Button>
+                  )}
                 </div>
               )}
+
+              {/* Category Confidence Chart */}
+              <Collapsible open={showChart} onOpenChange={setShowChart}>
+                <CollapsibleContent className="mt-2">
+                  {detectionResult && (
+                    <CategoryConfidenceChart
+                      scores={detectionResult.allScores}
+                      selectedCategory={category}
+                      onSelectCategory={handleChartCategorySelect}
+                    />
+                  )}
+                </CollapsibleContent>
+              </Collapsible>
             </div>
           </div>
 
