@@ -816,3 +816,130 @@ export async function runPythonScript(request: RunScriptRequest): Promise<RunScr
     body: JSON.stringify(request),
   });
 }
+
+// ============ File Upload to Edge Function ============
+
+export interface FileUploadResult {
+  success: boolean;
+  message: string;
+  analysis?: {
+    type: string;
+    category: string;
+    findings: string[];
+    flags_found: number;
+  };
+}
+
+/**
+ * Upload file content to edge function for analysis
+ */
+export async function uploadFileForAnalysis(
+  jobId: string,
+  fileName: string,
+  fileContent: string,
+  fileType: string = 'unknown'
+): Promise<FileUploadResult> {
+  return invokeEdgeFunction<FileUploadResult>('sandbox-terminal', {
+    job_id: jobId,
+    action: 'upload',
+    file_name: fileName,
+    file_content: fileContent,
+    file_type: fileType,
+  });
+}
+
+/**
+ * Upload multiple files for a job
+ */
+export async function uploadFilesForJob(
+  jobId: string,
+  files: File[]
+): Promise<FileUploadResult[]> {
+  const results: FileUploadResult[] = [];
+  
+  for (const file of files) {
+    try {
+      const content = await readFileAsText(file);
+      const result = await uploadFileForAnalysis(
+        jobId,
+        file.name,
+        content,
+        file.type || 'unknown'
+      );
+      results.push(result);
+    } catch (error) {
+      console.error(`Failed to upload file ${file.name}:`, error);
+      results.push({
+        success: false,
+        message: `Failed to upload ${file.name}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      });
+    }
+  }
+  
+  return results;
+}
+
+/**
+ * Read file as text (with binary fallback to base64)
+ */
+async function readFileAsText(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      resolve(result);
+    };
+    reader.onerror = () => reject(reader.error);
+    
+    // Try to read as text, fallback handled by edge function
+    reader.readAsText(file);
+  });
+}
+
+// ============ Netcat Challenge Support ============
+
+export interface NetcatConnectionResult {
+  stdout: string;
+  stderr: string;
+  exit_code: number;
+  connected: boolean;
+  interaction_log?: string[];
+}
+
+/**
+ * Execute netcat connection to remote server
+ */
+export async function executeNetcatCommand(
+  jobId: string,
+  host: string,
+  port: number,
+  payload?: string,
+  timeout: number = 10
+): Promise<NetcatConnectionResult> {
+  return invokeEdgeFunction<NetcatConnectionResult>('sandbox-terminal', {
+    job_id: jobId,
+    tool: 'nc',
+    args: [host, String(port)],
+    payload,
+    timeout,
+  });
+}
+
+/**
+ * Simulate netcat interaction with script
+ */
+export async function executeNetcatInteraction(
+  jobId: string,
+  host: string,
+  port: number,
+  script: string[],
+  timeout: number = 30
+): Promise<NetcatConnectionResult> {
+  return invokeEdgeFunction<NetcatConnectionResult>('sandbox-terminal', {
+    job_id: jobId,
+    tool: 'nc_interact',
+    args: [host, String(port)],
+    interaction_script: script,
+    timeout,
+  });
+}
