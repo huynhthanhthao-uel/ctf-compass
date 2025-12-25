@@ -37,7 +37,20 @@ interface UseWebSocketReturn {
 }
 
 /**
+ * Check if we're running on Lovable Cloud (no Docker backend with WebSocket support)
+ */
+function isCloudMode(): boolean {
+  // In Cloud mode, there's no /ws endpoint - only edge functions
+  const hostname = window.location.hostname;
+  // Lovable preview URLs or Supabase domains indicate Cloud mode
+  return hostname.includes('lovableproject.com') || 
+         hostname.includes('lovable.app') ||
+         hostname.includes('supabase.co');
+}
+
+/**
  * Hook for connecting to WebSocket for real-time job updates
+ * Disabled in Cloud mode since we don't have a WebSocket server
  */
 export function useJobWebSocket(options: UseWebSocketOptions = {}): UseWebSocketReturn {
   const {
@@ -51,6 +64,7 @@ export function useJobWebSocket(options: UseWebSocketOptions = {}): UseWebSocket
   const [isConnected, setIsConnected] = useState(false);
   const [lastMessage, setLastMessage] = useState<JobUpdate | null>(null);
   const [error, setError] = useState<Error | null>(null);
+  const [isCloudModeActive] = useState(isCloudMode());
   
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -133,6 +147,12 @@ export function useJobWebSocket(options: UseWebSocketOptions = {}): UseWebSocket
   }, [enableNotifications, addNotification]);
 
   const connect = useCallback(() => {
+    // Skip WebSocket connection in Cloud mode - no backend WS server
+    if (isCloudModeActive) {
+      console.log('[WS] Skipping WebSocket - Cloud mode detected (using edge functions)');
+      return;
+    }
+    
     cleanup();
     
     try {
@@ -209,7 +229,7 @@ export function useJobWebSocket(options: UseWebSocketOptions = {}): UseWebSocket
   useEffect(() => {
     connect();
     return cleanup;
-  }, [connect, cleanup]);
+  }, [connect, cleanup, isCloudModeActive]);
 
   return {
     isConnected,

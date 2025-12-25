@@ -576,6 +576,151 @@ function executePythonScript(jobId: string, script: string): { stdout: string; s
   };
 }
 
+// Simulate netcat connection to remote server
+function executeNetcatCommand(
+  jobId: string,
+  host: string,
+  port: string,
+  payload?: string,
+  interactionScript?: string[],
+  _timeout?: number
+): { stdout: string; stderr: string; exit_code: number; connected: boolean; interaction_log?: string[] } {
+  console.log(`[sandbox-terminal] Netcat connection: ${host}:${port}`);
+  
+  const state = getJobState(jobId);
+  
+  // Demo netcat responses for common CTF scenarios
+  const interactionLog: string[] = [];
+  
+  // PWN challenge simulation
+  if (host.includes('pwn') || port === '9001' || port === '1337') {
+    interactionLog.push(`$ nc ${host} ${port}`);
+    interactionLog.push(`[*] Connected to ${host}:${port}`);
+    interactionLog.push(`Welcome to the PWN challenge!`);
+    interactionLog.push(`Enter your name: `);
+    
+    if (payload) {
+      interactionLog.push(`You entered: ${payload.slice(0, 20)}...`);
+      // Check if payload looks like exploit (long string or contains ROP gadgets)
+      if (payload.length > 64 || payload.includes('\\x')) {
+        state.flagFound = true;
+        interactionLog.push(`[*] Buffer overflow detected!`);
+        interactionLog.push(`[*] Executing win_function...`);
+        interactionLog.push(`FLAG: CTF{r3m0t3_pwn_m4st3r}`);
+        return {
+          stdout: interactionLog.join('\n'),
+          stderr: '',
+          exit_code: 0,
+          connected: true,
+          interaction_log: interactionLog,
+        };
+      }
+    }
+    
+    if (interactionScript && interactionScript.length > 0) {
+      for (const cmd of interactionScript) {
+        interactionLog.push(`> ${cmd}`);
+        if (cmd.length > 64) {
+          state.flagFound = true;
+          interactionLog.push(`[*] Overflow triggered!`);
+          interactionLog.push(`FLAG: CTF{r3m0t3_pwn_m4st3r}`);
+          break;
+        }
+      }
+    }
+    
+    return {
+      stdout: interactionLog.join('\n'),
+      stderr: '',
+      exit_code: 0,
+      connected: true,
+      interaction_log: interactionLog,
+    };
+  }
+  
+  // Crypto challenge simulation
+  if (host.includes('crypto') || port === '9002') {
+    interactionLog.push(`$ nc ${host} ${port}`);
+    interactionLog.push(`[*] Connected to ${host}:${port}`);
+    interactionLog.push(`=== Crypto Challenge Server ===`);
+    interactionLog.push(`Encrypted message: 245`);
+    interactionLog.push(`Public key: n=323, e=5`);
+    interactionLog.push(`Enter decrypted message: `);
+    
+    if (payload === 'HI' || payload?.includes('CTF{')) {
+      state.flagFound = true;
+      interactionLog.push(`Correct! Here's your flag:`);
+      interactionLog.push(`FLAG: CTF{n3tw0rk_crypt0_m4st3r}`);
+    }
+    
+    return {
+      stdout: interactionLog.join('\n'),
+      stderr: '',
+      exit_code: 0,
+      connected: true,
+      interaction_log: interactionLog,
+    };
+  }
+  
+  // Misc/quiz challenge simulation
+  if (host.includes('misc') || host.includes('quiz') || port === '9003') {
+    interactionLog.push(`$ nc ${host} ${port}`);
+    interactionLog.push(`[*] Connected to ${host}:${port}`);
+    interactionLog.push(`=== CTF Quiz ===`);
+    interactionLog.push(`Question 1: What is 2+2?`);
+    
+    if (interactionScript) {
+      let correct = 0;
+      const answers = ['4', 'python', 'yes'];
+      for (let i = 0; i < interactionScript.length && i < answers.length; i++) {
+        interactionLog.push(`> ${interactionScript[i]}`);
+        if (interactionScript[i].toLowerCase().includes(answers[i])) {
+          interactionLog.push(`Correct!`);
+          correct++;
+        } else {
+          interactionLog.push(`Wrong!`);
+        }
+      }
+      if (correct >= 2) {
+        state.flagFound = true;
+        interactionLog.push(`Congratulations!`);
+        interactionLog.push(`FLAG: CTF{qu1z_m4st3r_2024}`);
+      }
+    }
+    
+    return {
+      stdout: interactionLog.join('\n'),
+      stderr: '',
+      exit_code: 0,
+      connected: true,
+      interaction_log: interactionLog,
+    };
+  }
+  
+  // Generic connection simulation
+  interactionLog.push(`$ nc ${host} ${port}`);
+  interactionLog.push(`[*] Attempting connection to ${host}:${port}...`);
+  interactionLog.push(`[*] Connected successfully`);
+  interactionLog.push(`Welcome to the challenge server!`);
+  
+  if (payload) {
+    interactionLog.push(`Received: ${payload}`);
+    // Check for flag patterns in response
+    if (payload.includes("' OR") || payload.includes('admin')) {
+      state.flagFound = true;
+      interactionLog.push(`FLAG: CTF{n3tc4t_ch4ll3ng3_s0lv3d}`);
+    }
+  }
+  
+  return {
+    stdout: interactionLog.join('\n'),
+    stderr: '',
+    exit_code: 0,
+    connected: true,
+    interaction_log: interactionLog,
+  };
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -596,11 +741,15 @@ serve(async (req) => {
       args = [], 
       script, 
       script_type,
-      // New: file upload support
+      // File upload support
       file_name,
       file_content,
       file_type,
-      action 
+      action,
+      // Netcat support
+      payload,
+      timeout,
+      interaction_script 
     } = body;
 
     console.log('[sandbox-terminal] Request:', { 
@@ -645,6 +794,23 @@ serve(async (req) => {
         stderr: result.stderr,
         exit_code: result.exit_code,
         command_id: `script-${Date.now()}`,
+        executed_at: new Date().toISOString()
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Handle netcat commands
+    if (tool === 'nc' || tool === 'nc_interact') {
+      console.log('[sandbox-terminal] Netcat command for job:', job_id, 'host:', args[0], 'port:', args[1]);
+      
+      const host = args[0] || 'localhost';
+      const port = args[1] || '9999';
+      const result = executeNetcatCommand(job_id, host, port, payload, interaction_script, timeout || 10);
+      
+      return new Response(JSON.stringify({
+        ...result,
+        command_id: `nc-${Date.now()}`,
         executed_at: new Date().toISOString()
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
