@@ -5,11 +5,16 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Track command history per job to simulate progressive analysis
+// Job file storage simulation (in production, use Supabase Storage)
+const jobFiles: Record<string, Map<string, { content: string; type: string }>> = {};
+
+// Track command history per job for progressive analysis
 const jobState: Record<string, {
   commandsRun: string[];
   discoveredInfo: string[];
   flagFound: boolean;
+  detectedCategory: string;
+  uploadedFiles: string[];
 }> = {};
 
 // Initialize or get job state
@@ -18,24 +23,282 @@ function getJobState(jobId: string) {
     jobState[jobId] = {
       commandsRun: [],
       discoveredInfo: [],
-      flagFound: false
+      flagFound: false,
+      detectedCategory: 'unknown',
+      uploadedFiles: [],
     };
   }
   return jobState[jobId];
 }
 
-// Job-specific realistic outputs that progress based on previous commands
-const getJobOutput = (
-  jobId: string, 
-  tool: string, 
-  args: string[]
-): { stdout: string; stderr: string; exit_code: number } => {
+// Store file content for a job
+function storeJobFile(jobId: string, fileName: string, content: string, type: string) {
+  if (!jobFiles[jobId]) {
+    jobFiles[jobId] = new Map();
+  }
+  jobFiles[jobId].set(fileName, { content, type });
+  
+  const state = getJobState(jobId);
+  if (!state.uploadedFiles.includes(fileName)) {
+    state.uploadedFiles.push(fileName);
+  }
+}
+
+// Get stored files for a job
+function getJobFiles(jobId: string): Map<string, { content: string; type: string }> {
+  return jobFiles[jobId] || new Map();
+}
+
+// Analyze file content to determine type and extract data
+function analyzeFileContent(content: string, fileName: string): {
+  type: string;
+  category: string;
+  findings: string[];
+  flags: string[];
+} {
+  const findings: string[] = [];
+  const flags: string[] = [];
+  let type = 'unknown';
+  let category = 'misc';
+
+  const lowerContent = content.toLowerCase();
+  const lowerName = fileName.toLowerCase();
+
+  // Detect file type
+  if (lowerName.endsWith('.py') || content.includes('#!/usr/bin/env python') || content.includes('def ') || content.includes('import ')) {
+    type = 'Python script';
+    category = 'crypto';
+    if (content.includes('RSA') || content.includes('rsa')) {
+      findings.push('RSA cryptography detected');
+      category = 'crypto';
+    }
+    if (content.includes('AES') || content.includes('Cipher')) {
+      findings.push('Symmetric encryption detected');
+    }
+  } else if (lowerName.endsWith('.png') || content.startsWith('\x89PNG')) {
+    type = 'PNG image';
+    category = 'forensics';
+    findings.push('PNG image - check for steganography');
+  } else if (lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg')) {
+    type = 'JPEG image';
+    category = 'forensics';
+    findings.push('JPEG image - check EXIF data');
+  } else if (lowerName.endsWith('.zip') || content.startsWith('PK')) {
+    type = 'ZIP archive';
+    category = 'forensics';
+    findings.push('ZIP archive - needs extraction');
+  } else if (lowerName.endsWith('.txt') || lowerName.endsWith('.enc')) {
+    type = 'Text file';
+    // Check for encoding patterns
+    if (/^[A-Za-z0-9+/=]+$/.test(content.trim())) {
+      findings.push('Possible Base64 encoding detected');
+      category = 'crypto';
+    }
+    if (/^[0-9a-fA-F]+$/.test(content.trim())) {
+      findings.push('Possible hex encoding detected');
+      category = 'crypto';
+    }
+  } else if (content.includes('ELF') || lowerName === 'challenge' || !lowerName.includes('.')) {
+    type = 'ELF executable';
+    category = 'rev';
+    if (content.includes('gets') || content.includes('strcpy')) {
+      findings.push('Potentially vulnerable function detected');
+      category = 'pwn';
+    }
+  }
+
+  // Extract flag candidates
+  const flagPatterns = [
+    /CTF\{[^}]+\}/gi,
+    /FLAG\{[^}]+\}/gi,
+    /flag\{[^}]+\}/gi,
+    /picoCTF\{[^}]+\}/gi,
+    /HTB\{[^}]+\}/gi,
+  ];
+
+  for (const pattern of flagPatterns) {
+    const matches = content.match(pattern);
+    if (matches) {
+      flags.push(...matches);
+    }
+  }
+
+  return { type, category, findings, flags };
+}
+
+// Dynamic output generator based on actual file analysis
+function getSmartOutput(
+  jobId: string,
+  tool: string,
+  args: string[],
+  files: Map<string, { content: string; type: string }>
+): { stdout: string; stderr: string; exit_code: number } {
   const state = getJobState(jobId);
   const argsStr = args.join(' ');
-  const commandKey = `${tool} ${argsStr}`.trim();
-  
-  // Track this command
-  state.commandsRun.push(commandKey);
+  state.commandsRun.push(`${tool} ${argsStr}`);
+
+  // List files
+  if (tool === 'ls') {
+    const fileList = Array.from(files.keys());
+    if (fileList.length > 0) {
+      return { stdout: fileList.join('\n'), stderr: '', exit_code: 0 };
+    }
+    // Check for hardcoded demo files if no uploaded files
+    return getHardcodedOutput(jobId, tool, args);
+  }
+
+  // File command
+  if (tool === 'file') {
+    const targetFile = args[0];
+    const fileData = files.get(targetFile);
+    if (fileData) {
+      const analysis = analyzeFileContent(fileData.content, targetFile);
+      state.detectedCategory = analysis.category;
+      return { stdout: `${targetFile}: ${analysis.type}`, stderr: '', exit_code: 0 };
+    }
+    return getHardcodedOutput(jobId, tool, args);
+  }
+
+  // Cat command - read file content
+  if (tool === 'cat') {
+    const targetFile = args[0];
+    const fileData = files.get(targetFile);
+    if (fileData) {
+      const analysis = analyzeFileContent(fileData.content, targetFile);
+      state.discoveredInfo.push(...analysis.findings);
+      if (analysis.flags.length > 0) {
+        state.flagFound = true;
+      }
+      // Return truncated content for display
+      const displayContent = fileData.content.length > 2000 
+        ? fileData.content.slice(0, 2000) + '\n... (truncated)'
+        : fileData.content;
+      return { stdout: displayContent, stderr: '', exit_code: 0 };
+    }
+    return getHardcodedOutput(jobId, tool, args);
+  }
+
+  // Strings command
+  if (tool === 'strings') {
+    const targetFile = args.find(a => !a.startsWith('-')) || args[0];
+    const fileData = files.get(targetFile);
+    if (fileData) {
+      // Extract printable strings
+      const extractedStrings: string[] = fileData.content.match(/[\x20-\x7E]{4,}/g) || [];
+      const analysis = analyzeFileContent(fileData.content, targetFile);
+      if (analysis.flags.length > 0) {
+        state.flagFound = true;
+        analysis.flags.forEach(f => {
+          if (!extractedStrings.includes(f)) extractedStrings.push(f);
+        });
+      }
+      return { stdout: extractedStrings.slice(0, 50).join('\n'), stderr: '', exit_code: 0 };
+    }
+    return getHardcodedOutput(jobId, tool, args);
+  }
+
+  // Base64 decode
+  if (tool === 'base64') {
+    const targetFile = args.find(a => !a.startsWith('-'));
+    const fileData = targetFile ? files.get(targetFile) : null;
+    if (fileData || args.includes('-d')) {
+      try {
+        const content = fileData?.content || args[args.length - 1];
+        const decoded = atob(content.trim());
+        // Check for flag in decoded content
+        const flagMatch = decoded.match(/CTF\{[^}]+\}|FLAG\{[^}]+\}|flag\{[^}]+\}/i);
+        if (flagMatch) {
+          state.flagFound = true;
+          return { stdout: decoded, stderr: '', exit_code: 0 };
+        }
+        return { stdout: decoded, stderr: '', exit_code: 0 };
+      } catch {
+        return { stdout: '', stderr: 'base64: invalid input', exit_code: 1 };
+      }
+    }
+    return getHardcodedOutput(jobId, tool, args);
+  }
+
+  // Xxd - hex dump
+  if (tool === 'xxd') {
+    const targetFile = args.find(a => !a.startsWith('-'));
+    const fileData = targetFile ? files.get(targetFile) : null;
+    if (fileData) {
+      const bytes = new TextEncoder().encode(fileData.content.slice(0, 256));
+      const lines: string[] = [];
+      for (let i = 0; i < bytes.length; i += 16) {
+        const hex = Array.from(bytes.slice(i, i + 16))
+          .map(b => b.toString(16).padStart(2, '0'))
+          .join(' ');
+        const ascii = Array.from(bytes.slice(i, i + 16))
+          .map(b => b >= 0x20 && b < 0x7f ? String.fromCharCode(b) : '.')
+          .join('');
+        lines.push(`${i.toString(16).padStart(8, '0')}: ${hex.padEnd(47)}  ${ascii}`);
+      }
+      return { stdout: lines.join('\n'), stderr: '', exit_code: 0 };
+    }
+    return getHardcodedOutput(jobId, tool, args);
+  }
+
+  // Python execution
+  if (tool === 'python3' || tool === 'python') {
+    // Check if we have enough info to solve
+    const allFlags: string[] = [];
+    for (const [, fileData] of files) {
+      const analysis = analyzeFileContent(fileData.content, '');
+      allFlags.push(...analysis.flags);
+    }
+    if (allFlags.length > 0) {
+      state.flagFound = true;
+      return {
+        stdout: `[*] Analysis complete\n[*] Flags found:\n${allFlags.map(f => `FLAG: ${f}`).join('\n')}`,
+        stderr: '',
+        exit_code: 0,
+      };
+    }
+    return getHardcodedOutput(jobId, tool, args);
+  }
+
+  // Grep - search for patterns
+  if (tool === 'grep') {
+    const pattern = args.find(a => !a.startsWith('-') && !files.has(a));
+    const targetFile = args.find(a => files.has(a));
+    if (pattern && targetFile) {
+      const fileData = files.get(targetFile);
+      if (fileData) {
+        const regex = new RegExp(pattern, 'gi');
+        const matches = fileData.content.match(regex);
+        if (matches) {
+          return { stdout: matches.join('\n'), stderr: '', exit_code: 0 };
+        }
+        return { stdout: '', stderr: '', exit_code: 1 };
+      }
+    }
+    // Special grep for flags
+    if (pattern?.includes('CTF') || pattern?.includes('FLAG')) {
+      for (const [, fileData] of files) {
+        const analysis = analyzeFileContent(fileData.content, '');
+        if (analysis.flags.length > 0) {
+          state.flagFound = true;
+          return { stdout: analysis.flags.join('\n'), stderr: '', exit_code: 0 };
+        }
+      }
+    }
+    return getHardcodedOutput(jobId, tool, args);
+  }
+
+  // Fall back to hardcoded for demo jobs
+  return getHardcodedOutput(jobId, tool, args);
+}
+
+// Hardcoded outputs for demo job IDs (keeping backward compatibility)
+function getHardcodedOutput(
+  jobId: string,
+  tool: string,
+  args: string[]
+): { stdout: string; stderr: string; exit_code: number } {
+  const state = getJobState(jobId);
+  const argsStr = args.join(' ');
 
   // === JOB-001: Crypto RSA ===
   if (jobId === 'job-001') {
@@ -66,98 +329,43 @@ print("Public key: (n={}, e={})".format(n, e))`,
         stderr: '', exit_code: 0
       };
     }
-    if (tool === 'cat' && argsStr.includes('output.txt')) {
-      return { stdout: 'Encrypted: 245\nn=323, e=5', stderr: '', exit_code: 0 };
-    }
     if (tool === 'strings') {
-      const hasContext = state.discoveredInfo.includes('RSA with small n');
+      state.flagFound = true;
       return {
-        stdout: hasContext 
-          ? `n = 323\ne = 5\nc = 245\n# Hint: 323 = 17 * 19\n# phi = (17-1)*(19-1) = 288\n# d = inverse(5, 288) = 173`
-          : 'n = 323\ne = 5\nc = 245\nEncrypted message',
+        stdout: `n = 323\ne = 5\nc = 245\n# Hint: 323 = 17 * 19`,
         stderr: '', exit_code: 0
       };
     }
     if (tool === 'python3' || tool === 'python') {
       state.flagFound = true;
       return {
-        stdout: `[*] RSA Decryption
-[*] n = 323, e = 5, c = 245
-[*] Factoring n = 323...
-[*] Found: p = 17, q = 19
-[*] phi(n) = (p-1)*(q-1) = 288
-[*] d = modular_inverse(5, 288) = 173
-[*] m = pow(245, 173, 323) = 67, 84, 70...
-[*] Decoding bytes...
-FLAG: CTF{sm4ll_pr1m3s_br34k_rs4}`,
+        stdout: `[*] RSA Decryption\n[*] n = 323, e = 5, c = 245\n[*] Factoring n = 323...\n[*] Found: p = 17, q = 19\n[*] Computing d = inverse(5, 288) = 173\n[*] Decrypting...\nFLAG: CTF{sm4ll_pr1m3s_br34k_rs4}`,
         stderr: '', exit_code: 0
       };
     }
   }
 
-  // === JOB-002: Forensics Steganography ===
+  // === JOB-002: Forensics ===
   if (jobId === 'job-002') {
     if (tool === 'ls') {
       return { stdout: 'secret.png\nREADME.txt', stderr: '', exit_code: 0 };
     }
     if (tool === 'file') {
-      return { 
-        stdout: 'secret.png: PNG image data, 1024 x 768, 8-bit/color RGBA, non-interlaced', 
-        stderr: '', exit_code: 0 
-      };
+      return { stdout: 'secret.png: PNG image data, 1024 x 768, 8-bit/color RGBA', stderr: '', exit_code: 0 };
     }
     if (tool === 'exiftool') {
-      state.discoveredInfo.push('EXIF metadata');
+      state.flagFound = true;
       return {
-        stdout: `ExifTool Version Number         : 12.40
-File Name                       : secret.png
-File Size                       : 245 kB
-File Type                       : PNG
-MIME Type                       : image/png
-Image Width                     : 1024
-Image Height                    : 768
-Comment                         : FLAG{h1dd3n_1n_pl41n_s1ght}
-Author                          : CTF Challenge`,
+        stdout: `File Name: secret.png\nFile Size: 245 kB\nImage Width: 1024\nImage Height: 768\nComment: FLAG{h1dd3n_1n_pl41n_s1ght}`,
         stderr: '', exit_code: 0
       };
     }
     if (tool === 'strings') {
-      return {
-        stdout: `IHDR\nsRGB\ngAMA\npHYs\nSteghide password: "hidden"\nIDAT\nIEND`,
-        stderr: '', exit_code: 0
-      };
-    }
-    if (tool === 'binwalk') {
-      state.discoveredInfo.push('embedded zip');
-      return {
-        stdout: `DECIMAL       HEXADECIMAL     DESCRIPTION
---------------------------------------------------------------------------------
-0             0x0             PNG image, 1024 x 768, 8-bit/color RGBA
-41            0x29            Zlib compressed data
-245760        0x3C000         Zip archive data, name: hidden.txt
-245800        0x3C028         End of Zip archive`,
-        stderr: '', exit_code: 0
-      };
+      return { stdout: `IHDR\nsRGB\nSteghide password: "hidden"`, stderr: '', exit_code: 0 };
     }
     if (tool === 'zsteg') {
       state.flagFound = true;
-      return {
-        stdout: `b1,r,lsb,xy         .. text: "FLAG{h1dd3n_1n_pl41n_s1ght}"
-b1,rgb,lsb,xy       .. file: data
-b2,r,lsb,xy         .. text: "random noise"`,
-        stderr: '', exit_code: 0
-      };
-    }
-    if (tool === 'python3' || tool === 'python') {
-      state.flagFound = true;
-      return {
-        stdout: `[*] PNG Forensics Analysis
-[*] Checking EXIF metadata...
-[*] Found Comment field with suspicious content
-[*] Checking LSB steganography...
-FLAG: FLAG{h1dd3n_1n_pl41n_s1ght}`,
-        stderr: '', exit_code: 0
-      };
+      return { stdout: `b1,r,lsb,xy: FLAG{h1dd3n_1n_pl41n_s1ght}`, stderr: '', exit_code: 0 };
     }
   }
 
@@ -167,107 +375,39 @@ FLAG: FLAG{h1dd3n_1n_pl41n_s1ght}`,
       return { stdout: 'challenge\nREADME.txt', stderr: '', exit_code: 0 };
     }
     if (tool === 'file') {
-      return { 
-        stdout: 'challenge: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), dynamically linked, stripped', 
-        stderr: '', exit_code: 0 
-      };
-    }
-    if (tool === 'checksec') {
-      return {
-        stdout: `RELRO           STACK CANARY      NX            PIE             RPATH      RUNPATH
-Partial RELRO   No canary found   NX enabled    No PIE          No RPATH   No RUNPATH`,
-        stderr: '', exit_code: 0
-      };
+      return { stdout: 'challenge: ELF 64-bit LSB executable, x86-64, dynamically linked, stripped', stderr: '', exit_code: 0 };
     }
     if (tool === 'strings') {
-      state.discoveredInfo.push('hardcoded strings');
       state.flagFound = true;
       return {
-        stdout: `/lib64/ld-linux-x86-64.so.2
-libc.so.6
-puts
-__libc_start_main
-Enter password: 
-Wrong password!
-Access granted!
-CTF{str1ngs_r3v34l_s3cr3ts}
-secret_function
-check_password
-main`,
+        stdout: `/lib64/ld-linux-x86-64.so.2\nputs\nmain\nEnter password:\nWrong password!\nCTF{str1ngs_r3v34l_s3cr3ts}`,
         stderr: '', exit_code: 0
       };
     }
     if (tool === 'ltrace') {
-      return {
-        stdout: `puts("Enter password: ") = 17
-gets(0x7ffd12345678, 0, 0, 0) = 0x7ffd12345678
-strcmp("test", "s3cr3t_p4ss") = -1
-puts("Wrong password!") = 16`,
-        stderr: '', exit_code: 0
-      };
-    }
-    if (tool === 'objdump') {
-      return {
-        stdout: `0000000000401000 <main>:
-  401000:       push   %rbp
-  401001:       mov    %rsp,%rbp
-  401008:       lea    0xff9(%rip),%rdi        # "Enter password:"
-  40100f:       call   401030 <puts@plt>
-  401021:       call   401060 <check_password>
-  401026:       cmp    $0x1,%eax
-  401029:       je     401040 <print_flag>
-
-0000000000401050 <print_flag>:
-  401050:       lea    0xe50(%rip),%rdi        # "CTF{str1ngs_r3v34l_s3cr3ts}"
-  401057:       call   401030 <puts@plt>`,
-        stderr: '', exit_code: 0
-      };
+      return { stdout: `strcmp("test", "s3cr3t_p4ss") = -1\nputs("Wrong password!")`, stderr: '', exit_code: 0 };
     }
   }
 
-  // === JOB-004: Web SQL Injection ===
+  // === JOB-004: Web SQLi ===
   if (jobId === 'job-004') {
     if (tool === 'ls') {
-      return { stdout: 'app.py\nrequirements.txt\ndatabase.db\nREADME.txt', stderr: '', exit_code: 0 };
+      return { stdout: 'app.py\nrequirements.txt\ndatabase.db', stderr: '', exit_code: 0 };
     }
-    if (tool === 'file') {
-      return { 
-        stdout: 'app.py: Python script, ASCII text executable\ndatabase.db: SQLite 3.x database', 
-        stderr: '', exit_code: 0 
-      };
-    }
-    if (tool === 'cat') {
-      if (argsStr.includes('app.py')) {
-        state.discoveredInfo.push('SQL injection vulnerability');
-        return {
-          stdout: `from flask import Flask, request
+    if (tool === 'cat' && argsStr.includes('app.py')) {
+      state.flagFound = true;
+      return {
+        stdout: `from flask import Flask, request
 import sqlite3
-
-app = Flask(__name__)
 
 @app.route('/login', methods=['POST'])
 def login():
     username = request.form['username']
     password = request.form['password']
-    # VULNERABLE: String formatting in SQL query
+    # VULNERABLE: SQL injection!
     query = f"SELECT * FROM users WHERE username='{username}' AND password='{password}'"
-    conn = sqlite3.connect('database.db')
-    result = conn.execute(query).fetchone()
     if result:
-        return {"message": "Login successful!", "flag": "CTF{sql1_1nj3ct10n_w1ns}"}
-    return {"error": "Invalid credentials"}, 401`,
-          stderr: '', exit_code: 0
-        };
-      }
-    }
-    if (tool === 'strings') {
-      return {
-        stdout: `SELECT * FROM users
-admin
-password
-CTF{sql1_1nj3ct10n_w1ns}
-flask
-sqlite3`,
+        return {"flag": "CTF{sql1_1nj3ct10n_w1ns}"}`,
         stderr: '', exit_code: 0
       };
     }
@@ -275,149 +415,70 @@ sqlite3`,
       state.flagFound = true;
       return { stdout: 'CTF{sql1_1nj3ct10n_w1ns}', stderr: '', exit_code: 0 };
     }
-    if (tool === 'python3' || tool === 'python') {
-      state.flagFound = true;
-      return {
-        stdout: `[*] SQL Injection Exploit
-[*] Target: http://localhost:5000/login
-[*] Payload: ' OR '1'='1' --
-[*] Sending request...
-[*] Response: {"message": "Login successful!", "flag": "CTF{sql1_1nj3ct10n_w1ns}"}
-FLAG: CTF{sql1_1nj3ct10n_w1ns}`,
-        stderr: '', exit_code: 0
-      };
-    }
   }
 
-  // === JOB-005: PWN Buffer Overflow ===
+  // === JOB-005: PWN ===
   if (jobId === 'job-005') {
     if (tool === 'ls') {
       return { stdout: 'vuln\nREADME.txt', stderr: '', exit_code: 0 };
     }
-    if (tool === 'file') {
-      return { 
-        stdout: 'vuln: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), dynamically linked, not stripped', 
-        stderr: '', exit_code: 0 
-      };
-    }
     if (tool === 'checksec') {
-      state.discoveredInfo.push('weak protections');
-      return {
-        stdout: `RELRO           STACK CANARY      NX            PIE             RPATH      RUNPATH
-No RELRO        No canary found   NX disabled   No PIE          No RPATH   No RUNPATH`,
-        stderr: '', exit_code: 0
-      };
+      return { stdout: 'RELRO: No RELRO\nStack Canary: No canary\nNX: Disabled\nPIE: No PIE', stderr: '', exit_code: 0 };
     }
     if (tool === 'strings') {
-      return {
-        stdout: `/lib64/ld-linux-x86-64.so.2
-gets
-puts
-system
-/bin/sh
-CTF{buff3r_0v3rfl0w_m4st3r}
-win_function
-main
-vulnerable_function`,
-        stderr: '', exit_code: 0
-      };
-    }
-    if (tool === 'objdump' || tool === 'readelf') {
-      state.discoveredInfo.push('win_function at 0x401156');
-      return {
-        stdout: `0000000000401156 <win_function>:
-  401156:       push   %rbp
-  401157:       mov    %rsp,%rbp
-  40115a:       lea    0xe9f(%rip),%rdi        # "CTF{buff3r_0v3rfl0w_m4st3r}"
-  401161:       call   401030 <puts@plt>
-
-0000000000401168 <vulnerable_function>:
-  401168:       sub    $0x40,%rsp              # 64 byte buffer
-  401177:       call   401040 <gets@plt>       # VULNERABLE: no bounds check`,
-        stderr: '', exit_code: 0
-      };
-    }
-    if (tool === 'python3' || tool === 'python') {
       state.flagFound = true;
+      return { stdout: `/bin/sh\ngets\nwin_function\nCTF{buff3r_0v3rfl0w_m4st3r}`, stderr: '', exit_code: 0 };
+    }
+    if (tool === 'objdump') {
       return {
-        stdout: `[*] PWN Exploit - Buffer Overflow
-[*] Binary: vuln
-[*] win_function at: 0x401156
-[*] Buffer size: 64 bytes (0x40)
-[*] Offset to return address: 72 bytes
-[*] Building payload: b'A' * 72 + p64(0x401156)
-[*] Sending payload...
-[*] Got shell!
-FLAG: CTF{buff3r_0v3rfl0w_m4st3r}`,
+        stdout: `0x401156 <win_function>:\n  lea 0xe50(%rip),%rdi  # "CTF{buff3r_0v3rfl0w_m4st3r}"\n  call puts@plt\n\n0x401168 <vulnerable_function>:\n  sub $0x40,%rsp  # 64 byte buffer\n  call gets@plt   # VULNERABLE!`,
         stderr: '', exit_code: 0
       };
     }
   }
 
-  // === JOB-006: Misc Base64 Encoding === (More realistic progressive flow)
+  // === JOB-006: Misc Base64 ===
   if (jobId === 'job-006') {
     if (tool === 'ls') {
       return { stdout: 'encoded.txt\nREADME.txt', stderr: '', exit_code: 0 };
     }
-    if (tool === 'file') {
-      return { stdout: 'encoded.txt: ASCII text\nREADME.txt: ASCII text', stderr: '', exit_code: 0 };
-    }
-    if (tool === 'cat') {
-      if (argsStr.includes('README')) {
-        return {
-          stdout: `# Misc Challenge - Nested Encoding
-
-The flag is hidden in encoded.txt
-It has been encoded multiple times using different methods.
-Can you decode it?
-
-Flag format: CTF{...}`,
-          stderr: '', exit_code: 0
-        };
-      }
-      if (argsStr.includes('encoded')) {
-        state.discoveredInfo.push('base64 encoded data');
-        return { 
-          stdout: 'Q1RGe20xeHQzdXJfM25jMGQxbmdfbTRzdDNyfQ==', 
-          stderr: '', exit_code: 0 
-        };
-      }
-    }
-    if (tool === 'strings') {
-      const output = state.discoveredInfo.includes('base64 encoded data')
-        ? `Q1RGe20xeHQzdXJfM25jMGQxbmdfbTRzdDNyfQ==
-# This looks like base64 encoding
-# Try: base64 -d encoded.txt`
-        : `Q1RGe20xeHQzdXJfM25jMGQxbmdfbTRzdDNyfQ==`;
-      return { stdout: output, stderr: '', exit_code: 0 };
-    }
-    if (tool === 'xxd') {
-      return {
-        stdout: `00000000: 5131 5247 6532 3078 6548 5130 6458 5666  Q1RGe20xeHQzdXJf
-00000010: 4d32 356a 4d47 5178 626d 6466 6254 5274  M25jMGQxbmdfbTRt
-00000020: 4d33 4a39 0a                             M3J9.`,
-        stderr: '', exit_code: 0
-      };
+    if (tool === 'cat' && argsStr.includes('encoded')) {
+      return { stdout: 'Q1RGe20xeHQzdXJfM25jMGQxbmdfbTRzdDNyfQ==', stderr: '', exit_code: 0 };
     }
     if (tool === 'base64') {
       state.flagFound = true;
       return { stdout: 'CTF{m1xt3ur_3nc0d1ng_m4st3r}', stderr: '', exit_code: 0 };
     }
-    if (tool === 'python3' || tool === 'python') {
-      state.flagFound = true;
-      return {
-        stdout: `[*] Encoding Analysis Script
-[*] Reading file: encoded.txt
-[*] Content: Q1RGe20xeHQzdXJfM25jMGQxbmdfbTRzdDNyfQ==
-[*] Detected encoding: Base64 (ends with ==)
-[*] Decoding Base64...
-[*] Decoded: CTF{m1xt3ur_3nc0d1ng_m4st3r}
-[*] Checking for additional layers...
-[*] No more encoding detected
-FLAG: CTF{m1xt3ur_3nc0d1ng_m4st3r}`,
-        stderr: '', exit_code: 0
-      };
+    if (tool === 'strings') {
+      return { stdout: 'Q1RGe20xeHQzdXJfM25jMGQxbmdfbTRzdDNyfQ==\n# Base64 encoded', stderr: '', exit_code: 0 };
     }
+  }
+
+  // Generic forensics demo (for new jobs with image files)
+  if (tool === 'exiftool') {
+    return {
+      stdout: `File Name: ${args[0] || 'image.png'}\nFile Size: 128 kB\nMIME Type: image/png\nImage Width: 800\nImage Height: 600\nComment: Check LSB steganography`,
+      stderr: '', exit_code: 0
+    };
+  }
+
+  if (tool === 'binwalk') {
+    return {
+      stdout: `DECIMAL       HEXADECIMAL     DESCRIPTION\n0             0x0             PNG image, 800 x 600\n65536         0x10000         Zip archive data`,
+      stderr: '', exit_code: 0
+    };
+  }
+
+  if (tool === 'checksec') {
+    return {
+      stdout: `RELRO: Partial RELRO\nStack Canary: No canary found\nNX: NX enabled\nPIE: No PIE`,
+      stderr: '', exit_code: 0
+    };
+  }
+
+  // Health check
+  if (tool === 'echo' && args.includes('ok')) {
+    return { stdout: 'ok', stderr: '', exit_code: 0 };
   }
 
   // Default fallback
@@ -426,56 +487,55 @@ FLAG: CTF{m1xt3ur_3nc0d1ng_m4st3r}`,
     stderr: '',
     exit_code: 0
   };
-};
+}
 
-// Execute Python script
-const executePythonScript = (jobId: string, script: string): { stdout: string; stderr: string; exit_code: number } => {
+// Execute Python script with smarter output
+function executePythonScript(jobId: string, script: string): { stdout: string; stderr: string; exit_code: number } {
   console.log(`[sandbox-terminal] Executing Python script for ${jobId}`);
   
-  const lowerScript = script.toLowerCase();
   const state = getJobState(jobId);
+  const lowerScript = script.toLowerCase();
+  const files = getJobFiles(jobId);
   
-  // Return job-specific script output
+  // Check if script analyzes uploaded files and finds flags
+  const allFlags: string[] = [];
+  for (const [fileName, fileData] of files) {
+    const analysis = analyzeFileContent(fileData.content, fileName);
+    allFlags.push(...analysis.flags);
+  }
+  
+  if (allFlags.length > 0) {
+    state.flagFound = true;
+    return {
+      stdout: `[*] Python Script Execution\n[*] Analyzing challenge files...\n[*] Processing complete!\n${allFlags.map(f => `FLAG: ${f}`).join('\n')}`,
+      stderr: '',
+      exit_code: 0,
+    };
+  }
+
+  // Job-specific script outputs (backward compatibility)
   if (jobId === 'job-001' || (lowerScript.includes('pow(') && lowerScript.includes('inverse'))) {
     state.flagFound = true;
     return {
-      stdout: `[*] RSA Solver Script
-[*] n = 323, e = 5, c = 245
-[*] Factoring n = 323...
-[*] Found factors: p = 17, q = 19
-[*] Computing phi = (p-1)*(q-1) = 288
-[*] Computing d = inverse(e, phi) = 173
-[*] Decrypting: m = pow(c, d, n)
-[*] Result: CTF{sm4ll_pr1m3s_br34k_rs4}
-FLAG: CTF{sm4ll_pr1m3s_br34k_rs4}`,
+      stdout: `[*] RSA Solver Script\n[*] n = 323, e = 5, c = 245\n[*] Factoring n...\n[*] Found: p = 17, q = 19\n[*] d = inverse(5, 288) = 173\n[*] Decrypting...\nFLAG: CTF{sm4ll_pr1m3s_br34k_rs4}`,
       stderr: '',
       exit_code: 0
     };
   }
   
-  if (jobId === 'job-002' || lowerScript.includes('exif') || lowerScript.includes('steg') || lowerScript.includes('png')) {
+  if (jobId === 'job-002' || lowerScript.includes('exif') || lowerScript.includes('steg')) {
     state.flagFound = true;
     return {
-      stdout: `[*] Forensics Analysis Script
-[*] Analyzing secret.png...
-[*] Checking EXIF metadata...
-[*] Found hidden Comment field
-[*] Content: FLAG{h1dd3n_1n_pl41n_s1ght}
-FLAG: FLAG{h1dd3n_1n_pl41n_s1ght}`,
+      stdout: `[*] Forensics Analysis\n[*] Checking EXIF metadata...\n[*] Found hidden Comment field\nFLAG: FLAG{h1dd3n_1n_pl41n_s1ght}`,
       stderr: '',
       exit_code: 0
     };
   }
   
-  if (jobId === 'job-003' || (lowerScript.includes('xor') || lowerScript.includes('binary'))) {
+  if (jobId === 'job-003' || lowerScript.includes('xor') || lowerScript.includes('binary')) {
     state.flagFound = true;
     return {
-      stdout: `[*] Binary Analysis Script
-[*] Reading binary: challenge
-[*] Extracting strings...
-[*] Found password comparison: "s3cr3t_p4ss"
-[*] Found flag string in binary
-FLAG: CTF{str1ngs_r3v34l_s3cr3ts}`,
+      stdout: `[*] Binary Analysis\n[*] Extracting strings...\n[*] Found hardcoded flag\nFLAG: CTF{str1ngs_r3v34l_s3cr3ts}`,
       stderr: '',
       exit_code: 0
     };
@@ -484,28 +544,16 @@ FLAG: CTF{str1ngs_r3v34l_s3cr3ts}`,
   if (jobId === 'job-004' || lowerScript.includes('sql') || lowerScript.includes('request')) {
     state.flagFound = true;
     return {
-      stdout: `[*] SQL Injection Solver
-[*] Target: login endpoint
-[*] Testing payload: ' OR '1'='1' --
-[*] Bypass successful!
-[*] Response: Login successful
-FLAG: CTF{sql1_1nj3ct10n_w1ns}`,
+      stdout: `[*] SQL Injection Solver\n[*] Payload: ' OR '1'='1' --\n[*] Bypass successful!\nFLAG: CTF{sql1_1nj3ct10n_w1ns}`,
       stderr: '',
       exit_code: 0
     };
   }
   
-  if (jobId === 'job-005' || lowerScript.includes('pwn') || lowerScript.includes('overflow') || lowerScript.includes('payload')) {
+  if (jobId === 'job-005' || lowerScript.includes('pwn') || lowerScript.includes('overflow')) {
     state.flagFound = true;
     return {
-      stdout: `[*] PWN Exploit Script
-[*] Binary: vuln
-[*] win_function at: 0x401156
-[*] Buffer size: 64 bytes
-[*] Offset: 72 bytes to return address
-[*] Payload: b'A' * 72 + p64(0x401156)
-[*] Sending exploit...
-FLAG: CTF{buff3r_0v3rfl0w_m4st3r}`,
+      stdout: `[*] PWN Exploit\n[*] win_function: 0x401156\n[*] Offset: 72 bytes\n[*] Sending payload...\nFLAG: CTF{buff3r_0v3rfl0w_m4st3r}`,
       stderr: '',
       exit_code: 0
     };
@@ -514,26 +562,19 @@ FLAG: CTF{buff3r_0v3rfl0w_m4st3r}`,
   if (jobId === 'job-006' || lowerScript.includes('base64') || lowerScript.includes('decode')) {
     state.flagFound = true;
     return {
-      stdout: `[*] Encoding Solver Script
-[*] Reading: encoded.txt
-[*] Content: Q1RGe20xeHQzdXJfM25jMGQxbmdfbTRzdDNyfQ==
-[*] Detected: Base64 encoding
-[*] Decoding...
-[*] Result: CTF{m1xt3ur_3nc0d1ng_m4st3r}
-FLAG: CTF{m1xt3ur_3nc0d1ng_m4st3r}`,
+      stdout: `[*] Encoding Solver\n[*] Input: Q1RGe20xeHQzdXJfM25jMGQxbmdfbTRzdDNyfQ==\n[*] Decoding Base64...\nFLAG: CTF{m1xt3ur_3nc0d1ng_m4st3r}`,
       stderr: '',
       exit_code: 0
     };
   }
   
-  // Generic fallback
+  // Generic script execution with analysis
   return {
-    stdout: `[*] Script executed successfully
-[*] No flag found in output`,
+    stdout: `[*] Script executed successfully\n[*] No flag found in output\n[*] Try running more specific analysis tools`,
     stderr: '',
     exit_code: 0
   };
-};
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -549,9 +590,49 @@ serve(async (req) => {
     }
 
     const body = await req.json();
-    const { job_id, tool, args = [], script, script_type } = body;
+    const { 
+      job_id, 
+      tool, 
+      args = [], 
+      script, 
+      script_type,
+      // New: file upload support
+      file_name,
+      file_content,
+      file_type,
+      action 
+    } = body;
 
-    console.log('[sandbox-terminal] Request:', { job_id, tool, args: args?.slice?.(0, 2), has_script: !!script });
+    console.log('[sandbox-terminal] Request:', { 
+      job_id, 
+      tool, 
+      args: args?.slice?.(0, 2), 
+      has_script: !!script,
+      action,
+      file_name 
+    });
+
+    // Handle file upload action
+    if (action === 'upload' && file_name && file_content) {
+      storeJobFile(job_id, file_name, file_content, file_type || 'unknown');
+      console.log(`[sandbox-terminal] Stored file ${file_name} for job ${job_id}`);
+      
+      // Analyze the file immediately
+      const analysis = analyzeFileContent(file_content, file_name);
+      
+      return new Response(JSON.stringify({
+        success: true,
+        message: `File ${file_name} uploaded`,
+        analysis: {
+          type: analysis.type,
+          category: analysis.category,
+          findings: analysis.findings,
+          flags_found: analysis.flags.length,
+        }
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
 
     // Handle Python script execution
     if (script && (script_type === 'python' || tool === 'python3')) {
@@ -559,12 +640,6 @@ serve(async (req) => {
       
       const result = executePythonScript(job_id, script);
       
-      console.log('[sandbox-terminal] Script result:', {
-        job_id,
-        stdout_length: result.stdout.length,
-        exit_code: result.exit_code
-      });
-
       return new Response(JSON.stringify({
         stdout: result.stdout,
         stderr: result.stderr,
@@ -583,13 +658,14 @@ serve(async (req) => {
       });
     }
 
-    console.log('[sandbox-terminal] Executing:', { job_id, tool, args });
-
-    // Get realistic progressive output
-    const result = getJobOutput(job_id, tool, args || []);
+    // Get uploaded files for this job
+    const files = getJobFiles(job_id);
+    
+    // Get smart output based on actual files or fallback to hardcoded
+    const result = getSmartOutput(job_id, tool, args || [], files);
 
     // Simulate processing delay
-    await new Promise(resolve => setTimeout(resolve, 150 + Math.random() * 250));
+    await new Promise(resolve => setTimeout(resolve, 100 + Math.random() * 200));
 
     console.log('[sandbox-terminal] Result:', { 
       job_id,
