@@ -69,11 +69,48 @@ async function apiFetch<T>(
     }
   }
 
-  const response = await fetch(url, {
-    ...options,
-    headers,
-    credentials: 'include',
-  });
+  // Log request for diagnostics
+  const startTime = performance.now();
+  let response: Response;
+  
+  try {
+    response = await fetch(url, {
+      ...options,
+      headers,
+      credentials: 'include',
+    });
+  } catch (error) {
+    // Log network error for diagnostics
+    const errorMessage = error instanceof Error ? error.message : 'Network error';
+    const isCors = errorMessage.includes('Failed to fetch') || errorMessage.includes('CORS');
+    
+    // Dynamic import to avoid circular dependency
+    import('@/components/NetworkDiagnostics').then(({ addDiagnosticLog }) => {
+      addDiagnosticLog({
+        type: 'error',
+        method,
+        url,
+        error: errorMessage,
+        corsError: isCors,
+      });
+    }).catch(() => {});
+    
+    throw error;
+  }
+
+  const duration = Math.round(performance.now() - startTime);
+
+  // Log response for diagnostics
+  import('@/components/NetworkDiagnostics').then(({ addDiagnosticLog }) => {
+    addDiagnosticLog({
+      type: 'response',
+      method,
+      url,
+      status: response.status,
+      statusText: response.statusText,
+      duration,
+    });
+  }).catch(() => {});
 
   // Handle response text first to check for HTML
   const text = await response.text();

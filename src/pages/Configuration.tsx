@@ -14,6 +14,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ToolChecker } from '@/components/jobs/ToolChecker';
 import { SolveScriptGenerator } from '@/components/jobs/SolveScriptGenerator';
 import { DeploymentInstructions } from '@/components/jobs/DeploymentInstructions';
+import { NetworkDiagnostics } from '@/components/NetworkDiagnostics';
 import * as api from '@/lib/api';
 import { getBackendUrlFromStorage, normalizeBackendUrl, setBackendUrlToStorage } from '@/lib/backend-url';
 
@@ -865,6 +866,9 @@ export default function Configuration() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Network Diagnostics Panel */}
+          <NetworkDiagnostics />
 
           <Card>
             <CardHeader>
