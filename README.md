@@ -119,11 +119,30 @@ docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml ps
 # All services
 docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml logs -f
 
-# Specific service
-docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml logs -f api
-docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml logs -f worker
-docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml logs -f web
+# Specific service (shorthand)
+docker logs ctf_compass_api --tail 100 -f
+docker logs ctf_compass_worker --tail 100 -f
+docker logs ctf_compass_web --tail 100 -f
 ```
+
+### Quick Update
+
+```bash
+# Fix git ownership (if needed)
+sudo git config --global --add safe.directory /opt/ctf-compass
+
+# Pull and rebuild
+cd /opt/ctf-compass && sudo git pull && sudo docker compose -f ctf-autopilot/infra/docker-compose.yml up -d --build
+```
+
+### Access URLs
+
+| Service | URL | Description |
+|---------|-----|-------------|
+| **Web UI** | `http://YOUR_IP:3000` | Main application |
+| **API** | `http://YOUR_IP:8000/api/` | REST API |
+| **API Health** | `http://YOUR_IP:8000/api/health` | Health check |
+| **API Docs** | `http://YOUR_IP:8000/docs` | Swagger docs |
 
 ### System Update
 

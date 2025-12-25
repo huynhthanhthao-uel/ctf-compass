@@ -388,12 +388,19 @@ The frontend supports multiple modes:
 ## 🚀 Useful Commands
 
 ```bash
-# View logs
+# Quick update (pull code and rebuild)
+cd /opt/ctf-compass && sudo git pull && sudo docker compose -f ctf-autopilot/infra/docker-compose.yml up -d --build
+
+# If git ownership error, run this first
+sudo git config --global --add safe.directory /opt/ctf-compass
+
+# View all logs
 docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml logs -f
 
 # View specific service logs
-docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml logs -f api
-docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml logs -f worker
+docker logs ctf_compass_api --tail 100 -f
+docker logs ctf_compass_worker --tail 100 -f
+docker logs ctf_compass_web --tail 100 -f
 
 # Stop services
 docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml down
@@ -403,14 +410,31 @@ docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml restar
 
 # Check status
 docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml ps
+docker ps
 
-# Update system
+# Rebuild specific service
+docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml build api --no-cache
+docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml up -d api
+
+# Full system update
 sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh
+
+# Test API health
+curl http://localhost:8000/api/health
 
 # Cleanup old Docker resources
 docker system prune -af
 docker volume prune -f
 ```
+
+### Access URLs
+
+| Service | URL | Description |
+|---------|-----|-------------|
+| **Web UI** | `http://YOUR_IP:3000` | Main application |
+| **API** | `http://YOUR_IP:8000/api/` | Backend REST API |
+| **API Health** | `http://YOUR_IP:8000/api/health` | Health check endpoint |
+| **API Docs** | `http://YOUR_IP:8000/docs` | Swagger documentation |
 
 ---
 
