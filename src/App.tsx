@@ -11,6 +11,7 @@ import Dashboard from "@/pages/Dashboard";
 import JobCreate from "@/pages/JobCreate";
 import JobDetail from "@/pages/JobDetail";
 import Configuration from "@/pages/Configuration";
+import Health from "@/pages/Health";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -61,6 +62,22 @@ const App = () => (
                 element={
                   <ProtectedRoute>
                     <Configuration />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/configuration"
+                element={
+                  <ProtectedRoute>
+                    <Configuration />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/health"
+                element={
+                  <ProtectedRoute>
+                    <Health />
                   </ProtectedRoute>
                 }
               />

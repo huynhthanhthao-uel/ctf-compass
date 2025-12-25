@@ -11,6 +11,7 @@ import {
   Github,
   User,
   ChevronDown,
+  Stethoscope,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/use-auth';
@@ -146,6 +147,10 @@ export function AppLayout({ children }: AppLayoutProps) {
                 <DropdownMenuItem onClick={() => navigate('/config')}>
                   <Settings className="mr-2 h-4 w-4" />
                   Settings
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('/health')}>
+                  <Stethoscope className="mr-2 h-4 w-4" />
+                  System Health
                 </DropdownMenuItem>
                 <DropdownMenuItem 
                   onClick={() => window.open('https://github.com/huynhtrungcipp/ctf-compass', '_blank')}

@@ -8,15 +8,18 @@ import {
   AlertTriangle,
   XCircle,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  Trash2,
+  Stethoscope
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
-import { getBackendUrlHeaders } from '@/lib/backend-url';
+import { getBackendUrlHeaders, getBackendUrlFromStorage } from '@/lib/backend-url';
 import { supabase } from '@/integrations/supabase/client';
+import { Link } from 'react-router-dom';
 
 interface HealthStatus {
   dockerBackend: 'checking' | 'connected' | 'disconnected';
@@ -25,7 +28,11 @@ interface HealthStatus {
   lastCheck: Date | null;
 }
 
-export function BackendHealthIndicator() {
+interface BackendHealthIndicatorProps {
+  onReset?: () => void;
+}
+
+export function BackendHealthIndicator({ onReset }: BackendHealthIndicatorProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
   const [health, setHealth] = useState<HealthStatus>({
@@ -270,7 +277,7 @@ export function BackendHealthIndicator() {
             )}
 
             {/* Configuration Help */}
-            {health.sandboxTerminal === 'not_configured' && (
+            {(health.sandboxTerminal === 'not_configured' || health.sandboxTerminal === 'error') && (
               <div className="p-3 rounded-lg bg-warning/10 border border-warning/20">
                 <p className="text-xs font-medium text-warning mb-2">Configuration Required:</p>
                 <ol className="text-xs text-warning/80 list-decimal list-inside space-y-1">
@@ -281,6 +288,28 @@ export function BackendHealthIndicator() {
                 </ol>
               </div>
             )}
+
+            {/* Action Buttons */}
+            <div className="flex gap-2 pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  localStorage.removeItem('ctf_backend_url');
+                  onReset?.();
+                  checkHealth();
+                }}
+              >
+                <Trash2 className="h-3 w-3 mr-1" />
+                Reset URL
+              </Button>
+              <Button variant="outline" size="sm" asChild>
+                <Link to="/health">
+                  <Stethoscope className="h-3 w-3 mr-1" />
+                  Debug Health
+                </Link>
+              </Button>
+            </div>
           </CardContent>
         </CollapsibleContent>
       </Card>
