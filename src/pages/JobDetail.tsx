@@ -916,6 +916,8 @@ if __name__ == "__main__":
               files={jobDetail.inputFiles || []}
               description={jobDetail.description}
               expectedFormat={jobDetail.flagFormat}
+              jobStatus={currentStatus as 'queued' | 'running' | 'done' | 'failed'}
+              initialFlags={jobDetail.flagCandidates.map(f => f.value)}
               onFlagFound={handleFlagFound}
               onComplete={(success, flags) => {
                 if (success && flags.length > 0) {

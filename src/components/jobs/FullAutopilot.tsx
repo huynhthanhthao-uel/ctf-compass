@@ -93,6 +93,8 @@ interface FullAutopilotProps {
   files: string[];
   description?: string;
   expectedFormat?: string;
+  jobStatus?: 'queued' | 'running' | 'done' | 'failed';
+  initialFlags?: string[];
   onFlagFound?: (flag: string) => void;
   onComplete?: (success: boolean, flags: string[]) => void;
   onStartRef?: (startFn: () => void) => void;
@@ -274,18 +276,24 @@ export function FullAutopilot({
   files,
   description = "",
   expectedFormat = "CTF{...}",
+  jobStatus,
+  initialFlags = [],
   onFlagFound,
   onComplete,
   onStartRef,
 }: FullAutopilotProps) {
   const [isRunning, setIsRunning] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
-  const [currentPhase, setCurrentPhase] = useState<Phase>('idle');
+  const [currentPhase, setCurrentPhase] = useState<Phase>(
+    jobStatus === 'done' && initialFlags.length > 0 ? 'completed' : 'idle'
+  );
   const [steps, setSteps] = useState<WorkflowStep[]>([]);
-  const [foundFlags, setFoundFlags] = useState<string[]>([]);
-  const [phaseMessage, setPhaseMessage] = useState<string>('Ready to start');
+  const [foundFlags, setFoundFlags] = useState<string[]>(initialFlags);
+  const [phaseMessage, setPhaseMessage] = useState<string>(
+    jobStatus === 'done' && initialFlags.length > 0 ? '✅ Analysis completed - Flag found!' : 'Ready to start'
+  );
   const [expandedSteps, setExpandedSteps] = useState<Set<string>>(new Set());
-  const [progress, setProgress] = useState(0);
+  const [progress, setProgress] = useState(jobStatus === 'done' ? 100 : 0);
   const [aiInsight, setAiInsight] = useState<AIInsight | null>(null);
   const [detectedCategory, setDetectedCategory] = useState<string>('unknown');
   const [generatedScript, setGeneratedScript] = useState<string>('');
@@ -296,7 +304,7 @@ export function FullAutopilot({
   const [commandsRun, setCommandsRun] = useState(0);
   const [analysisStartTime, setAnalysisStartTime] = useState<number | null>(null);
   const [analysisTimeMs, setAnalysisTimeMs] = useState(0);
-  const [aiConfidence, setAiConfidence] = useState(0);
+  const [aiConfidence, setAiConfidence] = useState(jobStatus === 'done' ? 0.95 : 0);
 
   const abortRef = useRef(false);
   const pauseRef = useRef(false);
