@@ -318,14 +318,18 @@ const INITIAL_DELAY_MS = 1000;
 async function invokeEdgeFunctionWithRetry<T>(
   functionName: string,
   body: unknown,
-  retries = MAX_RETRIES
+  retries = MAX_RETRIES,
+  headers?: Record<string, string>
 ): Promise<T> {
   let lastError: Error | null = null;
   let delay = INITIAL_DELAY_MS;
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      const { data, error } = await supabase.functions.invoke(functionName, { body });
+      const { data, error } = await supabase.functions.invoke(functionName, { 
+        body,
+        headers,
+      });
 
       if (error) {
         const msg = error.message || '';
@@ -374,8 +378,14 @@ export class PaymentRequiredError extends Error {
   }
 }
 
-async function invokeEdgeFunction<T>(functionName: string, body: unknown): Promise<T> {
-  return invokeEdgeFunctionWithRetry<T>(functionName, body);
+async function invokeEdgeFunction<T>(functionName: string, body: unknown, headers?: Record<string, string>): Promise<T> {
+  return invokeEdgeFunctionWithRetry<T>(functionName, body, MAX_RETRIES, headers);
+}
+
+// Get backend URL from localStorage for edge functions
+function getBackendUrlHeader(): Record<string, string> | undefined {
+  const backendUrl = localStorage.getItem('ctf_backend_url');
+  return backendUrl ? { 'x-backend-url': backendUrl } : undefined;
 }
 
 async function executeViaEdgeFunction(
@@ -387,7 +397,7 @@ async function executeViaEdgeFunction(
     job_id: jobId,
     tool,
     args,
-  });
+  }, getBackendUrlHeader());
 }
 
 

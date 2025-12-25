@@ -79,12 +79,17 @@ export function NetcatPanel({ jobId, onFlagFound, onGenerateSolveScript }: Netca
     addLine('system', `Connecting to ${host}:${port}...`);
 
     try {
+      // Get backend URL from localStorage
+      const backendUrl = localStorage.getItem('ctf_backend_url');
+      const headers = backendUrl ? { 'x-backend-url': backendUrl } : undefined;
+      
       const { data, error } = await supabase.functions.invoke('sandbox-terminal', {
         body: {
           job_id: jobId,
           tool: 'nc',
           args: [host, port],
-        }
+        },
+        headers,
       });
 
       if (error) throw error;
@@ -126,6 +131,10 @@ export function NetcatPanel({ jobId, onFlagFound, onGenerateSolveScript }: Netca
     setInteractions(prev => [...prev, message]);
 
     try {
+      // Get backend URL from localStorage
+      const backendUrl = localStorage.getItem('ctf_backend_url');
+      const headers = backendUrl ? { 'x-backend-url': backendUrl } : undefined;
+      
       const { data, error } = await supabase.functions.invoke('sandbox-terminal', {
         body: {
           job_id: jobId,
@@ -133,10 +142,9 @@ export function NetcatPanel({ jobId, onFlagFound, onGenerateSolveScript }: Netca
           args: [host, port],
           payload: message,
           interaction_script: [...interactions, message],
-        }
+        },
+        headers,
       });
-
-      if (error) throw error;
 
       if (data.stdout) {
         data.stdout.split('\n').forEach((line: string) => {

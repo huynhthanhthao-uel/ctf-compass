@@ -42,8 +42,13 @@ async function checkDockerBackend(): Promise<boolean> {
 // Check if Lovable Cloud edge functions are available
 async function checkCloudBackend(): Promise<boolean> {
   try {
+    // Get backend URL from localStorage
+    const backendUrl = localStorage.getItem('ctf_backend_url');
+    const headers = backendUrl ? { 'x-backend-url': backendUrl } : undefined;
+    
     const { data, error } = await supabase.functions.invoke('sandbox-terminal', {
       body: { job_id: 'health-check', tool: 'echo', args: ['ok'] },
+      headers,
     });
     
     if (error) return false;
