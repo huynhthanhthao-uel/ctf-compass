@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { getSupabaseClient, isSupabaseConfigured } from '@/integrations/supabase/safe-client';
 import { getBackendUrlHeaders } from '@/lib/backend-url';
 
 export type BackendMode = 'backend' | 'cloud' | 'demo';
@@ -14,15 +14,15 @@ interface BackendStatusResult {
 // Check if Docker backend is available
 async function checkDockerBackend(): Promise<boolean> {
   try {
-    const response = await fetch('/api/health', { 
+    const response = await fetch('/api/health', {
       method: 'GET',
       signal: AbortSignal.timeout(5000)
     });
-    
+
     if (!response.ok) return false;
-    
+
     const text = await response.text();
-    
+
     // Vite returns HTML for unknown routes
     if (text.trimStart().startsWith('<!') || text.trimStart().startsWith('<html')) {
       return false;
@@ -42,9 +42,14 @@ async function checkDockerBackend(): Promise<boolean> {
 
 // Check if Lovable Cloud edge functions are available
 async function checkCloudBackend(): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+
   // Cloud mode still requires a configured Docker backend URL because sandbox-terminal proxies to it.
   const headers = getBackendUrlHeaders();
   if (!headers) return false;
+
+  const supabase = await getSupabaseClient();
+  if (!supabase) return false;
 
   try {
     const { data, error } = await supabase.functions.invoke('sandbox-terminal', {

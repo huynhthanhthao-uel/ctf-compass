@@ -18,7 +18,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 import { getBackendUrlHeaders, getBackendUrlFromStorage } from '@/lib/backend-url';
-import { supabase } from '@/integrations/supabase/client';
+import { getSupabaseClient, isSupabaseConfigured } from '@/integrations/supabase/safe-client';
 import { Link } from 'react-router-dom';
 
 interface HealthStatus {
@@ -72,39 +72,53 @@ export function BackendHealthIndicator({ onReset }: BackendHealthIndicatorProps)
 
     const headers = getBackendUrlHeaders();
 
-    try {
-      const { data, error } = await supabase.functions.invoke('sandbox-terminal', {
-        body: { job_id: 'health-check', tool: 'echo', args: ['ok'] },
-        headers,
-      });
-      
-      if (error) {
-        sandboxError = error.message;
-        sandboxStatus = 'error';
-      } else if (data?.error) {
-        // Check for specific errors
-        if (data.error.toLowerCase().includes('not configured') || data.error.toLowerCase().includes('backend url')) {
-          sandboxStatus = 'not_configured';
-          sandboxError = 'Backend URL not configured. Set it in Settings → Docker Backend URL.';
-        } else if (data.error.includes('Invalid URL') || data.error.toLowerCase().includes('invalid backend url')) {
-          sandboxStatus = 'not_configured';
-          sandboxError = 'Invalid backend URL. Use a full URL like http://localhost:8000.';
-        } else if (data.error.includes('Cannot connect') || data.error.includes('fetch failed')) {
-          sandboxStatus = 'error';
-          sandboxError = 'Cannot connect to Docker backend. Ensure backend is running and reachable.';
-        } else {
-          sandboxStatus = 'error';
-          sandboxError = data.error;
-        }
-      } else if (data?.exit_code === 0) {
-        sandboxStatus = 'ready';
+    if (!isSupabaseConfigured()) {
+      sandboxStatus = 'not_configured';
+      sandboxError = 'Cloud mode is not configured in this deployment.';
+    } else if (!headers) {
+      sandboxStatus = 'not_configured';
+      sandboxError = 'Backend URL not configured. Set it in Settings → Docker Backend URL.';
+    } else {
+      const supabase = await getSupabaseClient();
+      if (!supabase) {
+        sandboxStatus = 'not_configured';
+        sandboxError = 'Cloud mode is not configured in this deployment.';
       } else {
-        sandboxStatus = 'error';
-        sandboxError = data?.stderr || 'Unknown error';
+        try {
+          const { data, error } = await supabase.functions.invoke('sandbox-terminal', {
+            body: { job_id: 'health-check', tool: 'echo', args: ['ok'] },
+            headers,
+          });
+
+          if (error) {
+            sandboxError = error.message;
+            sandboxStatus = 'error';
+          } else if (data?.error) {
+            // Check for specific errors
+            if (data.error.toLowerCase().includes('not configured') || data.error.toLowerCase().includes('backend url')) {
+              sandboxStatus = 'not_configured';
+              sandboxError = 'Backend URL not configured. Set it in Settings → Docker Backend URL.';
+            } else if (data.error.includes('Invalid URL') || data.error.toLowerCase().includes('invalid backend url')) {
+              sandboxStatus = 'not_configured';
+              sandboxError = 'Invalid backend URL. Use a full URL like http://localhost:8000.';
+            } else if (data.error.includes('Cannot connect') || data.error.includes('fetch failed')) {
+              sandboxStatus = 'error';
+              sandboxError = 'Cannot connect to Docker backend. Ensure backend is running and reachable.';
+            } else {
+              sandboxStatus = 'error';
+              sandboxError = data.error;
+            }
+          } else if (data?.exit_code === 0) {
+            sandboxStatus = 'ready';
+          } else {
+            sandboxStatus = 'error';
+            sandboxError = data?.stderr || 'Unknown error';
+          }
+        } catch (err) {
+          sandboxError = err instanceof Error ? err.message : 'Connection failed';
+          sandboxStatus = 'error';
+        }
       }
-    } catch (err) {
-      sandboxError = err instanceof Error ? err.message : 'Connection failed';
-      sandboxStatus = 'error';
     }
 
     setHealth({
