@@ -75,19 +75,10 @@ class Settings(BaseSettings):
     def runs_dir(self) -> str:
         return f"{self.data_dir}/runs"
     
-    # CORS
-    # IMPORTANT: when using cookie-based auth (credentials), origins must be explicit.
-    # You can override via env: CORS_ORIGINS='http://localhost:3000,http://127.0.0.1:3000'
-    cors_origins: List[str] = Field(default_factory=lambda: [
-        "http://localhost",
-        "http://127.0.0.1",
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "https://localhost",
-        "https://127.0.0.1",
-    ])
+    # CORS - Allow all origins by default for easier deployment
+    # For production, set CORS_ORIGINS env var to specific origins
+    # Example: CORS_ORIGINS='http://192.168.168.24:3000,http://localhost:3000'
+    cors_origins: List[str] = Field(default_factory=lambda: ["*"])
 
     @field_validator("cors_origins", mode="before")
     @classmethod
@@ -95,12 +86,13 @@ class Settings(BaseSettings):
         # Support env as:
         # - JSON list: ["http://a","http://b"]
         # - CSV: http://a,http://b
+        # - Single value: * or http://example.com
         if v is None:
-            return v
+            return ["*"]
         if isinstance(v, str):
             s = v.strip()
             if not s:
-                return []
+                return ["*"]
             if s.startswith("["):
                 try:
                     parsed = json.loads(s)
