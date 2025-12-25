@@ -127,6 +127,8 @@ function analyzeFileContent(content: string, fileName: string): {
 }
 
 // Dynamic output generator based on actual file analysis
+// NOTE: This is a SIMULATION - commands are not actually executed
+// For real execution, deploy the Docker backend
 function getSmartOutput(
   jobId: string,
   tool: string,
@@ -136,6 +138,8 @@ function getSmartOutput(
   const state = getJobState(jobId);
   const argsStr = args.join(' ');
   state.commandsRun.push(`${tool} ${argsStr}`);
+
+  console.log(`[sandbox-terminal] ⚠️ SIMULATION MODE: ${tool} ${argsStr} (job: ${jobId})`);
 
   // List files
   if (tool === 'ls') {
