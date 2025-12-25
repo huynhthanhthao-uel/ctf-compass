@@ -39,6 +39,7 @@ import { FullAutopilot } from '@/components/jobs/FullAutopilot';
 import { AutopilotPanel } from '@/components/jobs/AutopilotPanel';
 import { AnalysisHistory } from '@/components/jobs/AnalysisHistory';
 import { SolveScriptGenerator } from '@/components/jobs/SolveScriptGenerator';
+import { NetcatPanel } from '@/components/jobs/NetcatPanel';
 import { useJobDetail } from '@/hooks/use-jobs';
 import { useJobWebSocket, JobUpdate } from '@/hooks/use-websocket';
 import { cn } from '@/lib/utils';
@@ -907,6 +908,10 @@ if __name__ == "__main__":
               <FileText className="h-4 w-4" />
               Writeup
             </TabsTrigger>
+            <TabsTrigger value="netcat" className="flex items-center gap-2 data-[state=active]:bg-background">
+              <Wifi className="h-4 w-4" />
+              Netcat
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="analysis" className="space-y-6">
@@ -1012,6 +1017,13 @@ if __name__ == "__main__":
                 <WriteupView writeup={jobDetail.writeup} jobId={jobDetail.id} />
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="netcat">
+            <NetcatPanel 
+              jobId={jobDetail.id}
+              onFlagFound={handleFlagFound}
+            />
           </TabsContent>
         </Tabs>
       </div>

@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.sandbox-terminal]
 verify_jwt = false
+
+[functions.ai-solve-script]
+verify_jwt = false
