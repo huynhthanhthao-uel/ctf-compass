@@ -1,14 +1,20 @@
 # CTF Compass - Docker Compose Configuration
-# Production-ready multi-service deployment
+# Production-ready multi-service deployment for LOCAL backends
 #
 # GitHub: https://github.com/huynhtrungpc01/ctf-compass
-# Version: 1.1.0 (2025-12-25)
+# Version: 1.2.0 (2025-12-25)
+#
+# ARCHITECTURE:
+#   Frontend (React) connects directly to Docker Backend API via user-configured Backend URL.
+#   No external cloud/edge functions required for core functionality.
 #
 # FEATURES:
 #   - Full Autopilot AI analysis
-#   - Netcat terminal for PWN challenges
-#   - AI Solve Script generation
-#   - Cloud Mode fallback
+#   - Netcat terminal for PWN challenges  
+#   - AI Solve Script generation (pwntools)
+#   - Sandbox Terminal with Docker isolation
+#   - WebSocket real-time updates
+#   - MegaLLM AI integration
 #
 # USAGE:
 #   # Start services
@@ -56,8 +62,8 @@ services:
       start_period: 10s
     labels:
       - "com.ctf-compass.service=web"
-      - "com.ctf-compass.version=1.1.0"
-      - "com.ctf-compass.features=autopilot,netcat,ai-scripts"
+      - "com.ctf-compass.version=1.2.0"
+      - "com.ctf-compass.features=autopilot,netcat,ai-scripts,sandbox-terminal"
 
   # =============================================================================
   # Backend API - FastAPI Application
@@ -109,8 +115,8 @@ services:
       start_period: 60s
     labels:
       - "com.ctf-compass.service=api"
-      - "com.ctf-compass.version=1.1.0"
-      - "com.ctf-compass.features=autopilot,netcat,ai-scripts"
+      - "com.ctf-compass.version=1.2.0"
+      - "com.ctf-compass.features=autopilot,netcat,ai-scripts,sandbox-terminal,websocket"
 
   # =============================================================================
   # Celery Worker - Background Job Processing
@@ -152,7 +158,7 @@ services:
       - backend
     labels:
       - "com.ctf-compass.service=worker"
-      - "com.ctf-compass.version=1.1.0"
+      - "com.ctf-compass.version=1.2.0"
 
   # =============================================================================
   # PostgreSQL Database
@@ -176,7 +182,7 @@ services:
       - backend
     labels:
       - "com.ctf-compass.service=postgres"
-      - "com.ctf-compass.version=1.1.0"
+      - "com.ctf-compass.version=1.2.0"
 
   # =============================================================================
   # Redis - Message Broker & Cache
@@ -200,7 +206,7 @@ services:
       - backend
     labels:
       - "com.ctf-compass.service=redis"
-      - "com.ctf-compass.version=1.1.0"
+      - "com.ctf-compass.version=1.2.0"
 
   # =============================================================================
   # Nginx Reverse Proxy (Production)
@@ -224,7 +230,7 @@ services:
       - frontend
     labels:
       - "com.ctf-compass.service=nginx"
-      - "com.ctf-compass.version=1.1.0"
+      - "com.ctf-compass.version=1.2.0"
 
 # =============================================================================
 # Named Volumes - Persistent Data Storage
