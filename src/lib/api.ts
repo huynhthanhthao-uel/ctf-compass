@@ -46,14 +46,23 @@ async function apiFetch<T>(
 ): Promise<T> {
   const url = `${getApiBase()}${endpoint}`;
 
+  const method = (options.method || 'GET').toUpperCase();
+
   const headers: HeadersInit = {
-    'Content-Type': 'application/json',
     'Accept': 'application/json',
     ...options.headers,
   };
 
+  // Only send JSON content-type when we actually have a JSON body.
+  // Avoiding Content-Type on GET prevents unnecessary CORS preflights.
+  const hasBody = options.body !== undefined && options.body !== null;
+  if (hasBody && typeof options.body === 'string') {
+    const h = headers as Record<string, string>;
+    if (!h['Content-Type']) h['Content-Type'] = 'application/json';
+  }
+
   // Add CSRF token for mutating requests
-  if (['POST', 'PATCH', 'DELETE'].includes(options.method || '')) {
+  if (['POST', 'PATCH', 'DELETE'].includes(method)) {
     const csrfToken = getCsrfToken();
     if (csrfToken) {
       (headers as Record<string, string>)['X-CSRF-Token'] = csrfToken;

@@ -1,8 +1,9 @@
 from pydantic_settings import BaseSettings
-from pydantic import Field
+from pydantic import Field, field_validator
 from typing import List, Optional
 import secrets
 import os
+import json
 
 
 class Settings(BaseSettings):
@@ -74,9 +75,42 @@ class Settings(BaseSettings):
     def runs_dir(self) -> str:
         return f"{self.data_dir}/runs"
     
-    # CORS - allow all origins by default for development
-    cors_origins: List[str] = ["*"]
-    
+    # CORS
+    # IMPORTANT: when using cookie-based auth (credentials), origins must be explicit.
+    # You can override via env: CORS_ORIGINS='http://localhost:3000,http://127.0.0.1:3000'
+    cors_origins: List[str] = Field(default_factory=lambda: [
+        "http://localhost",
+        "http://127.0.0.1",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "https://localhost",
+        "https://127.0.0.1",
+    ])
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def _parse_cors_origins(cls, v):
+        # Support env as:
+        # - JSON list: ["http://a","http://b"]
+        # - CSV: http://a,http://b
+        if v is None:
+            return v
+        if isinstance(v, str):
+            s = v.strip()
+            if not s:
+                return []
+            if s.startswith("["):
+                try:
+                    parsed = json.loads(s)
+                    if isinstance(parsed, list):
+                        return parsed
+                except Exception:
+                    pass
+            return [item.strip() for item in s.split(",") if item.strip()]
+        return v
+
     # TLS
     enable_tls: bool = False
     
