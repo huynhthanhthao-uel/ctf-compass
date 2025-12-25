@@ -792,7 +792,7 @@ export default function Configuration() {
           </Card>
 
           {/* Docker Backend URL Configuration */}
-          <Card className="border-cyan-500/40 bg-gradient-to-r from-cyan-500/5 to-transparent">
+          <Card id="docker-backend-url" className="border-cyan-500/40 bg-gradient-to-r from-cyan-500/5 to-transparent">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Server className="h-5 w-5 text-cyan-500" />
