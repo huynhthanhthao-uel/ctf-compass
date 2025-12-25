@@ -1061,6 +1061,16 @@ ${insight ? `# AI Analysis: ${insight.analysis.slice(0, 200)}` : ''}
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {/* Start button - shows when idle */}
+              {!isRunning && currentPhase === 'idle' && (
+                <Button 
+                  onClick={runFullAutopilot}
+                  className="gap-2 bg-primary hover:bg-primary/90"
+                >
+                  <Rocket className="h-4 w-4" />
+                  Start Solving
+                </Button>
+              )}
               {/* Solve Again button - shows when completed or failed */}
               {!isRunning && (currentPhase === 'completed' || currentPhase === 'failed' || currentPhase === 'cancelled') && (
                 <Button 
