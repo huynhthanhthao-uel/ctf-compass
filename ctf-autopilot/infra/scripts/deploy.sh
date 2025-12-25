@@ -5,7 +5,7 @@
 #===============================================================================
 #
 # USAGE:
-#   curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/deploy.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf-autopilot/infra/scripts/deploy.sh | bash
 #
 #   # Or locally:
 #   bash ctf-autopilot/infra/scripts/deploy.sh
@@ -40,7 +40,7 @@ else
     echo -e "${YELLOW}📥 Cloning repository...${NC}"
     cd /tmp
     rm -rf ctf-compass
-    git clone --depth 1 https://github.com/HaryLya/ctf-compass.git
+    git clone --depth 1 https://github.com/huynhtrungpc01/ctf-compass.git
     COMPOSE_DIR="/tmp/ctf-compass/ctf-autopilot/infra"
     SANDBOX_DIR="/tmp/ctf-compass/ctf-autopilot/sandbox/image"
 fi

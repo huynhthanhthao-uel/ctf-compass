@@ -4,7 +4,7 @@
 # Pulls latest changes, cleans up, and restarts services
 #===============================================================================
 #
-# GitHub: https://github.com/HaryLya/ctf-compass.git
+# GitHub: https://github.com/huynhtrungpc01/ctf-compass.git
 #
 # USAGE:
 #   sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh
@@ -52,7 +52,7 @@ detect_install_dir() {
 INSTALL_DIR="$(detect_install_dir)"
 BACKUP_DIR="${BACKUP_DIR:-/opt/ctf-compass-backups}"
 LOG_FILE="${LOG_FILE:-/var/log/ctf-compass-update.log}"
-GITHUB_REPO="${GITHUB_REPO:-https://github.com/HaryLya/ctf-compass.git}"
+GITHUB_REPO="${GITHUB_REPO:-https://github.com/huynhtrungpc01/ctf-compass.git}"
 GITHUB_BRANCH="${GITHUB_BRANCH:-main}"
 
 # Flags
@@ -592,7 +592,7 @@ main() {
         echo -e "${CYAN}"
         echo "╔═══════════════════════════════════════════════════════════════════╗"
         echo "║                  CTF Compass - System Update                      ║"
-        echo "║            github.com/huynhtrungcipp/ctf-compass                  ║"
+        echo "║            github.com/huynhtrungpc01/ctf-compass                  ║"
         echo "╚═══════════════════════════════════════════════════════════════════╝"
         echo -e "${NC}"
         echo ""

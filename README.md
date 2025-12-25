@@ -2,7 +2,7 @@
 
 **AI-powered CTF challenge analyzer with sandboxed execution environment.**
 
-[![GitHub](https://img.shields.io/badge/GitHub-HaryLya%2Fctf--compass-blue?logo=github)](https://github.com/HaryLya/ctf-compass)
+[![GitHub](https://img.shields.io/badge/GitHub-huynhtrungpc01%2Fctf--compass-blue?logo=github)](https://github.com/huynhtrungpc01/ctf-compass)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Ubuntu 24.04](https://img.shields.io/badge/Ubuntu-24.04%20LTS-E95420?logo=ubuntu)](https://ubuntu.com/)
 [![Docker](https://img.shields.io/badge/Docker-Required-2496ED?logo=docker)](https://www.docker.com/)
@@ -33,7 +33,7 @@
 ### One-Line Deploy (Simplest)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/deploy.sh | bash
+curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf-autopilot/infra/scripts/deploy.sh | bash
 ```
 
 **🔑 Default Password: `admin`**
@@ -41,17 +41,17 @@ curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopi
 ### Full Installation (Ubuntu 24.04)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash
 ```
 
 ### Installation Options
 
 ```bash
 # Clean install (remove old installation first)
-curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --clean
+curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --clean
 
 # Complete purge and reinstall
-curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --clean --purge
+curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --clean --purge
 ```
 
 | Option | Description |
@@ -241,7 +241,7 @@ sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/uninstall.sh --force
 sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/uninstall.sh --purge
 
 # Uninstall via install script
-curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --clean-only --purge
+curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --clean-only --purge
 ```
 
 ---
@@ -360,5 +360,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-- **GitHub Issues:** [github.com/HaryLya/ctf-compass/issues](https://github.com/HaryLya/ctf-compass/issues)
+- **GitHub Issues:** [github.com/huynhtrungpc01/ctf-compass/issues](https://github.com/huynhtrungpc01/ctf-compass/issues)
 - **Documentation:** [ctf-autopilot/docs/](ctf-autopilot/docs/)

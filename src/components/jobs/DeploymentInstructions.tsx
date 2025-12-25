@@ -26,7 +26,7 @@ const DEPLOY_STEPS = [
     id: 'clone',
     title: 'Clone Repository',
     description: 'Clone the CTF Compass repository to your server',
-    command: 'git clone https://github.com/HaryLya/ctf-compass.git /opt/ctf-compass && cd /opt/ctf-compass',
+    command: 'git clone https://github.com/huynhtrungpc01/ctf-compass.git /opt/ctf-compass && cd /opt/ctf-compass',
   },
   {
     id: 'env',
@@ -110,13 +110,13 @@ export function DeploymentInstructions({ className }: DeploymentInstructionsProp
               </div>
               <div className="flex items-center gap-2">
                 <code className="flex-1 p-2 rounded bg-background/50 text-xs font-mono overflow-x-auto">
-                  curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/deploy.sh | bash
+                  curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf-autopilot/infra/scripts/deploy.sh | bash
                 </code>
                 <Button
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 flex-shrink-0"
-                  onClick={() => copyToClipboard('curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/deploy.sh | bash')}
+                  onClick={() => copyToClipboard('curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf-autopilot/infra/scripts/deploy.sh | bash')}
                 >
                   {copiedCommand?.includes('deploy.sh') ? (
                     <Check className="h-4 w-4 text-success" />
@@ -216,7 +216,7 @@ export function DeploymentInstructions({ className }: DeploymentInstructionsProp
             {/* Documentation Link */}
             <Button variant="outline" className="w-full gap-2" asChild>
               <a 
-                href="https://github.com/HaryLya/ctf-compass/blob/main/ctf-autopilot/QUICK_START.md" 
+                href="https://github.com/huynhtrungpc01/ctf-compass/blob/main/ctf-autopilot/QUICK_START.md" 
                 target="_blank" 
                 rel="noopener noreferrer"
               >
