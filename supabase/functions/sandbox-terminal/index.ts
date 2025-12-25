@@ -14,6 +14,19 @@ function getBackendUrl(req: Request): string {
   return (headerUrl || ENV_BACKEND_URL || '').trim();
 }
 
+function isAllowedHostname(hostname: string): boolean {
+  if (!hostname) return false;
+  if (hostname === 'localhost') return true;
+
+  // IPv4
+  if (/^(\d{1,3}\.){3}\d{1,3}$/.test(hostname)) return true;
+  // IPv6 (very loose)
+  if (hostname.includes(':')) return true;
+
+  // Require a dot for domains (prevents single-word like "bimat")
+  return hostname.includes('.');
+}
+
 function normalizeBackendUrl(input: string): string | null {
   const raw = input.trim();
   if (!raw) return null;
@@ -22,9 +35,10 @@ function normalizeBackendUrl(input: string): string | null {
 
   try {
     const url = new URL(withScheme);
-    if (!url.hostname) return null;
-    // Remove trailing slash
-    return url.toString().endsWith('/') ? url.toString().slice(0, -1) : url.toString();
+    if (!isAllowedHostname(url.hostname)) return null;
+
+    const normalized = url.toString();
+    return normalized.endsWith('/') ? normalized.slice(0, -1) : normalized;
   } catch {
     return null;
   }
@@ -227,12 +241,13 @@ serve(async (req) => {
       console.error(`[sandbox-terminal] Invalid or missing backend URL: ${backendUrlRaw}`);
       return new Response(
         JSON.stringify({
-          error: 'Invalid backend URL. Please set a valid URL like http://localhost:8000 in Settings → Docker Backend URL.',
+          error: 'Invalid backend URL. Set it in Settings → Docker Backend URL (e.g., http://localhost:8000 or http://YOUR_SERVER_IP:8000).',
           stdout: '',
           stderr: `Invalid backend URL: ${backendUrlRaw}`,
           exit_code: 1,
         }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        // Return 200 so clients can show the error instead of "Edge function returned 500"
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -310,21 +325,29 @@ serve(async (req) => {
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : 'Unknown error';
     console.error(`[sandbox-terminal] Error: ${errorMessage}`);
-    
-    // Check if it's a connection error to backend
-    if (errorMessage.includes('fetch failed') || errorMessage.includes('connection refused')) {
+
+    const msg = errorMessage.toLowerCase();
+    const isConnectionError =
+      msg.includes('fetch failed') ||
+      msg.includes('connection refused') ||
+      msg.includes('dns error') ||
+      msg.includes('failed to lookup') ||
+      msg.includes('name or service not known') ||
+      msg.includes('invalid url');
+
+    if (isConnectionError) {
       return new Response(
         JSON.stringify({
-          error: 'Cannot connect to Docker backend. Ensure the backend is running.',
-          hint: 'Run: cd ctf-autopilot/infra && docker compose up -d',
+          error: 'Cannot connect to Docker backend. Check the Backend URL in Settings and ensure the backend is running and reachable.',
           stdout: '',
-          stderr: 'Backend connection failed',
+          stderr: errorMessage,
           exit_code: 1,
         }),
-        { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        // Return 200 so UI can render a helpful error instead of throwing
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-    
+
     return new Response(
       JSON.stringify({
         error: errorMessage,
@@ -332,7 +355,7 @@ serve(async (req) => {
         stderr: errorMessage,
         exit_code: 1,
       }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });
