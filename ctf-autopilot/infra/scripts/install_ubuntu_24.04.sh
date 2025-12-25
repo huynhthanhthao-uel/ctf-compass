@@ -44,6 +44,8 @@ MIN_DISK_GB=15
 CLEAN_MODE=false
 FORCE_MODE=false
 NO_START=false
+PURGE_MODE=false
+CLEAN_ONLY=false
 
 # Parse arguments
 for arg in "$@"; do
@@ -51,16 +53,30 @@ for arg in "$@"; do
         --clean) CLEAN_MODE=true ;;
         --force) FORCE_MODE=true ;;
         --no-start) NO_START=true ;;
+        --purge) PURGE_MODE=true; CLEAN_MODE=true ;;
+        --clean-only) CLEAN_ONLY=true; CLEAN_MODE=true ;;
         --help|-h)
             echo "CTF Compass Installation Script"
             echo ""
             echo "Usage: $0 [OPTIONS]"
             echo ""
             echo "Options:"
-            echo "  --clean     Remove old installation before installing"
-            echo "  --force     Skip confirmation prompts"
-            echo "  --no-start  Don't start services after install"
-            echo "  --help      Show this help message"
+            echo "  --clean       Remove old installation before installing"
+            echo "  --clean-only  Only clean up, don't install (for uninstall)"
+            echo "  --purge       Clean + remove backups and all user data"
+            echo "  --force       Skip confirmation prompts"
+            echo "  --no-start    Don't start services after install"
+            echo "  --help        Show this help message"
+            echo ""
+            echo "Examples:"
+            echo "  # Fresh install"
+            echo "  sudo $0"
+            echo ""
+            echo "  # Clean reinstall"
+            echo "  sudo $0 --clean"
+            echo ""
+            echo "  # Complete uninstall"
+            echo "  sudo $0 --clean-only --purge"
             exit 0
             ;;
     esac
@@ -108,7 +124,7 @@ print_banner() {
 }
 
 #-------------------------------------------------------------------------------
-# Cleanup Old Installation
+# Cleanup Old Installation (Comprehensive)
 #-------------------------------------------------------------------------------
 cleanup_old_installation() {
     log_step "Cleaning up old installation..."
@@ -116,9 +132,42 @@ cleanup_old_installation() {
     # CRITICAL: Change to safe directory first to prevent getcwd() errors
     cd /tmp || cd /root || cd /
     
-    # Stop and remove old containers
+    #---------------------------------------------------------------------------
+    # 1. Stop systemd services (if any)
+    #---------------------------------------------------------------------------
+    log_info "Stopping systemd services..."
+    if systemctl is-active --quiet ctf-compass 2>/dev/null; then
+        systemctl stop ctf-compass 2>/dev/null || true
+        systemctl disable ctf-compass 2>/dev/null || true
+    fi
+    if systemctl is-active --quiet ctf-compass-api 2>/dev/null; then
+        systemctl stop ctf-compass-api 2>/dev/null || true
+        systemctl disable ctf-compass-api 2>/dev/null || true
+    fi
+    if systemctl is-active --quiet ctf-compass-worker 2>/dev/null; then
+        systemctl stop ctf-compass-worker 2>/dev/null || true
+        systemctl disable ctf-compass-worker 2>/dev/null || true
+    fi
+    
+    # Remove systemd service files
+    rm -f /etc/systemd/system/ctf-compass*.service
+    rm -f /etc/systemd/system/multi-user.target.wants/ctf-compass*.service
+    systemctl daemon-reload 2>/dev/null || true
+    
+    #---------------------------------------------------------------------------
+    # 2. Remove cron jobs
+    #---------------------------------------------------------------------------
+    log_info "Removing cron jobs..."
+    crontab -l 2>/dev/null | grep -v "ctf-compass" | crontab - 2>/dev/null || true
+    rm -f /etc/cron.d/ctf-compass*
+    rm -f /etc/cron.daily/ctf-compass*
+    rm -f /etc/cron.hourly/ctf-compass*
+    
+    #---------------------------------------------------------------------------
+    # 3. Stop Docker containers
+    #---------------------------------------------------------------------------
     if [[ -f "$INSTALL_DIR/ctf-autopilot/infra/docker-compose.yml" ]]; then
-        log_info "Stopping old services..."
+        log_info "Stopping Docker services via compose..."
         
         # Export env if exists
         if [[ -f "$INSTALL_DIR/.env" ]]; then
@@ -127,39 +176,194 @@ cleanup_old_installation() {
             set +a
         fi
         
-        docker compose -f "$INSTALL_DIR/ctf-autopilot/infra/docker-compose.yml" down -v --remove-orphans 2>/dev/null || true
+        docker compose -f "$INSTALL_DIR/ctf-autopilot/infra/docker-compose.yml" down -v --remove-orphans --timeout 30 2>/dev/null || true
     fi
     
-    # Stop containers by label/name
-    log_info "Removing old containers..."
+    # Also check dev compose
+    if [[ -f "$INSTALL_DIR/ctf-autopilot/infra/docker-compose.dev.yml" ]]; then
+        docker compose -f "$INSTALL_DIR/ctf-autopilot/infra/docker-compose.dev.yml" down -v --remove-orphans 2>/dev/null || true
+    fi
+    
+    # Stop containers by various naming patterns
+    log_info "Removing Docker containers..."
+    CONTAINER_PATTERNS=(
+        "ctf_compass"
+        "ctf-compass"
+        "ctfcompass"
+        "ctf_autopilot"
+        "ctf-autopilot"
+        "infra-api"
+        "infra-web"
+        "infra-postgres"
+        "infra-redis"
+        "infra-worker"
+        "infra-nginx"
+    )
+    
+    for pattern in "${CONTAINER_PATTERNS[@]}"; do
+        docker ps -aq --filter "name=$pattern" 2>/dev/null | xargs -r docker rm -f 2>/dev/null || true
+    done
+    
+    # By label
     docker ps -aq --filter "label=com.ctf-compass.service" 2>/dev/null | xargs -r docker rm -f 2>/dev/null || true
-    docker ps -aq --filter "name=ctf_compass" 2>/dev/null | xargs -r docker rm -f 2>/dev/null || true
-    docker ps -aq --filter "name=ctf-compass" 2>/dev/null | xargs -r docker rm -f 2>/dev/null || true
-    docker ps -aq --filter "name=infra" 2>/dev/null | xargs -r docker rm -f 2>/dev/null || true
+    docker ps -aq --filter "label=project=ctf-compass" 2>/dev/null | xargs -r docker rm -f 2>/dev/null || true
     
-    # Remove old images
-    log_info "Removing old images..."
-    docker images --format "{{.Repository}}:{{.Tag}} {{.ID}}" 2>/dev/null | grep -E "ctf[-_]compass|ctf[-_]autopilot|infra" | awk '{print $2}' | xargs -r docker rmi -f 2>/dev/null || true
+    #---------------------------------------------------------------------------
+    # 4. Remove Docker images
+    #---------------------------------------------------------------------------
+    log_info "Removing Docker images..."
+    IMAGE_PATTERNS=(
+        "ctf[-_]compass"
+        "ctf[-_]autopilot"
+        "ctfcompass"
+        "sandbox[-_]ctf"
+        "infra[-_]api"
+        "infra[-_]web"
+    )
     
-    # Remove old volumes
-    log_info "Removing old volumes..."
-    docker volume ls -q 2>/dev/null | grep -E "ctf[-_]compass|ctf[-_]autopilot|infra" | xargs -r docker volume rm -f 2>/dev/null || true
+    for pattern in "${IMAGE_PATTERNS[@]}"; do
+        docker images --format "{{.Repository}}:{{.Tag}} {{.ID}}" 2>/dev/null | grep -E "$pattern" | awk '{print $2}' | xargs -r docker rmi -f 2>/dev/null || true
+    done
     
-    # Remove old networks
+    # Remove by label
+    docker images --filter "label=com.ctf-compass.service" -q 2>/dev/null | xargs -r docker rmi -f 2>/dev/null || true
+    
+    #---------------------------------------------------------------------------
+    # 5. Remove Docker volumes
+    #---------------------------------------------------------------------------
+    log_info "Removing Docker volumes..."
+    VOLUME_PATTERNS=(
+        "ctf[-_]compass"
+        "ctf[-_]autopilot"
+        "ctfcompass"
+        "infra[-_]postgres"
+        "infra[-_]redis"
+        "infra[-_]uploads"
+    )
+    
+    for pattern in "${VOLUME_PATTERNS[@]}"; do
+        docker volume ls -q 2>/dev/null | grep -E "$pattern" | xargs -r docker volume rm -f 2>/dev/null || true
+    done
+    
+    #---------------------------------------------------------------------------
+    # 6. Remove Docker networks
+    #---------------------------------------------------------------------------
+    log_info "Removing Docker networks..."
     docker network ls -q --filter "name=ctf" 2>/dev/null | xargs -r docker network rm 2>/dev/null || true
     docker network ls -q --filter "name=infra" 2>/dev/null | xargs -r docker network rm 2>/dev/null || true
+    docker network ls -q --filter "name=compass" 2>/dev/null | xargs -r docker network rm 2>/dev/null || true
     
-    # Cleanup dangling resources
-    log_info "Pruning Docker resources..."
+    #---------------------------------------------------------------------------
+    # 7. Prune Docker resources
+    #---------------------------------------------------------------------------
+    log_info "Pruning dangling Docker resources..."
     docker system prune -af --volumes 2>/dev/null || true
     
-    # Remove old files (safe because we changed to /tmp first)
-    log_info "Removing old files..."
+    #---------------------------------------------------------------------------
+    # 8. Remove application files
+    #---------------------------------------------------------------------------
+    log_info "Removing application files..."
     rm -rf "$INSTALL_DIR"
-    rm -f /var/log/ctf-compass-*.log
-    rm -f /tmp/ctf_compass_sandbox_hash
+    rm -rf /opt/ctf-autopilot
+    rm -rf /var/lib/ctf-compass
+    rm -rf /var/run/ctf-compass
     
-    log_success "Old installation cleaned up"
+    #---------------------------------------------------------------------------
+    # 9. Remove log files
+    #---------------------------------------------------------------------------
+    log_info "Removing log files..."
+    rm -f /var/log/ctf-compass*.log
+    rm -rf /var/log/ctf-compass/
+    
+    #---------------------------------------------------------------------------
+    # 10. Remove temp files
+    #---------------------------------------------------------------------------
+    log_info "Removing temp files..."
+    rm -f /tmp/ctf_compass*
+    rm -f /tmp/ctf-compass*
+    rm -rf /tmp/ctf_sandbox*
+    
+    #---------------------------------------------------------------------------
+    # 11. Remove configuration files
+    #---------------------------------------------------------------------------
+    log_info "Removing configuration files..."
+    rm -f /etc/ctf-compass.conf
+    rm -rf /etc/ctf-compass/
+    rm -f /etc/nginx/sites-enabled/ctf-compass*
+    rm -f /etc/nginx/sites-available/ctf-compass*
+    
+    #---------------------------------------------------------------------------
+    # 12. Purge mode: Remove backups and user data
+    #---------------------------------------------------------------------------
+    if [[ "$PURGE_MODE" == "true" ]]; then
+        log_warn "Purge mode: Removing all backups and user data..."
+        rm -rf "$BACKUP_DIR"
+        rm -rf /home/*/ctf-compass-*
+        rm -rf /root/ctf-compass-*
+        
+        # Remove any exported data
+        rm -rf /tmp/ctf-compass-export*
+        
+        log_warn "All backups and user data removed!"
+    else
+        log_info "Backups preserved at: $BACKUP_DIR (use --purge to remove)"
+    fi
+    
+    #---------------------------------------------------------------------------
+    # 13. Reload services
+    #---------------------------------------------------------------------------
+    systemctl daemon-reload 2>/dev/null || true
+    
+    # Reload nginx if installed
+    if systemctl is-active --quiet nginx 2>/dev/null; then
+        systemctl reload nginx 2>/dev/null || true
+    fi
+    
+    log_success "Old installation cleaned up completely"
+}
+
+#-------------------------------------------------------------------------------
+# Clean Only Mode Handler
+#-------------------------------------------------------------------------------
+handle_clean_only() {
+    if [[ "$CLEAN_ONLY" == "true" ]]; then
+        print_banner
+        log_step "Running cleanup only (no installation)..."
+        
+        if [[ "$FORCE_MODE" != "true" && "$PURGE_MODE" != "true" ]]; then
+            echo ""
+            echo -e "${YELLOW}This will remove CTF Compass completely.${NC}"
+            echo -e "${YELLOW}Backups will be preserved unless --purge is used.${NC}"
+            echo ""
+            read -p "Continue? (y/N) " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                log_info "Cleanup cancelled."
+                exit 0
+            fi
+        fi
+        
+        cleanup_old_installation
+        
+        echo ""
+        echo -e "${GREEN}╔═══════════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "${GREEN}║                    CLEANUP COMPLETE                               ║${NC}"
+        echo -e "${GREEN}╚═══════════════════════════════════════════════════════════════════╝${NC}"
+        echo ""
+        
+        if [[ "$PURGE_MODE" == "true" ]]; then
+            echo -e "  ${RED}All data including backups has been removed.${NC}"
+        else
+            echo -e "  ${CYAN}Backups preserved at: $BACKUP_DIR${NC}"
+        fi
+        
+        echo ""
+        echo -e "  To reinstall CTF Compass:"
+        echo -e "  ${BOLD}curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash${NC}"
+        echo ""
+        
+        exit 0
+    fi
 }
 
 #-------------------------------------------------------------------------------
@@ -651,6 +855,10 @@ main() {
     echo "" >> "$LOG_FILE"
     
     print_banner
+    
+    # Handle clean-only mode (uninstall)
+    handle_clean_only
+    
     preflight_checks
     update_system
     install_docker
