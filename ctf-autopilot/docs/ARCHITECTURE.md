@@ -2,7 +2,7 @@
 
 ## Overview
 
-CTF Compass is a monorepo containing a React/Vite frontend, FastAPI backend, and isolated Docker sandbox for secure CTF challenge analysis.
+CTF Compass is a hybrid architecture containing a React/Vite frontend, FastAPI backend, Lovable Cloud Edge Functions, and isolated Docker sandbox for secure CTF challenge analysis.
 
 **GitHub:** [github.com/huynhtrungcipp/ctf-compass](https://github.com/huynhtrungcipp/ctf-compass)
 
@@ -30,21 +30,22 @@ CTF Compass is a monorepo containing a React/Vite frontend, FastAPI backend, and
 │                   │               │                           │
 │ • Dashboard       │    REST/WS    │ • Auth Service            │
 │ • Job Create      │◄─────────────►│ • Job Service             │
-│ • Job Detail      │               │ • System Service          │
+│ • Job Detail      │               │ • AI Analysis Service     │
+│ • Full Autopilot  │               │ • System Service          │
 │ • Configuration   │               │ • WebSocket Handler       │
 │ • Notifications   │               │                           │
-└───────────────────┘               └─────────────┬─────────────┘
-                                                  │
-                                    ┌─────────────┴─────────────┐
-                                    │                           │
-                          ┌─────────▼─────────┐       ┌─────────▼─────────┐
-                          │    PostgreSQL     │       │      Redis        │
-                          │    Database       │       │   Message Broker  │
-                          │    Port: 5432     │       │   Port: 6379      │
-                          └───────────────────┘       └─────────┬─────────┘
-                                                                │
-                                                      ┌─────────▼─────────┐
-                                                      │   Celery Worker   │
+└────────┬──────────┘               └─────────────┬─────────────┘
+         │                                        │
+         │ Cloud Mode (Fallback)    ┌─────────────┴─────────────┐
+         │                          │                           │
+┌────────▼────────────────┐   ┌─────▼─────────┐       ┌─────────▼─────────┐
+│   Lovable Cloud         │   │  PostgreSQL   │       │      Redis        │
+│   Edge Functions        │   │   Database    │       │   Message Broker  │
+│                         │   │   Port: 5432  │       │   Port: 6379      │
+│ • ai-analyze            │   └───────────────┘       └─────────┬─────────┘
+│ • sandbox-terminal      │                                     │
+│ • detect-category       │                           ┌─────────▼─────────┐
+└─────────────────────────┘                           │   Celery Worker   │
                                                       │ (Background Jobs) │
                                                       └─────────┬─────────┘
                                                                 │ Docker API
@@ -54,6 +55,30 @@ CTF Compass is a monorepo containing a React/Vite frontend, FastAPI backend, and
                                                       │  Analysis Tools   │
                                                       └───────────────────┘
 ```
+
+---
+
+## Operation Modes
+
+### 1. Connected Mode (Full Backend)
+- Backend API available at localhost:8000
+- Real database persistence
+- Celery workers for background jobs
+- Docker sandbox for real tool execution
+- WebSocket for real-time updates
+
+### 2. Cloud Mode (Edge Functions)
+- Backend unavailable or unreachable
+- Frontend falls back to Lovable Cloud
+- Edge Functions handle AI analysis
+- Simulated terminal execution
+- No local storage (session-only)
+
+### 3. Demo Mode (Mock Data)
+- No backend or cloud available
+- Uses mock data from `mock-data.ts`
+- Simulated job progress
+- Full UI functionality for testing
 
 ---
 
@@ -70,15 +95,14 @@ CTF Compass is a monorepo containing a React/Vite frontend, FastAPI backend, and
 - **Real-time:** WebSocket for live job updates
 
 **Key Features:**
-- Job creation wizard with drag-and-drop file upload
-- Real-time job status updates via WebSocket
+- Full Autopilot with one-click "Solve Challenge"
+- Real-time progress tracking with animations
+- Automatic mode detection (Connected/Cloud/Demo)
 - Job management: run, stop, delete with confirmation
 - Configuration page for API key and model settings
 - System update management from UI
-- Connection status indicator (Live/Demo Mode)
+- Connection status indicator with auto-retry
 - Notification center with mark-as-read
-- Auto-retry backend connection
-- Demo mode with mock data fallback
 
 **Pages:**
 | Route | Component | Description |
@@ -86,24 +110,79 @@ CTF Compass is a monorepo containing a React/Vite frontend, FastAPI backend, and
 | `/login` | Login.tsx | Authentication |
 | `/dashboard` | Dashboard.tsx | Job list, stats, management |
 | `/jobs/new` | JobCreate.tsx | Create new analysis |
-| `/jobs/:id` | JobDetail.tsx | Job details and results |
+| `/jobs/:id` | JobDetail.tsx | Job details, Full Autopilot |
 | `/config` | Configuration.tsx | Settings management |
 
 **Key Components:**
 | Component | Description |
 |-----------|-------------|
 | `AppLayout` | Main layout with navigation |
+| `FullAutopilot` | One-click solve with progress tracking |
+| `AutopilotPanel` | Manual autopilot controls |
+| `SandboxTerminal` | Interactive terminal interface |
+| `SolveScriptGenerator` | AI-powered script generation |
 | `JobCard` | Job display with actions |
-| `BackendStatus` | Demo/Connected indicator |
+| `BackendStatus` | Demo/Cloud/Connected indicator |
 | `NotificationDropdown` | Alert center |
 
 **Hooks:**
 | Hook | Description |
 |------|-------------|
-| `useJobs` | Job CRUD with mock fallback |
+| `useJobs` | Job CRUD with mode fallback |
 | `useJobDetail` | Single job details |
 | `useAuth` | Authentication state |
 | `useJobWebSocket` | Real-time updates |
+
+### Lovable Cloud Edge Functions
+
+**Location:** `supabase/functions/`
+
+Edge Functions provide backend functionality when local backend is unavailable.
+
+| Function | Endpoint | Description |
+|----------|----------|-------------|
+| `ai-analyze` | `/functions/v1/ai-analyze` | AI-powered challenge analysis |
+| `sandbox-terminal` | `/functions/v1/sandbox-terminal` | Simulated terminal commands |
+| `detect-category` | `/functions/v1/detect-category` | Auto category detection |
+
+#### ai-analyze Function
+
+Provides AI-powered CTF analysis with:
+- Category-specific playbooks (Crypto, Pwn, Web, Rev, Forensics)
+- Command history context
+- Pre-built solve scripts for common challenges
+- Structured JSON output with tool calling
+
+**Request:**
+```json
+{
+  "job_id": "job-001",
+  "files": [{"name": "challenge.py", "content": "..."}],
+  "command_history": [{"tool": "file", "output": "..."}],
+  "current_category": "crypto"
+}
+```
+
+**Response:**
+```json
+{
+  "summary": "RSA challenge with small public exponent",
+  "detected_category": "crypto",
+  "suggested_commands": [
+    {"tool": "python3", "args": ["solve.py"], "reason": "Run solve script"}
+  ],
+  "flag_candidates": ["CTF{example_flag}"],
+  "solve_script": "#!/usr/bin/env python3\n..."
+}
+```
+
+#### sandbox-terminal Function
+
+Simulates terminal execution for Cloud Mode:
+- Progressive command output based on job context
+- Supports common CTF tools (ls, cat, strings, file, python3)
+- Job state tracking for realistic progression
+- Python script execution simulation
 
 ### Backend API (FastAPI)
 
@@ -123,6 +202,8 @@ CTF Compass is a monorepo containing a React/Vite frontend, FastAPI backend, and
 | `jobs` | `/api/jobs` | Job CRUD and execution |
 | `config` | `/api/config` | System configuration |
 | `system` | `/api/system` | Updates, API key, models |
+| `ai` | `/api/ai` | AI analysis endpoints |
+| `history` | `/api/history` | Analysis history |
 | `ws` | `/ws` | WebSocket connections |
 
 **Services:**
@@ -131,9 +212,11 @@ CTF Compass is a monorepo containing a React/Vite frontend, FastAPI backend, and
 | `AuthService` | Password verification, session management |
 | `JobService` | Job lifecycle management |
 | `SandboxService` | Docker container orchestration |
+| `AIAnalysisService` | AI-powered analysis coordination |
 | `EvidenceService` | Flag extraction and scoring |
-| `WriteupService` | Report generation via MegaLLM |
+| `WriteupService` | Report generation via AI |
 | `FileService` | File upload and validation |
+| `HistoryService` | Analysis history tracking |
 
 ### Celery Workers
 
@@ -147,6 +230,7 @@ CTF Compass is a monorepo containing a React/Vite frontend, FastAPI backend, and
 - `analyze_job` - Main analysis pipeline
 - `run_sandbox_command` - Execute single command
 - `generate_writeup` - Create report
+- `run_solve_script` - Execute AI-generated scripts
 
 ### Sandbox Container
 
@@ -167,25 +251,76 @@ CTF Compass is a monorepo containing a React/Vite frontend, FastAPI backend, and
 | Seccomp | Restrictive profile |
 | AppArmor | Custom profile |
 
-**Allowed Tools:**
-| Tool | Purpose |
-|------|---------|
-| `strings` | Extract printable strings |
-| `file` | Identify file types |
-| `exiftool` | Metadata extraction |
-| `binwalk` | Firmware/binary analysis |
-| `pdfinfo` | PDF metadata |
-| `pdftotext` | PDF text extraction |
-| `tshark` | Network capture analysis |
-| `readelf` | ELF binary analysis |
-| `objdump` | Disassembly |
-| `xxd` | Hex dump |
-| `base64` | Encoding/decoding |
-| `unzip` | Archive extraction |
+**Installed Tools:**
+| Category | Tools |
+|----------|-------|
+| Binary Analysis | strings, file, binwalk, readelf, objdump, nm, checksec |
+| Reverse Engineering | radare2, retdec, gdb, ltrace, strace |
+| Crypto/Pwn | pwntools, pycryptodome, z3-solver, ROPgadget |
+| Network | tshark, tcpdump |
+| Forensics | volatility3, exiftool, foremost, binwalk |
+| Image/Stego | steghide, zsteg, pngcheck |
+| Archive | unzip, 7z, tar, gzip, bzip2 |
 
 ---
 
 ## Data Flow
+
+### Full Autopilot Flow
+
+```
+1. User clicks "Solve Challenge" button
+   │
+   ▼
+2. FullAutopilot component initializes
+   │
+   ├─► Check backend availability
+   │   │
+   │   ├─► If Connected: Use local API
+   │   │
+   │   └─► If Cloud Mode: Use Edge Functions
+   │
+   ▼
+3. Phase 1: Initial Analysis
+   │
+   ├─► List files (ls command)
+   ├─► Identify file types (file command)
+   ├─► Extract strings (strings command)
+   │
+   ▼
+4. Phase 2: Deep Scan
+   │
+   ├─► Category-specific tools
+   │   • Crypto: Check for keys, ciphertexts
+   │   • Pwn: checksec, readelf
+   │   • Rev: objdump, strings patterns
+   │   • Web: grep for endpoints, SQL
+   │   • Forensics: binwalk, exiftool
+   │
+   ▼
+5. Phase 3: AI Reasoning
+   │
+   ├─► Send context to ai-analyze
+   ├─► Receive analysis with:
+   │   • Challenge summary
+   │   • Suggested commands
+   │   • Solve strategy
+   │   • Generated solve script
+   │
+   ▼
+6. Phase 4: Flag Extraction
+   │
+   ├─► Execute solve script
+   ├─► Parse output for flag patterns
+   ├─► Validate against flag format
+   │
+   ▼
+7. Complete
+   │
+   ├─► Display found flags
+   ├─► Update job status to "done"
+   └─► Show success animation
+```
 
 ### Job Creation Flow
 
@@ -215,125 +350,33 @@ CTF Compass is a monorepo containing a React/Vite frontend, FastAPI backend, and
 7. WebSocket notification sent to clients
 ```
 
-### Job Execution Flow
+### Cloud Mode Flow
 
 ```
-1. Celery worker picks up task
+1. Frontend detects backend unavailable
    │
    ▼
-2. Worker selects playbook based on file types
+2. BackendStatus shows "Cloud Mode"
    │
    ▼
-3. For each command in playbook:
-   │
-   ├─► Create sandbox container
-   │   • Mount input files read-only
-   │   • Set resource limits
-   │   • Disable network
-   │
-   ├─► Execute command
-   │   • Capture stdout/stderr
-   │   • Enforce timeout
-   │
-   ├─► Store output
-   │   • Save to job directory
-   │   • Update database
-   │
-   └─► Send WebSocket progress update
+3. User clicks "Solve Challenge"
    │
    ▼
-4. Evidence extractor analyzes outputs
+4. FullAutopilot uses Edge Functions:
+   │
+   ├─► sandbox-terminal for command execution
+   │   • Simulated tool outputs
+   │   • Progressive discovery
+   │
+   ├─► ai-analyze for AI reasoning
+   │   • Lovable AI gateway
+   │   • Category playbooks
    │
    ▼
-5. Flag candidates scored and ranked
+5. Results displayed in real-time
    │
    ▼
-6. MegaLLM generates writeup
-   │
-   ▼
-7. Job marked complete
-   │
-   ▼
-8. Final WebSocket notification
-```
-
-### Job Stop/Delete Flow
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│ User clicks Stop/Delete button                                │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│ Frontend (use-jobs.tsx)                                       │
-│ • Clear any pending mock intervals                           │
-│ • Clear WebSocket update cache for job                       │
-│ • Update local state immediately                             │
-│ • (Delete only) Remove from mock data array                  │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│ If Backend Connected:                                         │
-│ • Send API request (DELETE/PATCH)                            │
-│ • Wait for confirmation                                      │
-│ • Update database                                            │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Configuration Flow
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│ Web UI Settings Page                                         │
-│ • API Key input                                              │
-│ • Model selection                                            │
-│ • Update button                                              │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│ API Endpoints                                                │
-│ POST /api/system/api-key    → Save to runtime + .env        │
-│ POST /api/system/models     → Save model preferences         │
-│ POST /api/system/update     → Stream update progress         │
-│ GET  /api/system/update     → Check for updates              │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│ Backend Services                                             │
-│ • Runtime config (in-memory)                                 │
-│ • .env file (persistent)                                     │
-│ • update.sh script execution                                 │
-└─────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Frontend Demo Mode
-
-When backend is unavailable, frontend operates in Demo Mode:
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│ isBackendAvailable() check                                    │
-│ • Fetch /api/health                                          │
-│ • Verify response is JSON (not HTML fallback)                │
-│ • Check status field                                         │
-└─────────────────────────────────────────────────────────────┘
-                              │
-          ┌───────────────────┴───────────────────┐
-          │                                       │
-┌─────────▼─────────┐               ┌─────────────▼─────────────┐
-│  Backend Connected │               │      Demo Mode            │
-│  useApi = true    │               │      useApi = false       │
-│                   │               │                           │
-│  • Real API calls │               │  • Mock data              │
-│  • Real WebSocket │               │  • Simulated progress     │
-│  • Real jobs      │               │  • Local state only       │
-└───────────────────┘               └───────────────────────────┘
+6. Job marked complete (local state only)
 ```
 
 ---
@@ -369,17 +412,27 @@ When backend is unavailable, frontend operates in Demo Mode:
 │       └── profiles/               # Seccomp/AppArmor
 ├── src/                            # React frontend source
 │   ├── components/
-│   │   ├── jobs/                   # JobCard, JobForm, etc.
+│   │   ├── jobs/
+│   │   │   ├── FullAutopilot.tsx   # One-click solve
+│   │   │   ├── AutopilotPanel.tsx
+│   │   │   ├── SandboxTerminal.tsx
+│   │   │   └── SolveScriptGenerator.tsx
 │   │   ├── layout/                 # AppLayout
 │   │   ├── ui/                     # shadcn/ui
 │   │   ├── BackendStatus.tsx
 │   │   └── NotificationDropdown.tsx
 │   ├── hooks/
-│   │   ├── use-jobs.tsx           # Job CRUD + mock
+│   │   ├── use-jobs.tsx           # Job CRUD + fallback
 │   │   ├── use-auth.tsx
 │   │   └── use-websocket.ts
 │   ├── pages/                      # Page components
 │   └── lib/                        # Utilities
+├── supabase/
+│   ├── functions/
+│   │   ├── ai-analyze/            # AI analysis function
+│   │   ├── sandbox-terminal/      # Terminal simulation
+│   │   └── detect-category/       # Category detection
+│   └── config.toml
 ├── data/
 │   └── runs/
 │       └── <job_id>/
@@ -387,78 +440,47 @@ When backend is unavailable, frontend operates in Demo Mode:
 │           ├── extracted/          # Extracted archives
 │           ├── output/             # Tool outputs
 │           ├── logs/               # Execution logs
-│           ├── evidence.json       # Extracted evidence
-│           ├── flags.json          # Flag candidates
-│           └── report.md           # Generated writeup
-├── .env                            # Configuration
-└── CREDENTIALS.txt                 # Generated credentials
+│           └── writeup.md          # Generated report
+└── .env                            # Environment config
 ```
 
 ---
 
-## Docker Containers
+## API Reference
 
-| Container | Image | Purpose | Network |
-|-----------|-------|---------|---------|
-| `ctf_compass_web` | Custom (Vite) | Frontend | frontend |
-| `ctf_compass_api` | Custom (FastAPI) | Backend API | frontend, backend |
-| `ctf_compass_worker` | Custom (Celery) | Job processing | backend |
-| `ctf_compass_postgres` | postgres:16-alpine | Database | backend |
-| `ctf_compass_redis` | redis:7-alpine | Message broker | backend |
-| `ctf_compass_nginx` | nginx:alpine | Reverse proxy | frontend |
+See [API.md](API.md) for complete API documentation.
 
-### Networks
+### Key Endpoints
 
-| Network | Type | Purpose |
-|---------|------|---------|
-| `ctf_compass_frontend` | bridge | Web and API access |
-| `ctf_compass_backend` | bridge (internal) | Database and cache |
-
-### Volumes
-
-| Volume | Purpose | Persistent |
-|--------|---------|------------|
-| `ctf_compass_postgres_data` | Database storage | Yes |
-| `ctf_compass_redis_data` | Cache and queues | Yes |
-| `ctf_compass_app_data` | Job files | Yes |
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/health` | GET | Health check |
+| `/api/auth/login` | POST | User login |
+| `/api/jobs` | GET/POST | List/create jobs |
+| `/api/jobs/{id}` | GET | Job details |
+| `/api/jobs/{id}/run` | POST | Start analysis |
+| `/api/ai/analyze` | POST | AI analysis |
+| `/ws/jobs/{id}` | WS | Real-time updates |
 
 ---
 
-## Technology Stack
+## Security Model
 
-| Layer | Technology |
-|-------|------------|
-| **Frontend** | React 18, Vite, TypeScript, Tailwind CSS, shadcn/ui |
-| **State** | React Query, React Context, useState/useCallback |
-| **Backend** | Python 3.12, FastAPI, SQLAlchemy, Pydantic v2 |
-| **Database** | PostgreSQL 16 |
-| **Cache/Queue** | Redis 7 |
-| **Task Queue** | Celery |
-| **Container** | Docker, Docker Compose |
-| **Reverse Proxy** | Nginx |
-| **AI Integration** | MegaLLM API |
+See [SECURITY.md](SECURITY.md) for complete security documentation.
+
+### Key Controls
+
+1. **Network Isolation**: Sandbox containers have no network access
+2. **File Validation**: Size, extension, and MIME type checks
+3. **Resource Limits**: CPU, memory, and time limits per job
+4. **Non-root Execution**: All sandbox commands run as non-root
+5. **Session Security**: HttpOnly cookies, secure sessions
 
 ---
 
-## Scalability Considerations
+## Getting Help
 
-### Horizontal Scaling
-
-- **Workers:** Add more Celery workers for parallel job processing
-- **API:** Run multiple API instances behind load balancer
-- **Database:** Use PostgreSQL replicas for read scaling
-
-### Performance Optimizations
-
-- **Caching:** Redis caches job metadata and session data
-- **Connection Pooling:** SQLAlchemy connection pool
-- **Async I/O:** FastAPI with async database operations
-- **Lazy Loading:** Frontend uses React Query for data fetching
-- **Mock Fallback:** Demo mode reduces backend load
-
-### Future Considerations
-
-- **Object Storage:** Move artifacts to S3-compatible storage
-- **Queue Priority:** Implement priority queues for urgent jobs
-- **Metrics:** Add Prometheus metrics endpoint
-- **Tracing:** Integrate OpenTelemetry for distributed tracing
+- **User Guide**: [USAGE.md](USAGE.md)
+- **Debug Guide**: [DEBUG.md](DEBUG.md)
+- **Runbook**: [RUNBOOK.md](RUNBOOK.md)
+- **GitHub**: [github.com/huynhtrungcipp/ctf-compass](https://github.com/huynhtrungcipp/ctf-compass)

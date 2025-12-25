@@ -16,19 +16,27 @@ A production-grade, security-first, local-only CTF challenge analyzer and writeu
 
 ### Frontend (React + TypeScript)
 - **Modern Dashboard**: Real-time job statistics with grid/list views
+- **Full Autopilot**: One-click "Solve Challenge" button with AI-powered analysis
 - **Job Management**: Create, run, stop, and delete analysis jobs
-- **Live Updates**: WebSocket-based progress tracking
-- **Demo Mode**: Full UI functionality without backend connection
+- **Live Updates**: WebSocket-based progress tracking with animations
+- **Cloud Mode**: Seamless fallback to Lovable Cloud Edge Functions when backend unavailable
+- **Demo Mode**: Full UI functionality with mock data
 - **Notification Center**: Real-time alerts with mark-as-read functionality
-- **Backend Status**: Visual indicator (Demo Mode / Connected)
+- **Backend Status**: Visual indicator (Demo Mode / Cloud Mode / Connected)
 - **Responsive Design**: Works on desktop and mobile devices
 
-### Backend (FastAPI + Celery)
+### Backend (FastAPI + Celery + Cloud)
+- **Hybrid Architecture**: Local backend with Cloud fallback
 - **Secure Analysis**: Sandboxed Docker containers with network isolation
-- **AI Integration**: MegaLLM API for intelligent analysis and writeup generation
+- **AI Integration**: Lovable AI / MegaLLM API for intelligent analysis
 - **Real-time WebSocket**: Live job updates pushed to clients
 - **RESTful API**: Complete job and configuration management
 - **Background Processing**: Celery workers for async job execution
+
+### Cloud Edge Functions
+- **`ai-analyze`**: AI-powered CTF challenge analysis with category-specific playbooks
+- **`sandbox-terminal`**: Simulated terminal for challenge file exploration
+- **`detect-category`**: Automatic challenge categorization (Crypto, Pwn, Web, Rev, Forensics)
 
 ---
 
@@ -50,10 +58,36 @@ curl -fsSL https://raw.githubusercontent.com/huynhtrungcipp/ctf-compass/main/ctf
 
 1. **Access the Web UI:** `http://YOUR_SERVER_IP:3000`
 2. **Login** with the admin password shown during installation
-3. **Configure API Key:** Go to Configuration page and enter your MegaLLM API key
-4. **Start analyzing!**
+3. **Configure API Key:** Go to Configuration page and enter your MegaLLM API key (optional - Cloud Mode works without it)
+4. **Start analyzing!** Click "Solve Challenge" on any job
 
-> **Note:** API key can be configured directly in the Web UI - no need to edit files manually!
+> **Note:** API key can be configured directly in the Web UI. Cloud Mode provides AI analysis even without backend!
+
+---
+
+## 🚀 Full Autopilot Mode
+
+### How It Works
+
+1. **Create a Job**: Upload challenge files and description
+2. **Click "Solve Challenge"**: One-click Full Autopilot activation
+3. **Watch AI Analyze**: See real-time progress through 4 phases:
+   - 🔍 **Initial Analysis**: File identification and category detection
+   - 📊 **Deep Scan**: Category-specific tool execution
+   - 🤖 **AI Reasoning**: Pattern recognition and exploit generation
+   - 🏁 **Flag Extraction**: Automated flag discovery
+4. **Get Results**: Flag candidates, solve scripts, and writeups
+
+### Supported Categories
+
+| Category | Tools Used | Example Challenges |
+|----------|------------|-------------------|
+| **Crypto** | Python, factordb, hashcat | RSA, AES, XOR |
+| **Pwn** | checksec, ROPgadget, gdb | Buffer overflow, ROP |
+| **Web** | curl, sqlmap, burp | SQLi, XSS, SSRF |
+| **Rev** | strings, objdump, r2 | Crackme, keygen |
+| **Forensics** | binwalk, volatility, exiftool | Memory dumps, files |
+| **Misc** | Various | Encoding, OSINT |
 
 ---
 
@@ -132,31 +166,38 @@ All analysis runs in isolated Docker containers with:
 │  │    Page     │  │    Page     │  │    Page     │          │
 │  └─────────────┘  └─────────────┘  └─────────────┘          │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐          │
-│  │ Notifications│ │Backend Status│ │  Job Detail │          │
+│  │Full Autopilot│ │Backend Status│ │  Job Detail │          │
 │  └─────────────┘  └─────────────┘  └─────────────┘          │
 └─────────────────────┬───────────────────────────────────────┘
                       │ HTTP/WebSocket
-┌─────────────────────▼───────────────────────────────────────┐
-│                    FastAPI Backend                           │
-│                    localhost:8000                            │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐          │
-│  │    Auth     │  │    Jobs     │  │   System    │          │
-│  │   Service   │  │   Service   │  │   Config    │          │
-│  └─────────────┘  └──────┬──────┘  └─────────────┘          │
-└──────────────────────────┼──────────────────────────────────┘
-                           │
-┌──────────────────────────▼──────────────────────────────────┐
-│                    Celery Workers                            │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐          │
-│  │  Analysis   │  │   Sandbox   │  │  Evidence   │          │
-│  │    Tasks    │  │   Runner    │  │  Extractor  │          │
-│  └─────────────┘  └──────┬──────┘  └─────────────┘          │
-└──────────────────────────┼──────────────────────────────────┘
+          ┌───────────┴───────────┐
+          │                       │
+┌─────────▼─────────┐   ┌─────────▼─────────┐
+│  Local Backend    │   │    Cloud Mode     │
+│  (FastAPI)        │   │  (Edge Functions) │
+│  localhost:8000   │   │                   │
+│  ┌─────────────┐  │   │  ┌─────────────┐  │
+│  │    Auth     │  │   │  │ ai-analyze  │  │
+│  │   Service   │  │   │  │   Function  │  │
+│  └─────────────┘  │   │  └─────────────┘  │
+│  ┌─────────────┐  │   │  ┌─────────────┐  │
+│  │    Jobs     │  │   │  │  sandbox-   │  │
+│  │   Service   │  │   │  │  terminal   │  │
+│  └──────┬──────┘  │   │  └─────────────┘  │
+└─────────┼─────────┘   └───────────────────┘
+          │
+┌─────────▼─────────────────────────────────┐
+│              Celery Workers               │
+│  ┌─────────────┐  ┌─────────────┐         │
+│  │  Analysis   │  │   Sandbox   │         │
+│  │    Tasks    │  │   Runner    │         │
+│  └─────────────┘  └──────┬──────┘         │
+└──────────────────────────┼────────────────┘
                            │ Docker API
-┌──────────────────────────▼──────────────────────────────────┐
-│              Sandbox Container (--network=none)              │
-│  Tools: strings, file, binwalk, exiftool, readelf, etc.     │
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────▼────────────────┐
+│       Sandbox Container (--network=none)  │
+│  Tools: strings, binwalk, pwntools, etc.  │
+└───────────────────────────────────────────┘
 ```
 
 ---
@@ -170,11 +211,11 @@ ctf-compass/
 │   │   ├── web/                 # Frontend Dockerfile
 │   │   └── api/                 # FastAPI backend
 │   │       └── app/
-│   │           ├── routers/     # API endpoints (auth, jobs, system, ws)
-│   │           ├── services/    # Business logic
+│   │           ├── routers/     # API endpoints (auth, jobs, system, ws, ai)
+│   │           ├── services/    # Business logic (sandbox, ai_analysis)
 │   │           └── models.py    # Database models
 │   ├── sandbox/
-│   │   ├── image/               # Sandbox Dockerfile
+│   │   ├── image/               # Sandbox Dockerfile with CTF tools
 │   │   └── profiles/            # Seccomp/AppArmor profiles
 │   ├── infra/
 │   │   ├── docker-compose.yml   # Production compose
@@ -194,10 +235,15 @@ ctf-compass/
 │       └── RUNBOOK.md
 ├── src/                         # React frontend source
 │   ├── components/
-│   │   ├── jobs/                # Job-related components
+│   │   ├── jobs/
+│   │   │   ├── FullAutopilot.tsx    # One-click solve component
+│   │   │   ├── AutopilotPanel.tsx   # Manual autopilot controls
+│   │   │   ├── SandboxTerminal.tsx  # Interactive terminal
+│   │   │   ├── SolveScriptGenerator.tsx  # AI script generation
+│   │   │   └── JobCard.tsx
 │   │   ├── layout/              # AppLayout, navigation
 │   │   ├── ui/                  # shadcn/ui components
-│   │   ├── BackendStatus.tsx    # Demo/Connected indicator
+│   │   ├── BackendStatus.tsx    # Demo/Cloud/Connected indicator
 │   │   └── NotificationDropdown.tsx
 │   ├── hooks/
 │   │   ├── use-auth.tsx
@@ -206,13 +252,20 @@ ctf-compass/
 │   ├── pages/
 │   │   ├── Dashboard.tsx
 │   │   ├── JobCreate.tsx
-│   │   ├── JobDetail.tsx
+│   │   ├── JobDetail.tsx        # Full Autopilot integration
 │   │   ├── Configuration.tsx
 │   │   └── Login.tsx
 │   └── lib/
 │       ├── api.ts
 │       ├── mock-data.ts
+│       ├── ctf-tools.ts         # Tool definitions
 │       └── types.ts
+├── supabase/
+│   ├── functions/
+│   │   ├── ai-analyze/          # AI analysis edge function
+│   │   ├── sandbox-terminal/    # Terminal simulation
+│   │   └── detect-category/     # Auto category detection
+│   └── config.toml
 ├── package.json
 └── README.md
 ```
@@ -226,14 +279,14 @@ ctf-compass/
 After installation:
 1. Login to the Web UI
 2. Go to **Configuration** page
-3. Enter your **MegaLLM API key**
+3. Enter your **MegaLLM API key** (optional for Cloud Mode)
 4. Configure model settings if needed
 
 ### Environment Variables
 
 | Variable | Description | Required |
 |----------|-------------|----------|
-| `MEGALLM_API_KEY` | API key from [ai.megallm.io](https://ai.megallm.io) | Yes |
+| `MEGALLM_API_KEY` | API key from [ai.megallm.io](https://ai.megallm.io) | No (Cloud Mode fallback) |
 | `ADMIN_PASSWORD` | Admin login password | Auto-generated |
 | `POSTGRES_PASSWORD` | Database password | Auto-generated |
 
@@ -266,10 +319,10 @@ cd ctf-autopilot/apps/api && ruff check .
 
 ### Frontend Development
 
-The frontend supports **Demo Mode** - when backend is unavailable:
-- Jobs use mock data
-- Analysis runs with simulated progress
-- All UI features work (stop, delete, notifications)
+The frontend supports multiple modes:
+- **Connected Mode**: Full backend available
+- **Cloud Mode**: Backend unavailable, using Edge Functions
+- **Demo Mode**: No backend/cloud, using mock data
 
 ---
 
@@ -277,10 +330,10 @@ The frontend supports **Demo Mode** - when backend is unavailable:
 
 | Document | Description |
 |----------|-------------|
-| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | System design overview |
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | System design with Cloud Mode |
 | [SECURITY.md](docs/SECURITY.md) | Security controls |
-| [DEBUG.md](docs/DEBUG.md) | Troubleshooting guide |
-| [USAGE.md](docs/USAGE.md) | User guide |
+| [DEBUG.md](docs/DEBUG.md) | Troubleshooting guide with Cloud debugging |
+| [USAGE.md](docs/USAGE.md) | User guide with Full Autopilot |
 | [RUNBOOK.md](docs/RUNBOOK.md) | Operations guide |
 
 ---
