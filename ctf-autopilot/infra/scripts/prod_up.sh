@@ -4,7 +4,7 @@
 # Starts all services in production mode
 #===============================================================================
 #
-# GitHub Repository: https://github.com/huynhtrungcipp/ctf-compass.git
+# GitHub Repository: https://github.com/HaryLya/ctf-compass.git
 #
 # USAGE:
 #   ./prod_up.sh [--clean] [--rebuild]
@@ -51,7 +51,7 @@ done
 echo -e "${CYAN}"
 echo "╔═══════════════════════════════════════════════════════════════════╗"
 echo "║                CTF Compass - Production Startup                   ║"
-echo "║          github.com/huynhtrungcipp/ctf-compass                    ║"
+echo "║          github.com/HaryLya/ctf-compass                           ║"
 echo "╚═══════════════════════════════════════════════════════════════════╝"
 echo -e "${NC}"
 

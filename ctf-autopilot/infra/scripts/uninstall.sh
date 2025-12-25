@@ -4,7 +4,7 @@
 # Removes all components, data, and Docker resources
 #===============================================================================
 #
-# GitHub: https://github.com/huynhtrungcipp/ctf-compass
+# GitHub: https://github.com/HaryLya/ctf-compass.git
 #
 # USAGE:
 #   sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/uninstall.sh
@@ -243,9 +243,9 @@ print_summary() {
     fi
     echo -e "${GREEN}║${NC}                                                                   ${GREEN}║${NC}"
     echo -e "${GREEN}║${NC}  To reinstall:                                                   ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}  curl -fsSL https://raw.githubusercontent.com/huynhtrungcipp/     ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}    ctf-compass/main/ctf-autopilot/infra/scripts/                  ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}    install_ubuntu_24.04.sh | sudo bash                            ${GREEN}║${NC}"
+echo -e "${GREEN}║${NC}  curl -fsSL https://raw.githubusercontent.com/HaryLya/            ${GREEN}║${NC}"
+echo -e "${GREEN}║${NC}    ctf-compass/main/ctf-autopilot/infra/scripts/                  ${GREEN}║${NC}"
+echo -e "${GREEN}║${NC}    install_ubuntu_24.04.sh | sudo bash                            ${GREEN}║${NC}"
     echo -e "${GREEN}║${NC}                                                                   ${GREEN}║${NC}"
     echo -e "${GREEN}╚═══════════════════════════════════════════════════════════════════╝${NC}"
     echo ""
