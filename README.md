@@ -32,11 +32,26 @@
 curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash
 ```
 
-### Clean Installation (Remove Old First)
+### Installation Options
 
 ```bash
+# Clean install (remove old installation first)
 curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --clean
+
+# Complete purge and reinstall
+curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --clean --purge
+
+# Force install (no prompts)
+curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --force
 ```
+
+| Option | Description |
+|--------|-------------|
+| `--clean` | Remove old installation before installing |
+| `--clean-only` | Only cleanup, don't install (uninstall) |
+| `--purge` | Remove everything including backups |
+| `--force` | Skip confirmation prompts |
+| `--no-start` | Don't start services after install |
 
 ### Post-Installation
 
@@ -126,14 +141,17 @@ sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh --clean
 ### Uninstall
 
 ```bash
-# Interactive uninstall
+# Interactive uninstall (keeps backups)
 sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/uninstall.sh
 
 # Force uninstall (no prompts)
 sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/uninstall.sh --force
 
-# Keep database data
-sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/uninstall.sh --keep-data
+# Complete purge (removes backups too)
+sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/uninstall.sh --purge
+
+# Uninstall via install script
+curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --clean-only --purge
 ```
 
 ---
