@@ -5,6 +5,7 @@
 [![Docker](https://img.shields.io/badge/Docker-Required-2496ED?logo=docker)](https://www.docker.com/)
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)](https://reactjs.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-Python-009688?logo=fastapi)](https://fastapi.tiangolo.com/)
+[![Version](https://img.shields.io/badge/Version-1.2.0-blue)](https://github.com/huynhtrungpc01/ctf-compass)
 
 A production-grade, security-first, local-only CTF challenge analyzer and writeup generator. This tool ingests challenge descriptions and attached files, runs deterministic offline analysis in an isolated Docker sandbox, extracts evidence and candidate flags, and generates professional writeups.
 
@@ -18,29 +19,24 @@ A production-grade, security-first, local-only CTF challenge analyzer and writeu
 - **Modern Dashboard**: Real-time job statistics with grid/list views
 - **Full Autopilot**: One-click "Solve Challenge" button with AI-powered analysis
 - **Netcat Terminal**: Interactive `nc host:port` connections for PWN challenges
-- **AI Solve Scripts**: Auto-generate pwntools scripts using Lovable AI
+- **AI Solve Scripts**: Auto-generate pwntools scripts using MegaLLM AI
 - **Job Management**: Create, run, stop, and delete analysis jobs
 - **Remote Connection**: Configure netcat host:port during job creation
 - **Live Updates**: WebSocket-based progress tracking with animations
-- **Cloud Mode**: Seamless fallback to Lovable Cloud Edge Functions when backend unavailable
-- **Demo Mode**: Full UI functionality with mock data
+- **Backend URL Configuration**: Connect to Docker backend via Settings page
+- **Demo Mode**: Full UI functionality with mock data when backend unavailable
 - **Notification Center**: Real-time alerts with mark-as-read functionality
-- **Backend Status**: Visual indicator (Demo Mode / Cloud Mode / Connected)
+- **Backend Status**: Visual indicator (Demo Mode / Connected)
 - **Responsive Design**: Works on desktop and mobile devices
 
-### Backend (FastAPI + Celery + Cloud)
-- **Hybrid Architecture**: Local backend with Cloud fallback
+### Backend (FastAPI + Celery + Docker)
+- **Local-First Architecture**: All processing done on your local Docker backend
 - **Secure Analysis**: Sandboxed Docker containers with network isolation
-- **AI Integration**: Lovable AI (Gemini 2.5) / MegaLLM API for intelligent analysis
+- **AI Integration**: MegaLLM API for intelligent analysis (Gemini 2.5 / LLaMA 3.3)
 - **Real-time WebSocket**: Live job updates pushed to clients
 - **RESTful API**: Complete job and configuration management
 - **Background Processing**: Celery workers for async job execution
-
-### Cloud Edge Functions
-- **`ai-analyze`**: AI-powered CTF challenge analysis with category-specific playbooks
-- **`sandbox-terminal`**: Simulated terminal for challenge file exploration + netcat
-- **`detect-category`**: Automatic challenge categorization (Crypto, Pwn, Web, Rev, Forensics)
-- **`ai-solve-script`**: Generate pwntools solve scripts from netcat interactions
+- **Sandbox Terminal**: Interactive shell in isolated Docker containers
 
 ---
 
@@ -82,8 +78,9 @@ curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf
 
 1. **Access the Web UI:** `http://YOUR_SERVER_IP:3000`
 2. **Login with password:** `admin`
-3. **Configure API Key (Optional):** Go to Configuration page for AI features
-4. **Start analyzing!** Click "Solve Challenge" on any job
+3. **Configure Backend URL:** Go to Configuration → Enter `http://YOUR_SERVER_IP:8000` → Click Connect
+4. **Configure API Key (Optional):** Enter MegaLLM API key for AI features
+5. **Start analyzing!** Click "Solve Challenge" on any job
 
 ---
 
@@ -122,8 +119,11 @@ sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh --check
 # Perform update
 sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh
 
-# Deep cleanup and update
+# Force deep cleanup and update (rebuild all containers)
 sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh --clean
+
+# Update via Web UI
+# Go to Configuration page → Click "Check Updates" → Click "Update Now"
 ```
 
 ---
@@ -331,10 +331,26 @@ ctf-compass/
 ### Web UI Configuration (Recommended)
 
 After installation:
-1. Login to the Web UI
-2. Go to **Configuration** page
-3. Enter your **MegaLLM API key** (optional for Cloud Mode)
-4. Configure model settings if needed
+1. Login to the Web UI at `http://YOUR_SERVER_IP:3000`
+2. Go to **Configuration** page (⚙️ icon)
+3. **Set Backend URL**: Enter your Docker backend URL (e.g., `http://YOUR_SERVER_IP:8000`)
+4. Click **Connect** to verify connection
+5. **Set MegaLLM API Key** (optional): Enter your API key for AI features
+6. Click **Save Changes**
+
+### Backend URL Setup
+
+The frontend connects directly to your Docker backend. You must configure the Backend URL:
+
+1. **Via Web UI** (Recommended):
+   - Go to Configuration page
+   - Enter Backend URL: `http://YOUR_SERVER_IP:8000`
+   - Click Connect to save
+
+2. **URL Format**:
+   - Local: `http://localhost:8000` or `http://127.0.0.1:8000`
+   - Remote: `http://192.168.1.100:8000`
+   - With HTTPS: `https://ctf.example.com:8000`
 
 ### Default Credentials
 
@@ -364,8 +380,11 @@ After installation:
 ## 🛠️ Development
 
 ```bash
-# Start development environment
-./ctf-autopilot/infra/scripts/dev_up.sh
+# Start development environment (PostgreSQL + Redis only)
+docker compose -f ctf-autopilot/infra/docker-compose.dev.yml up -d
+
+# Run API server
+cd ctf-autopilot/apps/api && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 # Run frontend with Vite (hot reload)
 npm run dev
@@ -377,12 +396,16 @@ cd ctf-autopilot/apps/api && pytest
 cd ctf-autopilot/apps/api && ruff check .
 ```
 
-### Frontend Development
+### Frontend Operation Modes
 
-The frontend supports multiple modes:
-- **Connected Mode**: Full backend available
-- **Cloud Mode**: Backend unavailable, using Edge Functions
-- **Demo Mode**: No backend/cloud, using mock data
+The frontend supports multiple connection modes:
+
+| Mode | Description | When Active |
+|------|-------------|-------------|
+| **Connected** | Full backend available | Backend URL configured and reachable |
+| **Demo Mode** | Mock data, UI testing | No backend configured or unreachable |
+
+Configure Backend URL in Settings → Configuration to switch from Demo Mode to Connected Mode.
 
 ---
 

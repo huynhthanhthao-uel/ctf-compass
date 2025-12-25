@@ -2,16 +2,20 @@
 #===============================================================================
 # CTF Compass - Production Installation Script
 # Ubuntu 24.04 LTS Only
-# Version: 1.1.0 (2025-12-25)
+# Version: 1.2.0 (2025-12-25)
 #===============================================================================
 #
 # GitHub Repository: https://github.com/huynhtrungpc01/ctf-compass.git
+#
+# ARCHITECTURE:
+#   Frontend connects directly to Docker Backend via user-configured Backend URL.
+#   No external cloud/edge functions required for core functionality.
 #
 # FEATURES:
 #   - Full Autopilot AI analysis
 #   - Netcat terminal for PWN/remote challenges
 #   - AI Solve Script generation (pwntools)
-#   - Cloud Mode with Lovable Edge Functions
+#   - Sandbox Terminal with Docker isolation
 #
 # USAGE:
 #   # Fresh install
@@ -122,8 +126,9 @@ print_banner() {
     echo "║     ╚██████╗   ██║   ██║         ╚██████╗╚██████╔╝██║ ╚═╝ ██║    ║"
     echo "║      ╚═════╝   ╚═╝   ╚═╝          ╚═════╝ ╚═════╝ ╚═╝     ╚═╝    ║"
     echo "║                                                                   ║"
-    echo "║                   CTF Compass v1.1.0                              ║"
+    echo "║                   CTF Compass v1.2.0                              ║"
     echo "║             Automated CTF Challenge Analyzer                      ║"
+    echo "║             Local Docker Backend Architecture                     ║"
     echo "║                                                                   ║"
     echo "║     GitHub: github.com/huynhtrungpc01/ctf-compass                  ║"
     echo "║                                                                   ║"
