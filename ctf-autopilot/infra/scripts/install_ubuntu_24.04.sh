@@ -608,36 +608,36 @@ configure_environment() {
     
     cd "$INSTALL_DIR"
     
-    # Generate secure credentials
+    # Simple fixed credentials for local deployment
     SECRET_KEY=$(openssl rand -base64 48 | tr -d '\n')
-    POSTGRES_PASSWORD=$(openssl rand -base64 32 | tr -dc 'a-zA-Z0-9' | head -c 32)
-    ADMIN_PASSWORD=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 16)
-    REDIS_PASSWORD=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 24)
-    GRAFANA_PASSWORD=$(openssl rand -base64 16 | tr -dc 'a-zA-Z0-9' | head -c 12)
+    POSTGRES_PASSWORD="ctfautopilot"
+    ADMIN_PASSWORD="admin"
+    REDIS_PASSWORD=""
+    GRAFANA_PASSWORD="admin"
     
     # Create .env file
     cat > .env << EOF
 #===============================================================================
 # CTF Compass Configuration
 # Generated: $(date)
+# Simple configuration for local deployment
 #===============================================================================
 
-# AI Configuration (REQUIRED)
+# AI Configuration (OPTIONAL - for AI analysis features)
 # Get your API key from: https://ai.megallm.io
 MEGALLM_API_KEY=
 MEGALLM_MODEL=llama3.3-70b-instruct
 
-# Authentication
+# Authentication - Default: admin
 ADMIN_PASSWORD=$ADMIN_PASSWORD
 
-# Database
+# Database - Simple defaults
 POSTGRES_USER=ctfautopilot
 POSTGRES_PASSWORD=$POSTGRES_PASSWORD
 POSTGRES_DB=ctfautopilot
 
 # Security
 SECRET_KEY=$SECRET_KEY
-REDIS_PASSWORD=$REDIS_PASSWORD
 
 # Application Settings
 MAX_UPLOAD_SIZE_MB=200
@@ -649,9 +649,6 @@ DEBUG=false
 
 # TLS (set to true for HTTPS)
 ENABLE_TLS=false
-
-# Monitoring (Grafana)
-GRAFANA_PASSWORD=$GRAFANA_PASSWORD
 EOF
 
     # Keep secrets readable by the installing user (so they can run docker compose without sudo)
@@ -668,55 +665,15 @@ EOF
     fi
     chmod 600 ctf-autopilot/infra/.env
     
-    # Save credentials
-    cat > CREDENTIALS.txt << EOF
-#===============================================================================
-# CTF Compass Credentials
-# Generated: $(date)
-# KEEP THIS FILE SECURE!
-#===============================================================================
-
-Admin Password: $ADMIN_PASSWORD
-
-Database:
-  User: ctfautopilot
-  Password: $POSTGRES_PASSWORD
-  Database: ctfautopilot
-
-Redis Password: $REDIS_PASSWORD
-
-Monitoring:
-  Grafana URL: http://YOUR_IP:3001
-  Grafana User: admin
-  Grafana Password: $GRAFANA_PASSWORD
-
-#===============================================================================
-# IMPORTANT: Set your MegaLLM API key!
-# 
-# Option 1: Edit via Web UI
-#   Go to Configuration page after login
-#
-# Option 2: Edit .env file
-#   sudo nano $INSTALL_DIR/.env
-#   Add: MEGALLM_API_KEY=your-key-here
-#   Then restart: docker compose restart
-#===============================================================================
-EOF
-
-    chmod 600 CREDENTIALS.txt
-    
-    # Display credentials
+    # Display simple credentials
     echo ""
-    echo -e "${YELLOW}╔═══════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${YELLOW}║${NC}  ${BOLD}IMPORTANT: Save these credentials securely!${NC}                      ${YELLOW}║${NC}"
-    echo -e "${YELLOW}╠═══════════════════════════════════════════════════════════════════╣${NC}"
-    echo -e "${YELLOW}║${NC}                                                                   ${YELLOW}║${NC}"
-    echo -e "${YELLOW}║${NC}  Admin Password: ${CYAN}${ADMIN_PASSWORD}${NC}                                  ${YELLOW}║${NC}"
-    echo -e "${YELLOW}║${NC}  Grafana Password: ${CYAN}${GRAFANA_PASSWORD}${NC}                              ${YELLOW}║${NC}"
-    echo -e "${YELLOW}║${NC}                                                                   ${YELLOW}║${NC}"
-    echo -e "${YELLOW}║${NC}  Credentials saved to: ${CYAN}$INSTALL_DIR/CREDENTIALS.txt${NC}  ${YELLOW}║${NC}"
-    echo -e "${YELLOW}║${NC}                                                                   ${YELLOW}║${NC}"
-    echo -e "${YELLOW}╚═══════════════════════════════════════════════════════════════════╝${NC}"
+    echo -e "${GREEN}╔═══════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${GREEN}║${NC}  ${BOLD}CTF Compass - Local Deployment${NC}                                  ${GREEN}║${NC}"
+    echo -e "${GREEN}╠═══════════════════════════════════════════════════════════════════╣${NC}"
+    echo -e "${GREEN}║${NC}                                                                   ${GREEN}║${NC}"
+    echo -e "${GREEN}║${NC}  Admin Password: ${CYAN}admin${NC}                                           ${GREEN}║${NC}"
+    echo -e "${GREEN}║${NC}                                                                   ${GREEN}║${NC}"
+    echo -e "${GREEN}╚═══════════════════════════════════════════════════════════════════╝${NC}"
     echo ""
     
     log_success "Environment configured"
