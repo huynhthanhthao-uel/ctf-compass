@@ -14,6 +14,7 @@ import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ToolChecker } from '@/components/jobs/ToolChecker';
 import { SolveScriptGenerator } from '@/components/jobs/SolveScriptGenerator';
+import { DeploymentInstructions } from '@/components/jobs/DeploymentInstructions';
 import * as api from '@/lib/api';
 
 // Complete list of MegaLLM models with accurate pricing
@@ -1123,6 +1124,9 @@ export default function Configuration() {
               </Alert>
             </CardContent>
           </Card>
+
+          {/* Deployment Instructions */}
+          <DeploymentInstructions />
 
           {/* Tool Availability Checker */}
           <ToolChecker />
