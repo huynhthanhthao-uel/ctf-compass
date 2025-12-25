@@ -28,12 +28,15 @@ Operations and maintenance guide for CTF Compass.
 - 4GB RAM minimum (8GB recommended)
 - 20GB disk space
 
-### Quick Install
+### Quick Deploy (One-Line)
 
 ```bash
-# One-command installation
-curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/deploy.sh | bash
 ```
+
+**Default Password: `admin`**
+
+### Full Install
 
 ### Clean Install (Remove Old First)
 
@@ -65,27 +68,27 @@ nano .env  # Set required values
 ### Post-Installation
 
 1. Access Web UI at `http://YOUR_SERVER_IP:3000`
-2. Login with admin password from `CREDENTIALS.txt`
-3. Go to **Configuration** page to set MegaLLM API key
+2. Login with password: `admin`
+3. Go to **Configuration** page to set MegaLLM API key (optional)
 4. Start analyzing CTF challenges!
 
 ---
 
 ## Configuration
 
-### Required Settings
+### Default Credentials
 
-| Variable | Description | Set Via |
-|----------|-------------|---------|
-| `MEGALLM_API_KEY` | AI API key | Web UI Configuration page |
-| `ADMIN_PASSWORD` | Admin login | Auto-generated during install |
-| `POSTGRES_PASSWORD` | Database password | Auto-generated during install |
+| Credential | Default Value |
+|------------|---------------|
+| `ADMIN_PASSWORD` | `admin` |
+| `POSTGRES_USER` | `ctfautopilot` |
+| `POSTGRES_PASSWORD` | `ctfautopilot` |
 
 ### Optional Settings
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `SECRET_KEY` | Auto-generated | JWT signing key |
+| `MEGALLM_API_KEY` | (empty) | AI API key (optional for Cloud Mode) |
 | `MAX_UPLOAD_SIZE_MB` | 200 | Maximum file upload size |
 | `SANDBOX_TIMEOUT_SECONDS` | 60 | Per-command timeout |
 | `MEGALLM_MODEL` | llama3.3-70b-instruct | AI model to use |
@@ -395,16 +398,17 @@ docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml up -d 
 
 ## Security Checklist
 
-### Pre-Deployment
+### Pre-Deployment (For Public Deployment)
 
-- [ ] Changed `ADMIN_PASSWORD` from default
+- [ ] Changed `ADMIN_PASSWORD` from default `admin`
 - [ ] Set strong `POSTGRES_PASSWORD`
-- [ ] Configured `SECRET_KEY`
-- [ ] Set MegaLLM API key via Settings page
+- [ ] Set MegaLLM API key via Settings page (optional)
 - [ ] Enabled TLS (for production)
 - [ ] Configured firewall (UFW)
 - [ ] Tested file upload restrictions
 - [ ] Verified sandbox isolation
+
+> **Note:** For local-only deployment, default credentials are acceptable.
 
 ### Regular Maintenance
 

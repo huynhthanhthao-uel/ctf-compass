@@ -31,8 +31,7 @@ Complete guide for using CTF Compass. This document covers the web interface, Fu
    - **Server**: `http://<your-server-ip>:3000`
 
 2. Login with your admin credentials:
-   - **Username**: `admin`
-   - **Password**: (from `CREDENTIALS.txt` or your configured password)
+   - **Password**: `admin` (default)
 
 ### First-Time Setup
 

@@ -176,8 +176,7 @@ docker compose -f ctf-autopilot/infra/docker-compose.yml logs postgres --tail 10
 
 | Cause | Solution |
 |-------|----------|
-| Missing .env file | `cp ctf-autopilot/.env.example .env` and configure |
-| Invalid POSTGRES_PASSWORD | Set a non-empty password in .env |
+| Missing .env file | `cp ctf-autopilot/infra/.env.local ctf-autopilot/infra/.env` |
 | Port already in use | Change ports or stop conflicting service |
 | Docker socket permission | `sudo chmod 666 /var/run/docker.sock` |
 
