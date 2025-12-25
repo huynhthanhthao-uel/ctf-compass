@@ -1150,6 +1150,30 @@ ${insight ? `# AI Analysis: ${insight.analysis.slice(0, 200)}` : ''}
                       Solved!
                     </Badge>
                   )}
+                  {/* Real-time connection indicator */}
+                  {isRunning && (
+                    <Badge 
+                      variant="outline" 
+                      className={cn(
+                        "gap-1.5 text-xs ml-2",
+                        progressConnected 
+                          ? "bg-success/10 text-success border-success/30" 
+                          : "bg-muted text-muted-foreground border-muted-foreground/30"
+                      )}
+                    >
+                      {progressConnected ? (
+                        <>
+                          <Wifi className="h-3 w-3" />
+                          Live
+                        </>
+                      ) : (
+                        <>
+                          <WifiOff className="h-3 w-3" />
+                          Offline
+                        </>
+                      )}
+                    </Badge>
+                  )}
                 </CardTitle>
                 <p className="text-sm text-muted-foreground">
                   One-click automated CTF solving with AI
