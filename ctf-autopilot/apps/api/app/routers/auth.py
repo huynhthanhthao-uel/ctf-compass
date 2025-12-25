@@ -21,15 +21,15 @@ def verify_password(password: str) -> bool:
 
 
 async def get_current_session(
-    session_id: str = Cookie(None, alias="session_id"),
+    auth_session_id: str = Cookie(None, alias="session_id"),
     db: AsyncSession = Depends(get_db),
 ) -> Session:
     """Verify session is valid and not expired."""
-    if not session_id:
+    if not auth_session_id:
         raise HTTPException(status_code=401, detail="Not authenticated")
     
     result = await db.execute(
-        select(Session).where(Session.id == session_id)
+        select(Session).where(Session.id == auth_session_id)
     )
     session = result.scalar_one_or_none()
     
@@ -37,7 +37,7 @@ async def get_current_session(
         raise HTTPException(status_code=401, detail="Invalid session")
     
     if session.expires_at < datetime.utcnow():
-        await db.execute(delete(Session).where(Session.id == session_id))
+        await db.execute(delete(Session).where(Session.id == auth_session_id))
         raise HTTPException(status_code=401, detail="Session expired")
     
     return session
