@@ -287,9 +287,9 @@ cleanup_old_installation() {
     # 10. Remove temp files
     #---------------------------------------------------------------------------
     log_info "Removing temp files..."
-    rm -f /tmp/ctf_compass*
-    rm -f /tmp/ctf-compass*
-    rm -rf /tmp/ctf_sandbox*
+    rm -rf /tmp/ctf_compass* 2>/dev/null || true
+    rm -rf /tmp/ctf-compass* 2>/dev/null || true
+    rm -rf /tmp/ctf_sandbox* 2>/dev/null || true
     
     #---------------------------------------------------------------------------
     # 11. Remove configuration files
