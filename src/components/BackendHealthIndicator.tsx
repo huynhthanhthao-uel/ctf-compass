@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
+import { getBackendUrlHeaders } from '@/lib/backend-url';
 import { supabase } from '@/integrations/supabase/client';
 
 interface HealthStatus {
@@ -62,14 +63,13 @@ export function BackendHealthIndicator() {
     // Check Sandbox Terminal edge function
     let sandboxStatus: HealthStatus['sandboxTerminal'] = 'error';
     let sandboxError: string | undefined;
-    
-    // Get backend URL from localStorage
-    const backendUrl = localStorage.getItem('ctf_backend_url') || '';
-    
+
+    const headers = getBackendUrlHeaders();
+
     try {
       const { data, error } = await supabase.functions.invoke('sandbox-terminal', {
         body: { job_id: 'health-check', tool: 'echo', args: ['ok'] },
-        headers: backendUrl ? { 'x-backend-url': backendUrl } : undefined,
+        headers,
       });
       
       if (error) {
@@ -77,15 +77,15 @@ export function BackendHealthIndicator() {
         sandboxStatus = 'error';
       } else if (data?.error) {
         // Check for specific errors
-        if (data.error.includes('not configured') || data.error.includes('CTF_BACKEND_URL')) {
+        if (data.error.toLowerCase().includes('not configured') || data.error.toLowerCase().includes('backend url')) {
           sandboxStatus = 'not_configured';
-          sandboxError = 'CTF_BACKEND_URL not configured. Set this secret with your Docker backend URL.';
-        } else if (data.error.includes('Invalid URL')) {
+          sandboxError = 'Backend URL not configured. Set it in Settings → Docker Backend URL.';
+        } else if (data.error.includes('Invalid URL') || data.error.toLowerCase().includes('invalid backend url')) {
           sandboxStatus = 'not_configured';
-          sandboxError = `Invalid backend URL format. Use full URL like: http://YOUR_SERVER:8000`;
+          sandboxError = 'Invalid backend URL. Use a full URL like http://localhost:8000.';
         } else if (data.error.includes('Cannot connect') || data.error.includes('fetch failed')) {
           sandboxStatus = 'error';
-          sandboxError = 'Cannot connect to Docker backend. Ensure backend is running.';
+          sandboxError = 'Cannot connect to Docker backend. Ensure backend is running and reachable.';
         } else {
           sandboxStatus = 'error';
           sandboxError = data.error;

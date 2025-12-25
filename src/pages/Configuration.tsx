@@ -16,6 +16,7 @@ import { ToolChecker } from '@/components/jobs/ToolChecker';
 import { SolveScriptGenerator } from '@/components/jobs/SolveScriptGenerator';
 import { DeploymentInstructions } from '@/components/jobs/DeploymentInstructions';
 import * as api from '@/lib/api';
+import { getBackendUrlFromStorage, normalizeBackendUrl, setBackendUrlToStorage } from '@/lib/backend-url';
 
 // Complete list of MegaLLM models with accurate pricing
 const ALL_MODELS = [
@@ -215,7 +216,7 @@ export default function Configuration() {
       }
       
       // Always load backend URL from localStorage
-      const storedBackendUrl = localStorage.getItem('ctf_backend_url');
+      const storedBackendUrl = getBackendUrlFromStorage();
       if (storedBackendUrl) {
         setBackendUrl(storedBackendUrl);
       }
@@ -228,24 +229,44 @@ export default function Configuration() {
   const testBackendConnection = async () => {
     setIsTestingBackend(true);
     setBackendStatus('unknown');
-    
+
+    const normalized = normalizeBackendUrl(backendUrl);
+    if (!normalized) {
+      setBackendStatus('error');
+      setIsTestingBackend(false);
+      toast({
+        title: 'Invalid URL',
+        description: 'Please enter a valid URL like http://localhost:8000 or http://YOUR_SERVER_IP:8000',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Keep UI + storage normalized
+    setBackendUrl(normalized);
+
     try {
-      const response = await fetch(`${backendUrl}/api/health`, {
+      const response = await fetch(`${normalized}/api/health`, {
         method: 'GET',
         headers: { 'Accept': 'application/json' },
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         if (data.status === 'healthy') {
           setBackendStatus('connected');
-          localStorage.setItem('ctf_backend_url', backendUrl);
+          setBackendUrlToStorage(normalized);
           toast({
             title: 'Backend Connected',
-            description: `Successfully connected to ${backendUrl}`,
+            description: `Successfully connected to ${normalized}`,
           });
         } else {
           setBackendStatus('error');
+          toast({
+            title: 'Connection Failed',
+            description: 'Backend responded but did not report healthy status',
+            variant: 'destructive',
+          });
         }
       } else {
         setBackendStatus('error');
