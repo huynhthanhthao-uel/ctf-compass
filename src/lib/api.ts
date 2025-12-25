@@ -1,11 +1,33 @@
-import { supabase } from "@/integrations/supabase/client";
 import { getBackendUrlHeaders } from "@/lib/backend-url";
 
 /**
  * API client for CTF Autopilot backend
+ * Supabase is loaded lazily only when needed (for Lovable Cloud fallback)
  */
 
 const API_BASE = '/api';
+
+// Lazy-loaded Supabase client (only loaded when edge functions are needed)
+let supabaseClient: Awaited<typeof import("@/integrations/supabase/client")>["supabase"] | null = null;
+
+async function getSupabaseClient() {
+  if (supabaseClient) return supabaseClient;
+  
+  try {
+    // Only import Supabase when actually needed
+    const { supabase } = await import("@/integrations/supabase/client");
+    supabaseClient = supabase;
+    return supabaseClient;
+  } catch (err) {
+    console.warn('[API] Supabase not available:', err);
+    return null;
+  }
+}
+
+// Check if Supabase is configured
+function isSupabaseConfigured(): boolean {
+  return !!(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY);
+}
 
 // Get CSRF token from cookie
 function getCsrfToken(): string | null {
@@ -322,6 +344,16 @@ async function invokeEdgeFunctionWithRetry<T>(
   retries = MAX_RETRIES,
   headers?: Record<string, string>
 ): Promise<T> {
+  // Check if Supabase is configured before attempting
+  if (!isSupabaseConfigured()) {
+    throw new Error('Supabase not configured. Using local backend only.');
+  }
+
+  const supabase = await getSupabaseClient();
+  if (!supabase) {
+    throw new Error('Supabase client not available. Using local backend only.');
+  }
+
   let lastError: Error | null = null;
   let delay = INITIAL_DELAY_MS;
 
