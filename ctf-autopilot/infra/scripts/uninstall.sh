@@ -1,7 +1,7 @@
 #!/bin/bash
 #===============================================================================
 # CTF Compass - Complete Uninstall Script
-# Removes all components, data, and Docker resources
+# Wrapper for install script with cleanup mode
 #===============================================================================
 #
 # GitHub: https://github.com/HaryLya/ctf-compass.git
@@ -10,9 +10,10 @@
 #   sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/uninstall.sh
 #
 # OPTIONS:
-#   --force     Skip confirmation prompts
-#   --keep-data Keep database volumes (only remove containers/images)
-#   --help      Show help message
+#   --force       Skip confirmation prompts
+#   --purge       Remove all data including backups
+#   --keep-data   Keep database backups (default behavior)
+#   --help        Show help message
 #
 #===============================================================================
 
@@ -22,11 +23,9 @@ set -euo pipefail
 # Configuration
 #-------------------------------------------------------------------------------
 INSTALL_DIR="${INSTALL_DIR:-/opt/ctf-compass}"
-BACKUP_DIR="/opt/ctf-compass-backups"
-LOG_FILE="/var/log/ctf-compass-uninstall.log"
-
-FORCE_MODE=false
-KEEP_DATA=false
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+INSTALL_SCRIPT="$SCRIPT_DIR/install_ubuntu_24.04.sh"
+REMOTE_SCRIPT="https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh"
 
 #-------------------------------------------------------------------------------
 # Colors
@@ -39,19 +38,17 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-log_info()    { echo -e "${BLUE}[INFO]${NC} $1" | tee -a "$LOG_FILE"; }
-log_success() { echo -e "${GREEN}[SUCCESS]${NC} $1" | tee -a "$LOG_FILE"; }
-log_warn()    { echo -e "${YELLOW}[WARN]${NC} $1" | tee -a "$LOG_FILE"; }
-log_error()   { echo -e "${RED}[ERROR]${NC} $1" | tee -a "$LOG_FILE"; exit 1; }
-log_step()    { echo -e "${CYAN}${BOLD}[STEP]${NC} $1" | tee -a "$LOG_FILE"; }
-
 #-------------------------------------------------------------------------------
 # Parse Arguments
 #-------------------------------------------------------------------------------
+FORCE_FLAG=""
+PURGE_FLAG=""
+
 for arg in "$@"; do
     case $arg in
-        --force) FORCE_MODE=true ;;
-        --keep-data) KEEP_DATA=true ;;
+        --force) FORCE_FLAG="--force" ;;
+        --purge) PURGE_FLAG="--purge" ;;
+        --keep-data) ;; # Default behavior, backups are kept
         --help|-h)
             echo "CTF Compass Uninstall Script"
             echo ""
@@ -59,221 +56,127 @@ for arg in "$@"; do
             echo ""
             echo "Options:"
             echo "  --force       Skip confirmation prompts"
-            echo "  --keep-data   Keep database volumes"
+            echo "  --purge       Remove all data including backups"
+            echo "  --keep-data   Keep database backups (default)"
             echo "  --help        Show this help message"
+            echo ""
+            echo "Examples:"
+            echo "  # Standard uninstall (keeps backups)"
+            echo "  sudo $0"
+            echo ""
+            echo "  # Complete removal including backups"
+            echo "  sudo $0 --purge"
+            echo ""
+            echo "  # Force uninstall without prompts"
+            echo "  sudo $0 --force --purge"
             exit 0
             ;;
     esac
 done
 
 #-------------------------------------------------------------------------------
+# Check Root
+#-------------------------------------------------------------------------------
+if [[ $EUID -ne 0 ]]; then
+    echo -e "${RED}[ERROR]${NC} This script must be run as root (use sudo)"
+    exit 1
+fi
+
+#-------------------------------------------------------------------------------
 # Banner
 #-------------------------------------------------------------------------------
-print_banner() {
-    echo -e "${RED}"
-    echo "╔═══════════════════════════════════════════════════════════════════╗"
-    echo "║                                                                   ║"
-    echo "║              CTF Compass - Uninstall Script                       ║"
-    echo "║                                                                   ║"
-    echo "╚═══════════════════════════════════════════════════════════════════╝"
-    echo -e "${NC}"
-}
+echo -e "${RED}"
+echo "╔═══════════════════════════════════════════════════════════════════╗"
+echo "║                                                                   ║"
+echo "║              CTF Compass - Uninstall Script                       ║"
+echo "║                                                                   ║"
+echo "╚═══════════════════════════════════════════════════════════════════╝"
+echo -e "${NC}"
 
 #-------------------------------------------------------------------------------
 # Confirmation
 #-------------------------------------------------------------------------------
-confirm_uninstall() {
-    if [[ "$FORCE_MODE" == "true" ]]; then
-        return 0
-    fi
-    
+if [[ -z "$FORCE_FLAG" ]]; then
     echo -e "${YELLOW}"
     echo "╔═══════════════════════════════════════════════════════════════════╗"
     echo "║  WARNING: This will remove CTF Compass completely!                ║"
     echo "╠═══════════════════════════════════════════════════════════════════╣"
     echo "║                                                                   ║"
     echo "║  The following will be deleted:                                   ║"
-    echo "║    • All Docker containers                                        ║"
-    echo "║    • All Docker images                                            ║"
-    if [[ "$KEEP_DATA" != "true" ]]; then
-        echo "║    • All database data (PostgreSQL, Redis)                        ║"
-        echo "║    • All uploaded files and job results                           ║"
-    fi
+    echo "║    • All Docker containers, images, volumes, networks             ║"
     echo "║    • Installation directory ($INSTALL_DIR)             ║"
-    echo "║    • Log files                                                    ║"
+    echo "║    • Log files and configuration                                  ║"
+    echo "║    • Systemd services and cron jobs                               ║"
+    if [[ -n "$PURGE_FLAG" ]]; then
+        echo "║                                                                   ║"
+        echo "║  ${RED}• All backups will also be removed (--purge)${YELLOW}                   ║"
+    else
+        echo "║                                                                   ║"
+        echo "║  Note: Backups will be preserved at /opt/ctf-compass-backups     ║"
+    fi
     echo "║                                                                   ║"
     echo "╚═══════════════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
     
     read -p "Are you sure you want to continue? (type 'yes' to confirm): " response
     if [[ "$response" != "yes" ]]; then
-        echo "Uninstall cancelled."
+        echo -e "${BLUE}[INFO]${NC} Uninstall cancelled."
         exit 0
     fi
-}
+    FORCE_FLAG="--force"  # Already confirmed
+fi
 
 #-------------------------------------------------------------------------------
-# Stop Services
+# Run Cleanup
 #-------------------------------------------------------------------------------
-stop_services() {
-    log_step "Step 1/5: Stopping services..."
-    
-    COMPOSE_FILE="$INSTALL_DIR/ctf-autopilot/infra/docker-compose.yml"
-    
-    if [[ -f "$COMPOSE_FILE" ]]; then
-        # Export env vars if .env exists
-        if [[ -f "$INSTALL_DIR/.env" ]]; then
-            set -a
-            source "$INSTALL_DIR/.env" 2>/dev/null || true
-            set +a
-        fi
-        
-        docker compose -f "$COMPOSE_FILE" down --remove-orphans 2>&1 | tee -a "$LOG_FILE" || true
-        log_success "Services stopped"
-    else
-        log_warn "docker-compose.yml not found, attempting manual cleanup..."
-    fi
-    
-    # Stop any remaining containers with ctf-compass label
-    log_info "Stopping any remaining containers..."
-    docker ps -q --filter "label=com.ctf-compass.service" | xargs -r docker stop 2>/dev/null || true
-    docker ps -aq --filter "label=com.ctf-compass.service" | xargs -r docker rm -f 2>/dev/null || true
-    
-    # Stop containers by name pattern
-    docker ps -aq --filter "name=ctf_compass" | xargs -r docker rm -f 2>/dev/null || true
-    docker ps -aq --filter "name=ctf-compass" | xargs -r docker rm -f 2>/dev/null || true
-}
+echo ""
+echo -e "${BLUE}[INFO]${NC} Starting cleanup process..."
+echo ""
+
+# Try local script first, fall back to remote
+if [[ -f "$INSTALL_SCRIPT" ]]; then
+    echo -e "${BLUE}[INFO]${NC} Using local install script for cleanup..."
+    bash "$INSTALL_SCRIPT" --clean-only $FORCE_FLAG $PURGE_FLAG
+else
+    echo -e "${BLUE}[INFO]${NC} Downloading cleanup script from GitHub..."
+    curl -fsSL "$REMOTE_SCRIPT" | bash -s -- --clean-only $FORCE_FLAG $PURGE_FLAG
+fi
 
 #-------------------------------------------------------------------------------
-# Remove Volumes
+# Final Cleanup (things the install script might miss)
 #-------------------------------------------------------------------------------
-remove_volumes() {
-    log_step "Step 2/5: Removing Docker volumes..."
-    
-    if [[ "$KEEP_DATA" == "true" ]]; then
-        log_info "Keeping data volumes (--keep-data flag set)"
-        return 0
-    fi
-    
-    # Remove named volumes
-    docker volume rm ctf_compass_postgres_data 2>/dev/null || true
-    docker volume rm ctf_compass_redis_data 2>/dev/null || true
-    docker volume rm ctf_compass_app_data 2>/dev/null || true
-    
-    # Remove any volumes with ctf-compass label
-    docker volume ls -q --filter "label=com.ctf-compass.volume" | xargs -r docker volume rm 2>/dev/null || true
-    
-    log_success "Volumes removed"
-}
+echo ""
+echo -e "${BLUE}[INFO]${NC} Performing final cleanup..."
+
+# Remove the uninstall log if it exists
+rm -f /var/log/ctf-compass-uninstall.log
+
+# Remove any remaining Docker resources
+docker system prune -af --volumes 2>/dev/null || true
 
 #-------------------------------------------------------------------------------
-# Remove Images
+# Summary
 #-------------------------------------------------------------------------------
-remove_images() {
-    log_step "Step 3/5: Removing Docker images..."
-    
-    # Remove images by name pattern
-    docker images --format "{{.Repository}}:{{.Tag}} {{.ID}}" | grep -E "ctf[-_]compass|ctf[-_]autopilot" | awk '{print $2}' | xargs -r docker rmi -f 2>/dev/null || true
-    
-    # Remove dangling images
-    docker image prune -f 2>&1 | tee -a "$LOG_FILE" || true
-    
-    log_success "Images removed"
-}
-
-#-------------------------------------------------------------------------------
-# Remove Networks
-#-------------------------------------------------------------------------------
-remove_networks() {
-    log_step "Step 4/5: Removing Docker networks..."
-    
-    docker network rm ctf_compass_frontend 2>/dev/null || true
-    docker network rm ctf_compass_backend 2>/dev/null || true
-    
-    # Prune unused networks
-    docker network prune -f 2>&1 | tee -a "$LOG_FILE" || true
-    
-    log_success "Networks removed"
-}
-
-#-------------------------------------------------------------------------------
-# Remove Files
-#-------------------------------------------------------------------------------
-remove_files() {
-    log_step "Step 5/5: Removing files..."
-    
-    # Remove installation directory
-    if [[ -d "$INSTALL_DIR" ]]; then
-        rm -rf "$INSTALL_DIR"
-        log_info "Removed: $INSTALL_DIR"
-    fi
-    
-    # Remove backup directory
-    if [[ -d "$BACKUP_DIR" ]]; then
-        rm -rf "$BACKUP_DIR"
-        log_info "Removed: $BACKUP_DIR"
-    fi
-    
-    # Remove log files
-    rm -f /var/log/ctf-compass-*.log
-    log_info "Removed log files"
-    
-    # Remove sandbox hash file
-    rm -f /tmp/ctf_compass_sandbox_hash
-    
-    log_success "Files removed"
-}
-
-#-------------------------------------------------------------------------------
-# Print Summary
-#-------------------------------------------------------------------------------
-print_summary() {
-    echo ""
-    echo -e "${GREEN}╔═══════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${GREEN}║${NC}                                                                   ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}        ${BOLD}✓ CTF Compass Uninstalled Successfully${NC}                     ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}                                                                   ${GREEN}║${NC}"
-    echo -e "${GREEN}╠═══════════════════════════════════════════════════════════════════╣${NC}"
-    echo -e "${GREEN}║${NC}                                                                   ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}  All CTF Compass components have been removed.                   ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}                                                                   ${GREEN}║${NC}"
-    if [[ "$KEEP_DATA" == "true" ]]; then
-        echo -e "${GREEN}║${NC}  ${YELLOW}Note: Database volumes were preserved (--keep-data)${NC}             ${GREEN}║${NC}"
-        echo -e "${GREEN}║${NC}  To remove them: docker volume prune                            ${GREEN}║${NC}"
-    fi
-    echo -e "${GREEN}║${NC}                                                                   ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}  To reinstall:                                                   ${GREEN}║${NC}"
-echo -e "${GREEN}║${NC}  curl -fsSL https://raw.githubusercontent.com/HaryLya/            ${GREEN}║${NC}"
-echo -e "${GREEN}║${NC}    ctf-compass/main/ctf-autopilot/infra/scripts/                  ${GREEN}║${NC}"
-echo -e "${GREEN}║${NC}    install_ubuntu_24.04.sh | sudo bash                            ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}                                                                   ${GREEN}║${NC}"
-    echo -e "${GREEN}╚═══════════════════════════════════════════════════════════════════╝${NC}"
-    echo ""
-}
-
-#-------------------------------------------------------------------------------
-# Main
-#-------------------------------------------------------------------------------
-main() {
-    # Check root
-    if [[ $EUID -ne 0 ]]; then
-        log_error "This script must be run as root (use sudo)"
-    fi
-    
-    print_banner
-    confirm_uninstall
-    
-    echo "" | tee -a "$LOG_FILE"
-    log_info "Starting uninstall at $(date)"
-    echo ""
-    
-    stop_services
-    remove_volumes
-    remove_images
-    remove_networks
-    remove_files
-    
-    print_summary
-}
-
-main "$@"
+echo ""
+echo -e "${GREEN}╔═══════════════════════════════════════════════════════════════════╗${NC}"
+echo -e "${GREEN}║                                                                   ║${NC}"
+echo -e "${GREEN}║        ✓ CTF Compass Uninstalled Successfully                     ║${NC}"
+echo -e "${GREEN}║                                                                   ║${NC}"
+echo -e "${GREEN}╠═══════════════════════════════════════════════════════════════════╣${NC}"
+echo -e "${GREEN}║                                                                   ║${NC}"
+echo -e "${GREEN}║  All CTF Compass components have been removed.                   ║${NC}"
+echo -e "${GREEN}║                                                                   ║${NC}"
+if [[ -z "$PURGE_FLAG" ]]; then
+    echo -e "${GREEN}║  ${YELLOW}Backups preserved at: /opt/ctf-compass-backups${NC}                 ${GREEN}║${NC}"
+    echo -e "${GREEN}║  ${CYAN}To remove: rm -rf /opt/ctf-compass-backups${NC}                     ${GREEN}║${NC}"
+else
+    echo -e "${GREEN}║  ${RED}All data including backups has been removed.${NC}                   ${GREEN}║${NC}"
+fi
+echo -e "${GREEN}║                                                                   ║${NC}"
+echo -e "${GREEN}║  To reinstall:                                                   ║${NC}"
+echo -e "${GREEN}║  ${CYAN}curl -fsSL https://raw.githubusercontent.com/HaryLya/${NC}            ${GREEN}║${NC}"
+echo -e "${GREEN}║  ${CYAN}  ctf-compass/main/ctf-autopilot/infra/scripts/${NC}                  ${GREEN}║${NC}"
+echo -e "${GREEN}║  ${CYAN}  install_ubuntu_24.04.sh | sudo bash${NC}                            ${GREEN}║${NC}"
+echo -e "${GREEN}║                                                                   ║${NC}"
+echo -e "${GREEN}╚═══════════════════════════════════════════════════════════════════╝${NC}"
+echo ""
