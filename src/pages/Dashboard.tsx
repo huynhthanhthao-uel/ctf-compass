@@ -1,9 +1,10 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Plus, RefreshCw, LayoutGrid, List, Search, Wifi, WifiOff, Radio, TrendingUp, Clock, CheckCircle, XCircle, Server, Cloud } from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
+import { Plus, RefreshCw, LayoutGrid, List, Search, Wifi, WifiOff, Radio, TrendingUp, Clock, CheckCircle, XCircle, Server, Cloud, AlertTriangle, Settings, Stethoscope } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { JobCard } from '@/components/jobs/JobCard';
 import { BackendHealthIndicator } from '@/components/BackendHealthIndicator';
@@ -11,6 +12,7 @@ import { useJobs } from '@/hooks/use-jobs';
 import { useJobsWithWebSocket } from '@/hooks/use-websocket';
 import { useToast } from '@/hooks/use-toast';
 import { useBackendStatus } from '@/hooks/use-backend-status';
+import { getBackendUrlFromStorage } from '@/lib/backend-url';
 import { cn } from '@/lib/utils';
 import { Job } from '@/lib/types';
 import {
@@ -34,6 +36,11 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [jobToDelete, setJobToDelete] = useState<string | null>(null);
+  const [backendUrl, setBackendUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    setBackendUrl(getBackendUrlFromStorage());
+  }, []);
 
   useEffect(() => {
     fetchJobs();
@@ -175,8 +182,35 @@ export default function Dashboard() {
           </Button>
         </div>
 
+        {/* Missing Backend URL Banner */}
+        {!backendUrl && (
+          <Alert className="border-warning/50 bg-warning/10">
+            <AlertTriangle className="h-4 w-4 text-warning" />
+            <AlertTitle className="text-warning">Backend URL Not Configured</AlertTitle>
+            <AlertDescription className="flex flex-col sm:flex-row sm:items-center gap-3">
+              <span className="text-sm">
+                Set your Docker Backend URL to enable real sandbox execution.
+              </span>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" asChild>
+                  <Link to="/configuration">
+                    <Settings className="h-4 w-4 mr-2" />
+                    Go to Settings
+                  </Link>
+                </Button>
+                <Button variant="outline" size="sm" asChild>
+                  <Link to="/health">
+                    <Stethoscope className="h-4 w-4 mr-2" />
+                    Debug Health
+                  </Link>
+                </Button>
+              </div>
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Backend Health Indicator */}
-        <BackendHealthIndicator />
+        <BackendHealthIndicator onReset={() => setBackendUrl(getBackendUrlFromStorage())} />
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
