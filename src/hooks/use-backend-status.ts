@@ -1,21 +1,24 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getSupabaseClient, isSupabaseConfigured } from '@/integrations/supabase/safe-client';
-import { getBackendUrlHeaders, getBackendUrlFromStorage } from '@/lib/backend-url';
+import { getBackendUrlFromStorage } from '@/lib/backend-url';
 
-export type BackendMode = 'backend' | 'cloud' | 'demo';
+export type BackendMode = 'backend' | 'demo';
 
 interface BackendStatusResult {
   mode: BackendMode;
   isConnected: boolean;
   isLoading: boolean;
+  backendUrl: string | null;
+  error: string | null;
   retry: () => Promise<void>;
 }
 
 // Check if Docker backend is available
-async function checkDockerBackend(): Promise<boolean> {
+async function checkDockerBackend(): Promise<{ ok: boolean; error: string | null }> {
   try {
     const backendUrl = getBackendUrlFromStorage();
-    if (!backendUrl) return false;
+    if (!backendUrl) {
+      return { ok: false, error: 'No backend URL configured. Go to Settings to configure.' };
+    }
 
     const response = await fetch(`${backendUrl}/api/health`, {
       method: 'GET',
@@ -23,66 +26,47 @@ async function checkDockerBackend(): Promise<boolean> {
       signal: AbortSignal.timeout(5000)
     });
 
-    if (!response.ok) return false;
+    if (!response.ok) {
+      return { ok: false, error: `Backend returned HTTP ${response.status}` };
+    }
 
     const data = await response.json().catch(() => null);
-    return data?.status === 'healthy';
-  } catch {
-    return false;
+    if (data?.status === 'healthy') {
+      return { ok: true, error: null };
+    }
+    
+    return { ok: false, error: 'Backend not reporting healthy status' };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Connection failed';
+    return { ok: false, error: message };
   }
 }
 
-// Check if Lovable Cloud edge functions are available
-async function checkCloudBackend(): Promise<boolean> {
-  if (!isSupabaseConfigured()) return false;
-
-  // Cloud mode still requires a configured Docker backend URL because sandbox-terminal proxies to it.
-  const headers = getBackendUrlHeaders();
-  if (!headers) return false;
-
-  const supabase = await getSupabaseClient();
-  if (!supabase) return false;
-
-  try {
-    const { data, error } = await supabase.functions.invoke('sandbox-terminal', {
-      body: { job_id: 'health-check', tool: 'echo', args: ['ok'] },
-      headers,
-    });
-
-    if (error) return false;
-
-    // Only consider "connected" when the proxy call succeeds.
-    return data?.exit_code === 0 && !data?.error;
-  } catch {
-    return false;
-  }
-}
 let globalMode: BackendMode = 'demo';
 let globalLoading = true;
+let globalError: string | null = null;
 let listeners: Set<() => void> = new Set();
 
 function notifyListeners() {
   listeners.forEach(fn => fn());
 }
 
-async function detectBackendMode(): Promise<BackendMode> {
-  // Check Docker backend first (preferred for local deployment)
-  const dockerOk = await checkDockerBackend();
-  if (dockerOk) {
-    console.log('[Backend] Docker backend detected');
-    return 'backend';
+async function detectBackendMode(): Promise<{ mode: BackendMode; error: string | null }> {
+  const backendUrl = getBackendUrlFromStorage();
+  
+  if (!backendUrl) {
+    console.log('[Backend] No backend URL configured - demo mode');
+    return { mode: 'demo', error: 'No backend URL configured. Go to Settings → Docker Backend URL.' };
   }
 
-  // Check Lovable Cloud next
-  const cloudOk = await checkCloudBackend();
-  if (cloudOk) {
-    console.log('[Backend] Lovable Cloud detected');
-    return 'cloud';
+  const result = await checkDockerBackend();
+  if (result.ok) {
+    console.log('[Backend] Docker backend connected:', backendUrl);
+    return { mode: 'backend', error: null };
   }
 
-  // Fallback to demo mode
-  console.log('[Backend] Using demo mode');
-  return 'demo';
+  console.log('[Backend] Docker backend not available:', result.error);
+  return { mode: 'demo', error: result.error };
 }
 
 // Initialize detection
@@ -91,8 +75,9 @@ let initPromise: Promise<void> | null = null;
 function initDetection(): Promise<void> {
   if (initPromise) return initPromise;
   
-  initPromise = detectBackendMode().then(mode => {
+  initPromise = detectBackendMode().then(({ mode, error }) => {
     globalMode = mode;
+    globalError = error;
     globalLoading = false;
     notifyListeners();
   });
@@ -105,9 +90,10 @@ initDetection();
 
 // Re-check every 30 seconds
 setInterval(async () => {
-  const newMode = await detectBackendMode();
-  if (newMode !== globalMode) {
-    globalMode = newMode;
+  const { mode, error } = await detectBackendMode();
+  if (mode !== globalMode || error !== globalError) {
+    globalMode = mode;
+    globalError = error;
     notifyListeners();
   }
 }, 30000);
@@ -131,16 +117,19 @@ export function useBackendStatus(): BackendStatusResult {
     globalLoading = true;
     notifyListeners();
     
-    const newMode = await detectBackendMode();
-    globalMode = newMode;
+    const { mode, error } = await detectBackendMode();
+    globalMode = mode;
+    globalError = error;
     globalLoading = false;
     notifyListeners();
   }, []);
 
   return {
     mode: globalMode,
-    isConnected: globalMode !== 'demo',
+    isConnected: globalMode === 'backend',
     isLoading: globalLoading,
+    backendUrl: getBackendUrlFromStorage(),
+    error: globalError,
     retry,
   };
 }
@@ -153,4 +142,14 @@ export async function getBackendMode(): Promise<BackendMode> {
 
 export function getCurrentBackendMode(): BackendMode {
   return globalMode;
+}
+
+// Force re-check backend status
+export async function refreshBackendStatus(): Promise<{ mode: BackendMode; error: string | null }> {
+  const result = await detectBackendMode();
+  globalMode = result.mode;
+  globalError = result.error;
+  globalLoading = false;
+  notifyListeners();
+  return result;
 }
