@@ -22,7 +22,12 @@ const App = () => (
         <NotificationProvider>
           <Toaster />
           <Sonner />
-          <BrowserRouter>
+          <BrowserRouter
+            future={{
+              v7_startTransition: true,
+              v7_relativeSplatPath: true,
+            }}
+          >
             <div className="dark">
             <Routes>
               <Route path="/" element={<Navigate to="/login" replace />} />
