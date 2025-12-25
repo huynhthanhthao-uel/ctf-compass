@@ -57,13 +57,23 @@ app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RateLimitMiddleware)
 
 # CORS
+cors_origins = settings.cors_origins
+allow_credentials = True
+
+# Wildcard origins cannot be combined with credentials (cookies).
+# If '*' is present, we fall back to non-credentialed CORS.
+if any(origin == "*" for origin in cors_origins):
+    cors_origins = ["*"]
+    allow_credentials = False
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PATCH", "DELETE"],
+    allow_origins=cors_origins,
+    allow_credentials=allow_credentials,
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
+
 
 # REST API Routers
 app.include_router(health.router, prefix="/api", tags=["Health"])

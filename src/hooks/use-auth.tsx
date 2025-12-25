@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react';
 import { User } from '@/lib/types';
+import { getBackendUrlFromStorage } from '@/lib/backend-url';
 import * as api from '@/lib/api';
 
 interface AuthContextType {
@@ -33,12 +34,19 @@ const MAX_RETRY_INTERVAL = 60000;
 // Check if backend is available
 async function checkBackend(): Promise<boolean> {
   try {
-    const response = await fetch('/api/health', { method: 'GET' });
+    const backendUrl = getBackendUrlFromStorage();
+    if (!backendUrl) return false;
+
+    const response = await fetch(`${backendUrl}/api/health`, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+      signal: AbortSignal.timeout(5000),
+    });
     if (!response.ok) return false;
-    
+
     const contentType = response.headers.get('content-type');
     if (!contentType?.includes('application/json')) return false;
-    
+
     const data = await response.json();
     return data.status === 'healthy' || data.status === 'ok';
   } catch {
