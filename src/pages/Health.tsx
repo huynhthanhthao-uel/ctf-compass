@@ -17,7 +17,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { supabase } from '@/integrations/supabase/client';
+import { getSupabaseClient, isSupabaseConfigured } from '@/integrations/supabase/safe-client';
 import { getBackendUrlFromStorage, getBackendUrlHeaders } from '@/lib/backend-url';
 import { cn } from '@/lib/utils';
 import { Link } from 'react-router-dom';
@@ -111,95 +111,124 @@ export default function Health() {
     }
 
     // 3. Check Edge Function (sandbox-terminal)
-    try {
-      const headers = getBackendUrlHeaders();
-      const { data, error } = await supabase.functions.invoke('sandbox-terminal', {
-        body: { job_id: 'health-check', tool: 'echo', args: ['health-test'] },
-        headers,
-      });
-
-      if (error) {
-        newChecks.push({
-          name: 'Edge Function (sandbox-terminal)',
-          status: 'error',
-          message: error.message,
-          timestamp: new Date(),
-        });
-        setEdgeFunctionLogs(prev => [...prev, `Error: ${error.message}`]);
-      } else if (data?.error) {
-        newChecks.push({
-          name: 'Edge Function (sandbox-terminal)',
-          status: 'error',
-          message: data.error,
-          details: data.stderr || data.hint,
-          timestamp: new Date(),
-        });
-        setEdgeFunctionLogs(prev => [...prev, `Response error: ${data.error}`, data.stderr || '']);
-      } else if (data?.exit_code === 0) {
-        newChecks.push({
-          name: 'Edge Function (sandbox-terminal)',
-          status: 'ok',
-          message: 'Working correctly',
-          details: `stdout: ${data.stdout}`,
-          timestamp: new Date(),
-        });
-        setEdgeFunctionLogs(prev => [...prev, `Success: exit_code=0, stdout="${data.stdout}"`]);
-      } else {
-        newChecks.push({
-          name: 'Edge Function (sandbox-terminal)',
-          status: 'warning',
-          message: `exit_code: ${data?.exit_code}`,
-          details: data?.stderr || JSON.stringify(data),
-          timestamp: new Date(),
-        });
-        setEdgeFunctionLogs(prev => [...prev, `Warning: ${JSON.stringify(data)}`]);
-      }
-    } catch (err) {
+    if (!isSupabaseConfigured()) {
       newChecks.push({
-        name: 'Edge Function (sandbox-terminal)',
-        status: 'error',
-        message: err instanceof Error ? err.message : 'Unknown error',
+        name: 'Cloud Function (sandbox-terminal)',
+        status: 'warning',
+        message: 'Skipped - cloud mode is not configured in this deployment',
         timestamp: new Date(),
       });
-      setEdgeFunctionLogs(prev => [...prev, `Exception: ${err}`]);
+    } else {
+      const supabase = await getSupabaseClient();
+
+      if (!supabase) {
+        newChecks.push({
+          name: 'Cloud Function (sandbox-terminal)',
+          status: 'warning',
+          message: 'Skipped - cloud client unavailable',
+          timestamp: new Date(),
+        });
+      } else {
+        try {
+          const headers = getBackendUrlHeaders();
+          const { data, error } = await supabase.functions.invoke('sandbox-terminal', {
+            body: { job_id: 'health-check', tool: 'echo', args: ['health-test'] },
+            headers,
+          });
+
+          if (error) {
+            newChecks.push({
+              name: 'Cloud Function (sandbox-terminal)',
+              status: 'error',
+              message: error.message,
+              timestamp: new Date(),
+            });
+            setEdgeFunctionLogs(prev => [...prev, `Error: ${error.message}`]);
+          } else if (data?.error) {
+            newChecks.push({
+              name: 'Cloud Function (sandbox-terminal)',
+              status: 'error',
+              message: data.error,
+              details: data.stderr || data.hint,
+              timestamp: new Date(),
+            });
+            setEdgeFunctionLogs(prev => [...prev, `Response error: ${data.error}`, data.stderr || '']);
+          } else if (data?.exit_code === 0) {
+            newChecks.push({
+              name: 'Cloud Function (sandbox-terminal)',
+              status: 'ok',
+              message: 'Working correctly',
+              details: `stdout: ${data.stdout}`,
+              timestamp: new Date(),
+            });
+            setEdgeFunctionLogs(prev => [...prev, `Success: exit_code=0, stdout="${data.stdout}"`]);
+          } else {
+            newChecks.push({
+              name: 'Cloud Function (sandbox-terminal)',
+              status: 'warning',
+              message: `exit_code: ${data?.exit_code}`,
+              details: data?.stderr || JSON.stringify(data),
+              timestamp: new Date(),
+            });
+            setEdgeFunctionLogs(prev => [...prev, `Warning: ${JSON.stringify(data)}`]);
+          }
+        } catch (err) {
+          newChecks.push({
+            name: 'Cloud Function (sandbox-terminal)',
+            status: 'error',
+            message: err instanceof Error ? err.message : 'Unknown error',
+            timestamp: new Date(),
+          });
+          setEdgeFunctionLogs(prev => [...prev, `Exception: ${err}`]);
+        }
+      }
     }
 
     // 4. Check WebSocket (job-progress)
-    try {
-      const ws = new WebSocket(
-        `wss://mjnunfojcevetemeynut.supabase.co/functions/v1/job-progress?job_id=health-test`
-      );
-      
-      await new Promise<void>((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          ws.close();
-          reject(new Error('WebSocket connection timeout'));
-        }, 5000);
-
-        ws.onopen = () => {
-          clearTimeout(timeout);
-          newChecks.push({
-            name: 'WebSocket (job-progress)',
-            status: 'ok',
-            message: 'Connection successful',
-            timestamp: new Date(),
-          });
-          ws.close();
-          resolve();
-        };
-
-        ws.onerror = () => {
-          clearTimeout(timeout);
-          reject(new Error('WebSocket connection failed'));
-        };
-      });
-    } catch (err) {
+    if (!isSupabaseConfigured()) {
       newChecks.push({
         name: 'WebSocket (job-progress)',
-        status: 'error',
-        message: err instanceof Error ? err.message : 'Connection failed',
+        status: 'warning',
+        message: 'Skipped - cloud mode is not configured in this deployment',
         timestamp: new Date(),
       });
+    } else {
+      try {
+        const ws = new WebSocket(
+          `wss://mjnunfojcevetemeynut.supabase.co/functions/v1/job-progress?job_id=health-test`
+        );
+
+        await new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            ws.close();
+            reject(new Error('WebSocket connection timeout'));
+          }, 5000);
+
+          ws.onopen = () => {
+            clearTimeout(timeout);
+            newChecks.push({
+              name: 'WebSocket (job-progress)',
+              status: 'ok',
+              message: 'Connection successful',
+              timestamp: new Date(),
+            });
+            ws.close();
+            resolve();
+          };
+
+          ws.onerror = () => {
+            clearTimeout(timeout);
+            reject(new Error('WebSocket connection failed'));
+          };
+        });
+      } catch (err) {
+        newChecks.push({
+          name: 'WebSocket (job-progress)',
+          status: 'error',
+          message: err instanceof Error ? err.message : 'Connection failed',
+          timestamp: new Date(),
+        });
+      }
     }
 
     setChecks(newChecks);

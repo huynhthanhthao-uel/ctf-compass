@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
+import { getSupabaseClient } from '@/integrations/supabase/safe-client';
 import { getBackendUrlHeaders } from '@/lib/backend-url';
 
 interface NetcatLine {
@@ -79,6 +79,14 @@ export function NetcatPanel({ jobId, onFlagFound, onGenerateSolveScript }: Netca
     setIsConnecting(true);
     addLine('system', `Connecting to ${host}:${port}...`);
 
+    const supabase = await getSupabaseClient();
+    if (!supabase) {
+      addLine('system', 'Cloud mode is not configured in this deployment.');
+      toast.error('Cloud mode not configured');
+      setIsConnecting(false);
+      return;
+    }
+
     try {
       const { data, error } = await supabase.functions.invoke('sandbox-terminal', {
         body: {
@@ -128,10 +136,15 @@ export function NetcatPanel({ jobId, onFlagFound, onGenerateSolveScript }: Netca
     setInteractions(prev => [...prev, message]);
 
     try {
+      const supabase = await getSupabaseClient();
+      if (!supabase) {
+        throw new Error('Cloud mode not configured');
+      }
+
       // Get backend URL from localStorage
       const backendUrl = localStorage.getItem('ctf_backend_url');
       const headers = backendUrl ? { 'x-backend-url': backendUrl } : undefined;
-      
+
       const { data, error } = await supabase.functions.invoke('sandbox-terminal', {
         body: {
           job_id: jobId,
@@ -142,6 +155,8 @@ export function NetcatPanel({ jobId, onFlagFound, onGenerateSolveScript }: Netca
         },
         headers,
       });
+
+      if (error) throw error;
 
       if (data.stdout) {
         data.stdout.split('\n').forEach((line: string) => {
@@ -172,6 +187,11 @@ export function NetcatPanel({ jobId, onFlagFound, onGenerateSolveScript }: Netca
     setIsGeneratingScript(true);
 
     try {
+      const supabase = await getSupabaseClient();
+      if (!supabase) {
+        throw new Error('Cloud mode not configured');
+      }
+
       const { data, error } = await supabase.functions.invoke('ai-solve-script', {
         body: {
           host,
