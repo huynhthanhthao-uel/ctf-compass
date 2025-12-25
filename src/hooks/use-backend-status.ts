@@ -42,16 +42,20 @@ async function checkDockerBackend(): Promise<boolean> {
 
 // Check if Lovable Cloud edge functions are available
 async function checkCloudBackend(): Promise<boolean> {
+  // Cloud mode still requires a configured Docker backend URL because sandbox-terminal proxies to it.
+  const headers = getBackendUrlHeaders();
+  if (!headers) return false;
+
   try {
     const { data, error } = await supabase.functions.invoke('sandbox-terminal', {
       body: { job_id: 'health-check', tool: 'echo', args: ['ok'] },
-      headers: getBackendUrlHeaders(),
+      headers,
     });
-    
+
     if (error) return false;
-    
-    // Check if we got a valid response (exit_code exists)
-    return typeof data?.exit_code === 'number';
+
+    // Only consider "connected" when the proxy call succeeds.
+    return data?.exit_code === 0 && !data?.error;
   } catch {
     return false;
   }

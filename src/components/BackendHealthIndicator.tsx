@@ -44,22 +44,21 @@ export function BackendHealthIndicator({ onReset }: BackendHealthIndicatorProps)
   const checkHealth = useCallback(async () => {
     setIsChecking(true);
     
-    // Check Docker backend
+    // Check Docker backend (direct via configured backend URL)
     let dockerStatus: HealthStatus['dockerBackend'] = 'disconnected';
     try {
-      const response = await fetch('/api/health', { 
-        method: 'GET',
-        signal: AbortSignal.timeout(5000)
-      });
-      
-      if (response.ok) {
-        const text = await response.text();
-        if (!text.trimStart().startsWith('<!') && !text.trimStart().startsWith('<html')) {
-          try {
-            JSON.parse(text);
+      const backendUrl = getBackendUrlFromStorage();
+      if (backendUrl) {
+        const response = await fetch(`${backendUrl}/api/health`, {
+          method: 'GET',
+          headers: { 'Accept': 'application/json' },
+          signal: AbortSignal.timeout(5000),
+        });
+
+        if (response.ok) {
+          const data = await response.json().catch(() => null);
+          if (data?.status === 'healthy') {
             dockerStatus = 'connected';
-          } catch {
-            dockerStatus = 'disconnected';
           }
         }
       }

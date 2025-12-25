@@ -12,7 +12,7 @@ import { useJobs } from '@/hooks/use-jobs';
 import { useJobsWithWebSocket } from '@/hooks/use-websocket';
 import { useToast } from '@/hooks/use-toast';
 import { useBackendStatus } from '@/hooks/use-backend-status';
-import { getBackendUrlFromStorage } from '@/lib/backend-url';
+import { getBackendUrlFromStorage, normalizeBackendUrl } from '@/lib/backend-url';
 import { cn } from '@/lib/utils';
 import { Job } from '@/lib/types';
 import {
@@ -37,10 +37,17 @@ export default function Dashboard() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [jobToDelete, setJobToDelete] = useState<string | null>(null);
   const [backendUrl, setBackendUrl] = useState<string | null>(null);
+  const [hasInvalidStoredBackendUrl, setHasInvalidStoredBackendUrl] = useState(false);
 
-  useEffect(() => {
+  const refreshBackendUrlState = useCallback(() => {
+    const raw = localStorage.getItem('ctf_backend_url');
+    setHasInvalidStoredBackendUrl(Boolean(raw && !normalizeBackendUrl(raw)));
     setBackendUrl(getBackendUrlFromStorage());
   }, []);
+
+  useEffect(() => {
+    refreshBackendUrlState();
+  }, [refreshBackendUrlState]);
 
   useEffect(() => {
     fetchJobs();
@@ -182,20 +189,42 @@ export default function Dashboard() {
           </Button>
         </div>
 
-        {/* Missing Backend URL Banner */}
-        {!backendUrl && (
+        {/* Backend URL Banner */}
+        {(!backendUrl || hasInvalidStoredBackendUrl) && (
           <Alert className="border-warning/50 bg-warning/10">
             <AlertTriangle className="h-4 w-4 text-warning" />
-            <AlertTitle className="text-warning">Backend URL Not Configured</AlertTitle>
+            <AlertTitle className="text-warning">
+              {!backendUrl ? 'Backend URL Not Configured' : 'Backend URL Invalid'}
+            </AlertTitle>
             <AlertDescription className="flex flex-col sm:flex-row sm:items-center gap-3">
               <span className="text-sm">
-                Set your Docker Backend URL to enable real sandbox execution.
+                {!backendUrl
+                  ? 'Set your Docker Backend URL to enable real sandbox execution.'
+                  : 'Stored backend URL is invalid. Reset it and set a proper URL in Settings.'}
               </span>
               <div className="flex gap-2">
+                {hasInvalidStoredBackendUrl && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      localStorage.removeItem('ctf_backend_url');
+                      refreshBackendUrlState();
+                      await retryBackendConnection();
+                      toast({
+                        title: 'Backend URL Reset',
+                        description: 'Cleared saved backend URL. Please set it again in Settings.',
+                      });
+                    }}
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Reset Backend URL
+                  </Button>
+                )}
                 <Button variant="outline" size="sm" asChild>
-                  <Link to="/configuration">
+                  <Link to="/configuration#docker-backend-url">
                     <Settings className="h-4 w-4 mr-2" />
-                    Go to Settings
+                    Docker Backend URL
                   </Link>
                 </Button>
                 <Button variant="outline" size="sm" asChild>
@@ -210,7 +239,7 @@ export default function Dashboard() {
         )}
 
         {/* Backend Health Indicator */}
-        <BackendHealthIndicator onReset={() => setBackendUrl(getBackendUrlFromStorage())} />
+        <BackendHealthIndicator onReset={refreshBackendUrlState} />
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
