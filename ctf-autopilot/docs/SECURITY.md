@@ -4,7 +4,7 @@
 
 CTF Compass is designed with security-first principles for analyzing untrusted CTF challenge files in a safe, isolated environment.
 
-**GitHub:** [github.com/huynhtrungcipp/ctf-compass](https://github.com/huynhtrungcipp/ctf-compass)
+**GitHub:** [github.com/HaryLya/ctf-compass](https://github.com/HaryLya/ctf-compass)
 
 ---
 

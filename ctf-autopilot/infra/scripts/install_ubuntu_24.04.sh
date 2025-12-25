@@ -4,14 +4,14 @@
 # Ubuntu 24.04 LTS Only
 #===============================================================================
 #
-# GitHub Repository: https://github.com/huynhtrungcipp/ctf-compass.git
+# GitHub Repository: https://github.com/HaryLya/ctf-compass.git
 #
 # USAGE:
 #   # Fresh install
-#   curl -fsSL https://raw.githubusercontent.com/huynhtrungcipp/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash
+#   curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash
 #
 #   # Clean install (remove old first)
-#   curl -fsSL https://raw.githubusercontent.com/huynhtrungcipp/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --clean
+#   curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --clean
 #
 # OPTIONS:
 #   --clean     Remove old installation completely before installing
@@ -35,7 +35,7 @@ set -euo pipefail
 INSTALL_DIR="/opt/ctf-compass"
 BACKUP_DIR="/opt/ctf-compass-backups"
 LOG_FILE="/var/log/ctf-compass-install.log"
-GITHUB_REPO="https://github.com/huynhtrungcipp/ctf-compass.git"
+GITHUB_REPO="https://github.com/HaryLya/ctf-compass.git"
 GITHUB_BRANCH="main"
 MIN_MEMORY_MB=3072
 MIN_DISK_GB=15
@@ -101,7 +101,7 @@ print_banner() {
     echo "║                   CTF Compass v1.0.0                              ║"
     echo "║             Automated CTF Challenge Analyzer                      ║"
     echo "║                                                                   ║"
-    echo "║     GitHub: github.com/huynhtrungcipp/ctf-compass                 ║"
+    echo "║     GitHub: github.com/HaryLya/ctf-compass                        ║"
     echo "║                                                                   ║"
     echo "╚═══════════════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
@@ -636,7 +636,7 @@ print_summary() {
     echo "  User Guide:    $INSTALL_DIR/ctf-autopilot/docs/USAGE.md"
     echo "  Troubleshoot:  $INSTALL_DIR/ctf-autopilot/docs/DEBUG.md"
     echo ""
-    echo -e "${CYAN}GitHub:${NC} https://github.com/huynhtrungcipp/ctf-compass"
+    echo -e "${CYAN}GitHub:${NC} https://github.com/HaryLya/ctf-compass"
     echo ""
 }
 

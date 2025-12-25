@@ -2,7 +2,7 @@
 
 **AI-powered CTF challenge analyzer with sandboxed execution environment.**
 
-[![GitHub](https://img.shields.io/badge/GitHub-huynhtrungcipp%2Fctf--compass-blue?logo=github)](https://github.com/huynhtrungcipp/ctf-compass)
+[![GitHub](https://img.shields.io/badge/GitHub-HaryLya%2Fctf--compass-blue?logo=github)](https://github.com/HaryLya/ctf-compass)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Ubuntu 24.04](https://img.shields.io/badge/Ubuntu-24.04%20LTS-E95420?logo=ubuntu)](https://ubuntu.com/)
 [![Docker](https://img.shields.io/badge/Docker-Required-2496ED?logo=docker)](https://www.docker.com/)
@@ -29,13 +29,13 @@
 ### One-Command Installation (Ubuntu 24.04)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/huynhtrungcipp/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash
 ```
 
 ### Clean Installation (Remove Old First)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/huynhtrungcipp/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --clean
+curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --clean
 ```
 
 ### Post-Installation
@@ -245,5 +245,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-- **GitHub Issues:** [github.com/huynhtrungcipp/ctf-compass/issues](https://github.com/huynhtrungcipp/ctf-compass/issues)
+- **GitHub Issues:** [github.com/HaryLya/ctf-compass/issues](https://github.com/HaryLya/ctf-compass/issues)
 - **Documentation:** [ctf-autopilot/docs/](ctf-autopilot/docs/)

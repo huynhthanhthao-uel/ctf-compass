@@ -2,7 +2,7 @@
 
 Operations and maintenance guide for CTF Compass.
 
-**GitHub:** [github.com/huynhtrungcipp/ctf-compass](https://github.com/huynhtrungcipp/ctf-compass)
+**GitHub:** [github.com/HaryLya/ctf-compass](https://github.com/HaryLya/ctf-compass)
 
 ---
 
@@ -32,21 +32,21 @@ Operations and maintenance guide for CTF Compass.
 
 ```bash
 # One-command installation
-curl -fsSL https://raw.githubusercontent.com/huynhtrungcipp/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash
 ```
 
 ### Clean Install (Remove Old First)
 
 ```bash
 # Use --clean flag to remove previous installation
-curl -fsSL https://raw.githubusercontent.com/huynhtrungcipp/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --clean
+curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --clean
 ```
 
 ### Manual Install
 
 ```bash
 # Clone repository
-git clone https://github.com/huynhtrungcipp/ctf-compass.git
+git clone https://github.com/HaryLya/ctf-compass.git
 cd ctf-compass
 
 # Install Docker if not installed
@@ -436,4 +436,4 @@ sudo ufw enable
 - **User Guide:** [USAGE.md](USAGE.md)
 - **Security:** [SECURITY.md](SECURITY.md)
 - **Architecture:** [ARCHITECTURE.md](ARCHITECTURE.md)
-- **GitHub Issues:** [github.com/huynhtrungcipp/ctf-compass/issues](https://github.com/huynhtrungcipp/ctf-compass/issues)
+- **GitHub Issues:** [github.com/HaryLya/ctf-compass/issues](https://github.com/HaryLya/ctf-compass/issues)

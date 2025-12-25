@@ -2,7 +2,7 @@
 
 Complete guide for using CTF Compass. This document covers the web interface, Full Autopilot, job creation, and analysis workflow.
 
-**GitHub:** [github.com/huynhtrungcipp/ctf-compass](https://github.com/huynhtrungcipp/ctf-compass)
+**GitHub:** [github.com/HaryLya/ctf-compass](https://github.com/HaryLya/ctf-compass)
 
 ---
 
@@ -475,4 +475,4 @@ sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh
 - **Debug Guide**: [DEBUG.md](DEBUG.md)
 - **Runbook**: [RUNBOOK.md](RUNBOOK.md)
 - **Architecture**: [ARCHITECTURE.md](ARCHITECTURE.md)
-- **GitHub**: [github.com/huynhtrungcipp/ctf-compass](https://github.com/huynhtrungcipp/ctf-compass)
+- **GitHub**: [github.com/HaryLya/ctf-compass](https://github.com/HaryLya/ctf-compass)
