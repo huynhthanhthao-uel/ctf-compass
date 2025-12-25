@@ -233,6 +233,10 @@ volumes:
     name: ctf_compass_app_data
     labels:
       - "com.ctf-compass.volume=app"
+  backup_data:
+    name: ctf_compass_backup_data
+    labels:
+      - "com.ctf-compass.volume=backup"
 
 # =============================================================================
 # Networks
@@ -245,3 +249,7 @@ networks:
     name: ctf_compass_backend
     driver: bridge
     internal: true
+  # Monitoring network (used by Prometheus/Grafana stack)
+  monitoring:
+    name: ctf_compass_monitoring
+    driver: bridge

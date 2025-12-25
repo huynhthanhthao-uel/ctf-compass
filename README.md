@@ -143,6 +143,22 @@ cd /opt/ctf-compass && sudo git pull && sudo docker compose -f ctf-autopilot/inf
 | **API** | `http://YOUR_IP:8000/api/` | REST API |
 | **API Health** | `http://YOUR_IP:8000/api/health` | Health check |
 | **API Docs** | `http://YOUR_IP:8000/docs` | Swagger docs |
+| **Grafana** | `http://YOUR_IP:3001` | Monitoring dashboard |
+| **Prometheus** | `http://YOUR_IP:9090` | Metrics server |
+
+### Makefile Commands
+
+```bash
+cd /opt/ctf-compass/ctf-autopilot
+
+make help           # Show all commands
+make status         # Service status
+make logs           # View logs
+make update         # Pull & rebuild
+make backup         # Database backup
+make health-setup   # Configure Telegram/Discord alerts
+make monitor-start  # Start Prometheus + Grafana
+```
 
 ### System Update
 
@@ -155,6 +171,45 @@ sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh
 
 # Deep cleanup and update
 sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh --clean
+```
+
+### Database Backup
+
+```bash
+# Manual backup
+make backup
+
+# Setup daily auto-backup (2 AM, keeps 7 days)
+sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/backup.sh --setup-cron
+
+# List backups
+sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/backup.sh --list
+```
+
+### Health Check & Alerts
+
+```bash
+# Configure Telegram/Discord/Slack alerts
+make health-setup
+
+# Run single health check
+make health-check
+
+# Setup cron (every 5 minutes)
+make health-cron
+```
+
+### Monitoring Stack
+
+```bash
+# Start Prometheus + Grafana + Alertmanager
+make monitor-start
+
+# Show URLs
+make monitor-urls
+
+# Stop
+make monitor-stop
 ```
 
 ### Uninstall

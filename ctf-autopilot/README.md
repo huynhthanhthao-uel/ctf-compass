@@ -455,6 +455,78 @@ tail -f /var/log/ctf-compass-backup.log
 
 Backups are stored in `/opt/ctf-compass/backups/` with automatic 7-day rotation.
 
+## 📊 Monitoring (Prometheus + Grafana)
+
+CTF Compass includes a complete monitoring stack with Prometheus, Grafana, and Alertmanager.
+
+### Start Monitoring Stack
+
+```bash
+cd /opt/ctf-compass/ctf-autopilot
+
+# Setup (first time)
+make monitor-setup
+
+# Start monitoring
+make monitor-start
+
+# Show access URLs
+make monitor-urls
+
+# Stop monitoring
+make monitor-stop
+```
+
+### Monitoring URLs
+
+| Service | URL | Description |
+|---------|-----|-------------|
+| **Grafana** | `http://YOUR_IP:3001` | Dashboards & visualization |
+| **Prometheus** | `http://YOUR_IP:9090` | Metrics & queries |
+| **Alertmanager** | `http://YOUR_IP:9093` | Alert management |
+
+Grafana credentials: `admin` / (see CREDENTIALS.txt)
+
+### Features
+
+- **System Overview Dashboard**: CPU, Memory, Disk usage
+- **Container Metrics**: Per-container resource usage
+- **Database Monitoring**: PostgreSQL connections, performance
+- **Cache Monitoring**: Redis memory, operations/sec
+- **Auto Alerts**: Container down, high resource usage, disk space
+
+## 🔔 Health Check & Alerts
+
+Automatic health monitoring with Telegram/Discord/Slack notifications.
+
+### Setup Alerts
+
+```bash
+cd /opt/ctf-compass/ctf-autopilot
+
+# Interactive setup for Telegram/Discord/Slack
+make health-setup
+
+# Test notifications
+make health-test
+
+# Setup cron job (runs every 5 minutes)
+make health-cron
+
+# Manual health check
+make health-check
+```
+
+### Supported Notification Channels
+
+- **Telegram**: Bot token + Chat ID
+- **Discord**: Webhook URL
+- **Slack**: Webhook URL
+
+Alerts are sent when:
+- ✅ Service goes DOWN
+- ✅ Service RECOVERS
+
 ### Access URLs
 
 | Service | URL | Description |
@@ -463,6 +535,8 @@ Backups are stored in `/opt/ctf-compass/backups/` with automatic 7-day rotation.
 | **API** | `http://YOUR_IP:8000/api/` | Backend REST API |
 | **API Health** | `http://YOUR_IP:8000/api/health` | Health check endpoint |
 | **API Docs** | `http://YOUR_IP:8000/docs` | Swagger documentation |
+| **Grafana** | `http://YOUR_IP:3001` | Monitoring dashboards |
+| **Prometheus** | `http://YOUR_IP:9090` | Metrics server |
 
 ---
 
