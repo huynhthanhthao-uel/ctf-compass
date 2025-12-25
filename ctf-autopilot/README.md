@@ -385,47 +385,75 @@ The frontend supports multiple modes:
 
 ---
 
-## 🚀 Useful Commands
+## 🚀 Makefile Commands
+
+CTF Compass includes a Makefile for easy management. Run from `/opt/ctf-compass/ctf-autopilot/`:
 
 ```bash
-# Quick update (pull code and rebuild)
-cd /opt/ctf-compass && sudo git pull && sudo docker compose -f ctf-autopilot/infra/docker-compose.yml up -d --build
+cd /opt/ctf-compass/ctf-autopilot
 
-# If git ownership error, run this first
-sudo git config --global --add safe.directory /opt/ctf-compass
+# Show all available commands
+make help
 
-# View all logs
-docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml logs -f
+# Service Management
+make status      # Show container status
+make start       # Start all services
+make stop        # Stop all services
+make restart     # Restart all services
 
-# View specific service logs
-docker logs ctf_compass_api --tail 100 -f
-docker logs ctf_compass_worker --tail 100 -f
-docker logs ctf_compass_web --tail 100 -f
+# Logs
+make logs        # View all logs
+make logs-api    # View API logs only
+make logs-worker # View Worker logs only
+make logs-web    # View Web logs only
 
-# Stop services
-docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml down
+# Updates & Builds
+make update      # Pull latest code and rebuild
+make rebuild     # Rebuild all (no cache)
+make rebuild-api # Rebuild API only
 
-# Restart services
-docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml restart
+# Database
+make backup      # Create database backup
+make restore     # Restore from latest backup
+make shell-db    # Open PostgreSQL shell
 
-# Check status
-docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml ps
-docker ps
+# Debugging
+make health      # Check API health
+make shell-api   # Open API container shell
 
-# Rebuild specific service
-docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml build api --no-cache
-docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml up -d api
-
-# Full system update
-sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh
-
-# Test API health
-curl http://localhost:8000/api/health
-
-# Cleanup old Docker resources
-docker system prune -af
-docker volume prune -f
+# Cleanup
+make clean       # Remove unused Docker resources
 ```
+
+## 💾 Database Backup
+
+### Manual Backup
+
+```bash
+# Create backup
+sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/backup.sh
+
+# List backups
+sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/backup.sh --list
+
+# Restore from latest
+sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/backup.sh --restore
+
+# Restore from specific file
+sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/backup.sh --restore-file /path/to/backup.sql.gz
+```
+
+### Setup Automatic Daily Backup (Cron)
+
+```bash
+# Setup cron job (runs daily at 2 AM, keeps 7 days)
+sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/backup.sh --setup-cron
+
+# View backup logs
+tail -f /var/log/ctf-compass-backup.log
+```
+
+Backups are stored in `/opt/ctf-compass/backups/` with automatic 7-day rotation.
 
 ### Access URLs
 
