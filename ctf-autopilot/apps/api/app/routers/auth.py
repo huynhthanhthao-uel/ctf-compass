@@ -53,6 +53,18 @@ def verify_csrf(
     return True
 
 
+async def require_auth(
+    session: Session = Depends(get_current_session),
+) -> None:
+    """Simple auth dependency that just requires a valid session.
+    
+    Use this for endpoints that need authentication but don't need CSRF protection
+    (e.g., GET requests, internal API calls).
+    """
+    # Session validation is already done by get_current_session
+    return None
+
+
 @router.post("/login", response_model=LoginResponse)
 async def login(
     request: LoginRequest,
