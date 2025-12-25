@@ -1,15 +1,15 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, RefreshCw, LayoutGrid, List, Search, Wifi, WifiOff, Radio, TrendingUp, Clock, CheckCircle, XCircle } from 'lucide-react';
+import { Plus, RefreshCw, LayoutGrid, List, Search, Wifi, WifiOff, Radio, TrendingUp, Clock, CheckCircle, XCircle, Server, Cloud } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { JobCard } from '@/components/jobs/JobCard';
 import { useJobs } from '@/hooks/use-jobs';
-import { useAuth } from '@/hooks/use-auth';
 import { useJobsWithWebSocket } from '@/hooks/use-websocket';
 import { useToast } from '@/hooks/use-toast';
+import { useBackendStatus } from '@/hooks/use-backend-status';
 import { cn } from '@/lib/utils';
 import { Job } from '@/lib/types';
 import {
@@ -26,12 +26,11 @@ import {
 export default function Dashboard() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { jobs, isLoading, fetchJobs, runJob, stopJob, deleteJob, isBackendConnected } = useJobs();
-  const { retryBackendConnection } = useAuth();
-  const { isConnected: wsConnected, getJobUpdate, clearJobUpdate } = useJobsWithWebSocket(true); // Enable notifications
+  const { jobs, isLoading, fetchJobs, runJob, stopJob, deleteJob } = useJobs();
+  const { mode, isConnected: backendConnected, retry: retryBackendConnection, isLoading: backendLoading } = useBackendStatus();
+  const { isConnected: wsConnected, getJobUpdate, clearJobUpdate } = useJobsWithWebSocket(true);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
-  const [isRetrying, setIsRetrying] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [jobToDelete, setJobToDelete] = useState<string | null>(null);
 
@@ -40,9 +39,7 @@ export default function Dashboard() {
   }, [fetchJobs]);
 
   const handleRetryConnection = async () => {
-    setIsRetrying(true);
     await retryBackendConnection();
-    setIsRetrying(false);
   };
 
   const handleStopJob = useCallback((jobId: string) => {
@@ -117,26 +114,29 @@ export default function Dashboard() {
               <h1 className="text-2xl font-bold text-foreground tracking-tight">Dashboard</h1>
               
               {/* Connection Status Badge */}
-              {isBackendConnected ? (
+              {backendConnected ? (
                 <Badge 
                   variant="outline" 
                   className={cn(
                     "text-xs gap-1.5 cursor-default font-medium",
-                    wsConnected 
-                      ? "border-success/40 text-success bg-success/10" 
-                      : "border-info/40 text-info bg-info/10"
+                    mode === 'backend'
+                      ? "border-green-500/40 text-green-600 dark:text-green-400 bg-green-500/10"
+                      : "border-primary/40 text-primary bg-primary/10"
                   )}
                 >
-                  {wsConnected ? (
+                  {mode === 'backend' ? (
                     <>
-                      <Radio className="h-3 w-3 animate-pulse" />
-                      Live
+                      <Server className="h-3 w-3" />
+                      Backend
                     </>
                   ) : (
                     <>
-                      <Wifi className="h-3 w-3" />
-                      Connected
+                      <Cloud className="h-3 w-3" />
+                      Cloud
                     </>
+                  )}
+                  {wsConnected && (
+                    <Radio className="h-3 w-3 animate-pulse ml-1" />
                   )}
                 </Badge>
               ) : (
@@ -145,7 +145,7 @@ export default function Dashboard() {
                   className="text-xs gap-1.5 border-warning/40 text-warning bg-warning/10 cursor-pointer hover:bg-warning/20 transition-colors font-medium"
                   onClick={handleRetryConnection}
                 >
-                  {isRetrying ? (
+                  {backendLoading ? (
                     <>
                       <RefreshCw className="h-3 w-3 animate-spin" />
                       Connecting...
@@ -160,8 +160,10 @@ export default function Dashboard() {
               )}
             </div>
             <p className="text-muted-foreground mt-1.5 text-sm">
-              {isBackendConnected 
-                ? 'Manage and monitor your CTF challenge analyses'
+              {backendConnected 
+                ? mode === 'backend' 
+                  ? 'Connected to Docker backend • Real-time analysis available'
+                  : 'Connected to Lovable Cloud • AI-powered analysis available'
                 : 'Running in demo mode • Click badge to retry connection'
               }
             </p>
