@@ -11,7 +11,23 @@ const ENV_BACKEND_URL = Deno.env.get('CTF_BACKEND_URL') || '';
 // Get backend URL from header or fallback to env
 function getBackendUrl(req: Request): string {
   const headerUrl = req.headers.get('x-backend-url');
-  return headerUrl || ENV_BACKEND_URL;
+  return (headerUrl || ENV_BACKEND_URL || '').trim();
+}
+
+function normalizeBackendUrl(input: string): string | null {
+  const raw = input.trim();
+  if (!raw) return null;
+
+  const withScheme = raw.startsWith('http://') || raw.startsWith('https://') ? raw : `http://${raw}`;
+
+  try {
+    const url = new URL(withScheme);
+    if (!url.hostname) return null;
+    // Remove trailing slash
+    return url.toString().endsWith('/') ? url.toString().slice(0, -1) : url.toString();
+  } catch {
+    return null;
+  }
 }
 
 // Allowed tools for security (whitelist)
@@ -203,23 +219,23 @@ serve(async (req) => {
     }
 
     // Get backend URL from header or env
-    const backendUrl = getBackendUrl(req);
-    
+    const backendUrlRaw = getBackendUrl(req);
+    const backendUrl = normalizeBackendUrl(backendUrlRaw);
+
     // Check if backend is configured
     if (!backendUrl) {
-      console.error('[sandbox-terminal] Backend URL not configured');
+      console.error(`[sandbox-terminal] Invalid or missing backend URL: ${backendUrlRaw}`);
       return new Response(
         JSON.stringify({
-          error: 'Backend not configured. Set backend URL in Configuration page or CTF_BACKEND_URL secret.',
-          hint: 'Go to Settings → Docker Backend URL and enter your backend address',
+          error: 'Invalid backend URL. Please set a valid URL like http://localhost:8000 in Settings → Docker Backend URL.',
           stdout: '',
-          stderr: 'Backend API URL not configured',
+          stderr: `Invalid backend URL: ${backendUrlRaw}`,
           exit_code: 1,
         }),
-        { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-    
+
     console.log(`[sandbox-terminal] Using backend URL: ${backendUrl}`);
 
     // Handle file upload action

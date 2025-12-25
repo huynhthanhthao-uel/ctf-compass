@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { getBackendUrlHeaders } from '@/lib/backend-url';
 
 export type BackendMode = 'backend' | 'cloud' | 'demo';
 
@@ -42,13 +43,9 @@ async function checkDockerBackend(): Promise<boolean> {
 // Check if Lovable Cloud edge functions are available
 async function checkCloudBackend(): Promise<boolean> {
   try {
-    // Get backend URL from localStorage
-    const backendUrl = localStorage.getItem('ctf_backend_url');
-    const headers = backendUrl ? { 'x-backend-url': backendUrl } : undefined;
-    
     const { data, error } = await supabase.functions.invoke('sandbox-terminal', {
       body: { job_id: 'health-check', tool: 'echo', args: ['ok'] },
-      headers,
+      headers: getBackendUrlHeaders(),
     });
     
     if (error) return false;
@@ -59,8 +56,6 @@ async function checkCloudBackend(): Promise<boolean> {
     return false;
   }
 }
-
-// Singleton state to share across components
 let globalMode: BackendMode = 'demo';
 let globalLoading = true;
 let listeners: Set<() => void> = new Set();

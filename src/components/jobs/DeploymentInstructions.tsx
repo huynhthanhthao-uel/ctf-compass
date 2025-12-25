@@ -203,14 +203,13 @@ export function DeploymentInstructions({ className }: DeploymentInstructionsProp
             <div className="p-3 rounded-lg bg-muted/30 border border-border/50">
               <h4 className="font-medium text-sm mb-2 flex items-center gap-2">
                 <Server className="h-4 w-4" />
-                Connect to Lovable Cloud
+                Connect your Backend
               </h4>
               <p className="text-xs text-muted-foreground mb-2">
-                After deploying the backend, set <code className="bg-muted px-1 rounded">CTF_BACKEND_URL</code> 
-                in your Lovable Cloud secrets to enable real command execution.
+                After deploying the backend, open <strong>Settings</strong> in this app and enter your Docker Backend URL to enable real command execution.
               </p>
               <code className="block p-2 rounded bg-background/50 text-xs font-mono">
-                CTF_BACKEND_URL=http://YOUR_SERVER_IP:8000
+                http://YOUR_SERVER_IP:8000
               </code>
             </div>
 

@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { getBackendUrlHeaders } from '@/lib/backend-url';
 
 interface NetcatLine {
   id: string;
@@ -79,17 +80,13 @@ export function NetcatPanel({ jobId, onFlagFound, onGenerateSolveScript }: Netca
     addLine('system', `Connecting to ${host}:${port}...`);
 
     try {
-      // Get backend URL from localStorage
-      const backendUrl = localStorage.getItem('ctf_backend_url');
-      const headers = backendUrl ? { 'x-backend-url': backendUrl } : undefined;
-      
       const { data, error } = await supabase.functions.invoke('sandbox-terminal', {
         body: {
           job_id: jobId,
           tool: 'nc',
           args: [host, port],
         },
-        headers,
+        headers: getBackendUrlHeaders(),
       });
 
       if (error) throw error;

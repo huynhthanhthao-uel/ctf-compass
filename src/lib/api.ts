@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { getBackendUrlHeaders } from "@/lib/backend-url";
 
 /**
  * API client for CTF Autopilot backend
@@ -382,12 +383,6 @@ async function invokeEdgeFunction<T>(functionName: string, body: unknown, header
   return invokeEdgeFunctionWithRetry<T>(functionName, body, MAX_RETRIES, headers);
 }
 
-// Get backend URL from localStorage for edge functions
-function getBackendUrlHeader(): Record<string, string> | undefined {
-  const backendUrl = localStorage.getItem('ctf_backend_url');
-  return backendUrl ? { 'x-backend-url': backendUrl } : undefined;
-}
-
 async function executeViaEdgeFunction(
   jobId: string,
   tool: string,
@@ -397,7 +392,7 @@ async function executeViaEdgeFunction(
     job_id: jobId,
     tool,
     args,
-  }, getBackendUrlHeader());
+  }, getBackendUrlHeaders());
 }
 
 
