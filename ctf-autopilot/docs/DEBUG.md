@@ -1,6 +1,6 @@
 # Debug & Troubleshooting Guide
 
-Complete debugging guide for CTF Compass. This document covers common issues, debugging commands, and step-by-step troubleshooting procedures.
+Complete debugging guide for CTF Compass. This document covers common issues, Cloud Mode debugging, and step-by-step troubleshooting procedures.
 
 **GitHub:** [github.com/huynhtrungcipp/ctf-compass](https://github.com/huynhtrungcipp/ctf-compass)
 
@@ -9,13 +9,14 @@ Complete debugging guide for CTF Compass. This document covers common issues, de
 ## Table of Contents
 
 1. [Quick Diagnostics](#quick-diagnostics)
-2. [Service Status & Health](#service-status--health)
-3. [Common Issues](#common-issues)
-4. [Log Analysis](#log-analysis)
-5. [Database Debugging](#database-debugging)
-6. [Sandbox Debugging](#sandbox-debugging)
-7. [API & Frontend Debugging](#api--frontend-debugging)
-8. [Recovery Procedures](#recovery-procedures)
+2. [Operation Mode Issues](#operation-mode-issues)
+3. [Cloud Mode Debugging](#cloud-mode-debugging)
+4. [Common Issues](#common-issues)
+5. [Log Analysis](#log-analysis)
+6. [Database Debugging](#database-debugging)
+7. [Sandbox Debugging](#sandbox-debugging)
+8. [API & Frontend Debugging](#api--frontend-debugging)
+9. [Recovery Procedures](#recovery-procedures)
 
 ---
 
@@ -48,36 +49,107 @@ echo -e "\n=== Docker Stats ===" && docker stats --no-stream
 
 ---
 
-## Service Status & Health
+## Operation Mode Issues
 
-### Check All Container Status
+### Identifying Current Mode
 
-```bash
-cd /opt/ctf-compass
-docker compose -f ctf-autopilot/infra/docker-compose.yml ps -a
+Check the status badge in the header:
 
-# Expected output:
-# NAME                    STATUS
-# ctf-compass-api-1       Up (healthy)
-# ctf-compass-web-1       Up
-# ctf-compass-worker-1    Up
-# ctf-compass-postgres-1  Up (healthy)
-# ctf-compass-redis-1     Up (healthy)
+| Badge | Mode | Meaning |
+|-------|------|---------|
+| `Connected` (blue) | Connected | Full backend available |
+| `Cloud Mode` (cyan) | Cloud | Using Edge Functions |
+| `Demo Mode` (amber) | Demo | Using mock data |
+
+### Switching Between Modes
+
+The frontend automatically detects the best available mode:
+
+1. **Connected Mode**: Checks `http://localhost:8000/api/health`
+2. **Cloud Mode**: Falls back if backend unavailable
+3. **Demo Mode**: Falls back if both unavailable
+
+To force a mode:
+- **Force Connected**: Ensure backend is running
+- **Force Cloud**: Stop backend containers
+- **Force Demo**: Stop backend and disconnect from internet
+
+### Mode Not Switching
+
+If stuck in wrong mode:
+
+```javascript
+// In browser console
+localStorage.clear();
+location.reload();
 ```
 
-### Health Check Endpoints
+---
+
+## Cloud Mode Debugging
+
+### Edge Function Errors
+
+#### 402 Payment Required
+
+**Cause**: Lovable AI rate limit exceeded or credits exhausted
+
+**Solutions**:
+1. Wait a few minutes and retry
+2. Check Lovable workspace credits
+3. Upgrade plan if needed
+
+#### 429 Too Many Requests
+
+**Cause**: Rate limiting
+
+**Solutions**:
+1. Wait 60 seconds
+2. Reduce request frequency
+3. Check for loops in code
+
+#### 404 Not Found
+
+**Cause**: Edge function not deployed
+
+**Solutions**:
+1. Check function exists in `supabase/functions/`
+2. Redeploy Edge Functions
+3. Check function name spelling
+
+### Checking Edge Function Logs
+
+Use browser DevTools:
+
+1. Open Network tab
+2. Filter by "functions"
+3. Look for `ai-analyze` and `sandbox-terminal` calls
+4. Check response status and body
+
+### Testing Edge Functions
 
 ```bash
-# API health check (detailed)
-curl -s http://localhost:8000/api/health | jq .
+# Test ai-analyze function
+curl -X POST https://YOUR_PROJECT.supabase.co/functions/v1/ai-analyze \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_ANON_KEY" \
+  -d '{"job_id":"test","files":[{"name":"test.txt","content":"test"}]}'
 
-# Expected response:
-# {
-#   "status": "healthy",
-#   "timestamp": "2024-01-01T00:00:00.000000",
-#   "service": "ctf-autopilot-api"
-# }
+# Test sandbox-terminal function
+curl -X POST https://YOUR_PROJECT.supabase.co/functions/v1/sandbox-terminal \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_ANON_KEY" \
+  -d '{"job_id":"test","tool":"ls","args":[]}'
 ```
+
+### Common Cloud Mode Issues
+
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| "AI analysis failed" | Edge function error | Check logs, retry |
+| No response | Network issue | Check connection |
+| Wrong output | Context missing | Add more file content |
+| Slow response | Large payload | Reduce file sizes |
 
 ---
 
@@ -122,7 +194,7 @@ docker compose -f ctf-autopilot/infra/docker-compose.yml logs api --tail 200 | g
 | Cause | Solution |
 |-------|----------|
 | Database connection failed | Check POSTGRES_* env variables |
-| Missing MEGALLM_API_KEY | Set via UI Settings page or .env |
+| Missing MEGALLM_API_KEY | Set via UI Settings page or use Cloud Mode |
 | Redis connection failed | Check Redis container status |
 
 ### Issue 3: Jobs Stuck in "Running"
@@ -147,27 +219,32 @@ docker compose -f ctf-autopilot/infra/docker-compose.yml restart worker
 docker compose -f ctf-autopilot/infra/docker-compose.yml exec redis redis-cli FLUSHDB
 ```
 
-### Issue 4: API Key Not Working
+### Issue 4: Full Autopilot Not Working
 
 **Symptoms:**
-- Analysis jobs fail with API errors
-- "API key not configured" messages
+- "Solve Challenge" button doesn't respond
+- Progress stuck at 0%
+- No analysis output
 
 **Solutions:**
 
-1. **Via Web UI (Recommended):**
-   - Go to Settings page (⚙️ icon)
-   - Enter your MegaLLM API key
-   - Click "Test Connection" then "Save"
+1. **Check mode**: Ensure not in Demo Mode
+2. **Check console**: Open DevTools, look for errors
+3. **Check network**: Ensure Edge Functions accessible
+4. **Retry**: Refresh page and try again
 
-2. **Via .env file:**
-   ```bash
-   sudo nano /opt/ctf-compass/.env
-   # Add: MEGALLM_API_KEY=your-key-here
-   
-   # Restart services
-   docker compose -f ctf-autopilot/infra/docker-compose.yml restart api worker
-   ```
+### Issue 5: Flags Not Found
+
+**Symptoms:**
+- Autopilot completes but no flags
+- Wrong flag format
+
+**Solutions:**
+
+1. **Check flag format**: Ensure regex matches CTF format
+2. **Check solve script**: May need manual adjustments
+3. **Run manually**: Execute script in real terminal
+4. **Add context**: Include more challenge description
 
 ---
 
@@ -198,6 +275,14 @@ docker compose -f ctf-autopilot/infra/docker-compose.yml logs api 2>&1 | grep -i
 # Save logs to file for analysis
 docker compose -f ctf-autopilot/infra/docker-compose.yml logs api > /tmp/api-logs.txt 2>&1
 ```
+
+### Browser Console Logs
+
+For frontend issues:
+1. Open DevTools (F12)
+2. Go to Console tab
+3. Look for red errors
+4. Filter by "error" or component name
 
 ---
 
@@ -259,6 +344,7 @@ docker run --rm -it \
 strings --version
 file --version
 binwalk --help
+checksec --version
 ```
 
 ### Rebuild Sandbox Image
@@ -266,6 +352,16 @@ binwalk --help
 ```bash
 cd /opt/ctf-compass
 docker build -t ctf-compass-sandbox:latest -f ctf-autopilot/sandbox/image/Dockerfile ctf-autopilot/sandbox/image/
+```
+
+### Check Available Tools
+
+```bash
+# List installed tools
+docker run --rm ctf-compass-sandbox:latest ls /usr/bin | head -50
+
+# Check specific tool
+docker run --rm ctf-compass-sandbox:latest which pwntools
 ```
 
 ---
@@ -280,6 +376,11 @@ curl -s http://localhost:8000/api/health
 
 # Test with verbose output
 curl -v http://localhost:8000/api/health
+
+# Test job creation
+curl -X POST http://localhost:8000/api/jobs \
+  -H "Content-Type: application/json" \
+  -d '{"title":"test","description":"test"}'
 ```
 
 ### Check Frontend Build
@@ -291,6 +392,13 @@ docker compose -f ctf-autopilot/infra/docker-compose.yml logs web --tail 100
 # Verify nginx is serving
 curl -I http://localhost:3000
 ```
+
+### React DevTools
+
+1. Install React DevTools browser extension
+2. Open DevTools
+3. Go to "Components" or "Profiler" tab
+4. Inspect component state and props
 
 ---
 
@@ -325,14 +433,24 @@ sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh
 curl -fsSL https://raw.githubusercontent.com/huynhtrungcipp/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --clean
 ```
 
+### Reset Frontend State
+
+```javascript
+// In browser console
+localStorage.clear();
+sessionStorage.clear();
+location.reload();
+```
+
 ---
 
 ## Debug Checklist
 
 When debugging, follow this checklist:
 
-- [ ] Check container status: `docker compose -f ctf-autopilot/infra/docker-compose.yml ps -a`
-- [ ] Check service logs: `docker compose -f ctf-autopilot/infra/docker-compose.yml logs <service> --tail 100`
+- [ ] Check operation mode badge (Connected/Cloud/Demo)
+- [ ] Check container status: `docker compose ps -a`
+- [ ] Check service logs: `docker compose logs <service> --tail 100`
 - [ ] Check disk space: `df -h /`
 - [ ] Check memory: `free -h`
 - [ ] Check API health: `curl http://localhost:8000/api/health`
@@ -340,6 +458,8 @@ When debugging, follow this checklist:
 - [ ] Check Redis: `docker compose exec redis redis-cli ping`
 - [ ] Check .env file exists and is configured
 - [ ] Check file permissions: `ls -la /opt/ctf-compass/data`
+- [ ] Check browser console for JS errors
+- [ ] Check network tab for failed requests
 - [ ] Check firewall: `sudo ufw status`
 
 ---
@@ -347,5 +467,6 @@ When debugging, follow this checklist:
 ## Getting Help
 
 - **Install Logs:** `/var/log/ctf-compass-install.log`
+- **Update Logs:** `/var/log/ctf-compass-update.log`
 - **GitHub Issues:** [github.com/huynhtrungcipp/ctf-compass/issues](https://github.com/huynhtrungcipp/ctf-compass/issues)
 - **Documentation:** [ctf-autopilot/docs/](.)

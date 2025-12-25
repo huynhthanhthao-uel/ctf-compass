@@ -1,6 +1,6 @@
 # User Guide
 
-Complete guide for using CTF Compass. This document covers the web interface, job creation, analysis workflow, and best practices.
+Complete guide for using CTF Compass. This document covers the web interface, Full Autopilot, job creation, and analysis workflow.
 
 **GitHub:** [github.com/huynhtrungcipp/ctf-compass](https://github.com/huynhtrungcipp/ctf-compass)
 
@@ -11,12 +11,12 @@ Complete guide for using CTF Compass. This document covers the web interface, jo
 1. [Getting Started](#getting-started)
 2. [Web Interface Overview](#web-interface-overview)
 3. [Dashboard Features](#dashboard-features)
-4. [Configuration](#configuration)
+4. [Full Autopilot Mode](#full-autopilot-mode)
 5. [Creating Analysis Jobs](#creating-analysis-jobs)
 6. [Managing Jobs](#managing-jobs)
 7. [Understanding Results](#understanding-results)
-8. [Working with Writeups](#working-with-writeups)
-9. [Demo Mode](#demo-mode)
+8. [Operation Modes](#operation-modes)
+9. [Configuration](#configuration)
 10. [Best Practices](#best-practices)
 11. [FAQ](#faq)
 
@@ -36,20 +36,19 @@ Complete guide for using CTF Compass. This document covers the web interface, jo
 
 ### First-Time Setup
 
-1. **Configure API Key**: 
+1. **Check Operation Mode**: 
+   - Look at the status badge in the header
+   - "Connected" = Full backend available
+   - "Cloud Mode" = Using Lovable Cloud Edge Functions
+   - "Demo Mode" = Using mock data
+
+2. **Configure API Key** (Optional for Cloud Mode): 
    - Click the Settings icon (⚙️) in the navigation
    - Enter your MegaLLM API key in the "API Configuration" section
    - Click "Test Connection" to verify
    - Click "Save Changes"
 
-2. **Select AI Models** (Optional):
-   - Choose models for analysis, writeup generation, and flag extraction
-   - Free/cheap models are marked with green checkmarks
-
-3. **Verify System Status**:
-   - Check the backend status badge in the header
-   - "Connected" = Backend is running
-   - "Demo Mode" = Using mock data (click to retry)
+3. **Start Analyzing**: Click "Solve Challenge" on any job!
 
 ---
 
@@ -64,7 +63,7 @@ CTF Compass uses a modern top navigation bar:
 | **Logo** | Top left | Click to go to Dashboard |
 | **Dashboard** | Top nav | View all jobs and statistics |
 | **New Analysis** | Top nav | Create a new analysis job |
-| **Backend Status** | Top right | Shows Demo Mode / Connected |
+| **Backend Status** | Top right | Shows operation mode |
 | **Notifications** | Top right (🔔) | View alerts and updates |
 | **Settings** | Top right (⚙️) | System configuration |
 | **User Menu** | Top right | Profile, logout options |
@@ -73,8 +72,9 @@ CTF Compass uses a modern top navigation bar:
 
 | Badge | Meaning |
 |-------|---------|
-| `Demo Mode` (amber) | Backend not connected, using mock data |
-| `Connected` (blue) | Backend API is available |
+| `Demo Mode` (amber) | No backend/cloud, using mock data |
+| `Cloud Mode` (cyan) | Using Lovable Cloud Edge Functions |
+| `Connected` (blue) | Local backend API available |
 | `Live` (green + pulse) | WebSocket connected, real-time updates |
 
 ---
@@ -113,49 +113,60 @@ Each job card shows:
 
 ---
 
-## Configuration
+## Full Autopilot Mode
 
-### API Key Setup
+### Overview
 
-The API key can be configured in two ways:
+Full Autopilot is the primary way to analyze CTF challenges. It automates the entire analysis process with one click.
 
-**1. Via Web Interface (Recommended):**
-- Go to Settings page (⚙️ icon)
-- Enter your MegaLLM API key
-- Click "Test Connection" then "Save Changes"
-- Key is automatically synced to backend
+### How to Use
 
-**2. Via Environment File:**
-```bash
-sudo nano /opt/ctf-compass/.env
-# Add: MEGALLM_API_KEY=your-key-here
+1. **Navigate to a Job**: Click on any job card to open Job Detail page
+2. **Click "Solve Challenge"**: The big button in the Autopilot tab
+3. **Watch the Progress**: See real-time updates through 4 phases
+4. **Get Results**: Flags, solve scripts, and analysis
 
-# Restart services
-cd /opt/ctf-compass
-docker compose -f ctf-autopilot/infra/docker-compose.yml restart
-```
+### The 4 Phases
 
-### Model Selection
+#### Phase 1: Initial Analysis (0-25%)
+- Lists all challenge files
+- Identifies file types
+- Extracts readable strings
+- Detects challenge category
 
-Choose different AI models for each task:
+#### Phase 2: Deep Scan (25-50%)
+- Runs category-specific tools
+- Analyzes file structure
+- Looks for patterns and clues
+- Builds context for AI
 
-| Task | Description | Recommended Model |
-|------|-------------|-------------------|
-| **Analysis** | Analyzing challenge files | llama3.3-70b-instruct |
-| **Writeup** | Generating writeups | llama3.3-70b-instruct |
-| **Extraction** | Flag extraction | openai-gpt-oss-20b |
+#### Phase 3: AI Reasoning (50-75%)
+- Sends context to AI
+- Analyzes challenge mechanics
+- Generates solve strategy
+- Creates solve script
 
-### System Updates
+#### Phase 4: Flag Extraction (75-100%)
+- Executes solve script
+- Parses output for flags
+- Validates flag format
+- Reports results
 
-Updates can be triggered from the Settings page:
-1. Click "Check Updates" to check for new versions
-2. If update is available, click "Update Now"
-3. System will automatically backup, update, and restart
+### What You'll See
 
-Manual update:
-```bash
-sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh
-```
+- **Progress Bar**: Animated progress through phases
+- **Phase Indicator**: Current phase with description
+- **Detected Category**: Auto-detected challenge type
+- **Current Strategy**: What the AI is doing
+- **Found Flags**: Extracted flag candidates
+- **Solve Script**: Generated Python script
+
+### After Completion
+
+- Job status updates to "Completed"
+- Flags displayed with copy button
+- Solve script available for download
+- Full analysis history preserved
 
 ---
 
@@ -189,32 +200,28 @@ Upload challenge files by:
 - Network: `.pcap`, `.pcapng`
 - Code: `.py`, `.c`, `.cpp`, `.java`, `.js`
 
-### Step 3: Submit & Monitor
+### Step 3: Submit & Analyze
 
-1. Click **Start Analysis**
-2. Job enters queue and starts processing
-3. Monitor progress on Dashboard or Job Detail page
-
-**Job Status Flow:**
-```
-QUEUED → RUNNING → ANALYZING → EXTRACTING → GENERATING → COMPLETED
-```
+1. Click **Create Job**
+2. Job appears on Dashboard
+3. Click on job to open detail page
+4. Click **Solve Challenge** to start Full Autopilot
 
 ---
 
 ## Managing Jobs
 
-### Running Jobs
+### Starting Analysis
 
-- Click **Run** button on a queued job card
-- Or select "Run Analysis" from the actions menu (⋮)
-- Progress bar shows real-time completion percentage
+- Click **Solve Challenge** button on Job Detail page
+- Or click **Run** button on job card
+- Or select "Run Analysis" from actions menu (⋮)
 
 ### Stopping Jobs
 
 To cancel a running analysis:
 1. Click **Stop** button on the job card
-2. Or select "Stop Analysis" from the actions menu
+2. Or select "Stop Analysis" from actions menu
 3. Job status changes to "Failed" with "Cancelled by user" message
 
 ### Deleting Jobs
@@ -225,35 +232,34 @@ To remove a job:
 3. Confirm deletion in the dialog
 4. Job and all associated data are removed
 
-### Bulk Actions (Coming Soon)
-
-- Select multiple jobs
-- Delete all selected
-- Cancel all running
-
 ---
 
 ## Understanding Results
 
 ### Job Details Page
 
-After analysis completes:
+After analysis completes, you'll see several tabs:
 
-#### 1. Summary Tab
-- Status, duration, files analyzed, flags found
+#### 1. Autopilot Tab
+- **Solve Challenge** button for Full Autopilot
+- **Found Flags** with copy functionality
+- **Solve Script** with download option
+- **Analysis Progress** visualization
 
 #### 2. Commands Tab
 - List of executed tools with output
 - Exit codes and execution time
+- Searchable command history
 
 #### 3. Artifacts Tab
 - `strings_output.txt`: Extracted strings
 - `file_info.txt`: File type identification
-- `exif_data.json`: Image metadata
-- `binwalk_output.txt`: Embedded signatures
+- `checksec_output.txt`: Binary security features
+- `solve_script.py`: Generated solve script
 
 #### 4. Flags Tab
-- Extracted flag candidates with confidence scores
+- Extracted flag candidates
+- Confidence scores
 - Source context for each candidate
 
 #### 5. Writeup Tab
@@ -265,44 +271,94 @@ After analysis completes:
 
 ---
 
-## Working with Writeups
+## Operation Modes
 
-### Export Options
+### Connected Mode
 
-- **Markdown**: Download as `.md` file
-- **PDF**: Generate PDF document
-- **Copy**: Copy to clipboard
+**When**: Local backend is running and accessible
 
-### Editing Writeups
+**Features**:
+- ✅ Full database persistence
+- ✅ Real Docker sandbox execution
+- ✅ Celery background workers
+- ✅ WebSocket real-time updates
+- ✅ File upload and storage
+- ✅ Complete job history
 
-1. Click **Edit** on the Writeup tab
-2. Modify content using Markdown editor
-3. Click **Save** to update
+### Cloud Mode
+
+**When**: Local backend unavailable, Lovable Cloud accessible
+
+**Features**:
+- ✅ AI-powered analysis via Edge Functions
+- ✅ Simulated terminal execution
+- ✅ Full Autopilot functionality
+- ✅ Category detection
+- ⚠️ Session-only storage (no persistence)
+- ⚠️ Mock job data
+
+**Indicators**:
+- Cyan "Cloud Mode" badge in header
+- "Using Cloud AI" message in Autopilot
+
+### Demo Mode
+
+**When**: No backend and no cloud available
+
+**Features**:
+- ✅ Full UI navigation
+- ✅ Mock job data
+- ✅ Simulated progress
+- ⚠️ No real analysis
+- ⚠️ No AI features
 
 ---
 
-## Demo Mode
+## Configuration
 
-When the backend is unavailable, the frontend operates in **Demo Mode**:
+### API Key Setup
 
-### What Works in Demo Mode
-- ✅ Create new jobs (mock data)
-- ✅ Run analysis (simulated progress)
-- ✅ Stop running jobs
-- ✅ Delete jobs
-- ✅ View notifications
-- ✅ Navigate all pages
+The API key can be configured in two ways:
 
-### Demo Mode Indicators
-- Amber "Demo Mode" badge in header
-- "Running in demo mode" message on dashboard
-- Click badge to retry backend connection
+**1. Via Web Interface (Recommended):**
+- Go to Settings page (⚙️ icon)
+- Enter your MegaLLM API key
+- Click "Test Connection" then "Save Changes"
+- Key is automatically synced to backend
 
-### Why Demo Mode?
-- Preview environment (no backend)
-- Backend container is starting
-- Network connectivity issues
-- API configuration problems
+**2. Via Environment File:**
+```bash
+sudo nano /opt/ctf-compass/.env
+# Add: MEGALLM_API_KEY=your-key-here
+
+# Restart services
+cd /opt/ctf-compass
+docker compose -f ctf-autopilot/infra/docker-compose.yml restart
+```
+
+> **Note**: Cloud Mode uses Lovable AI and doesn't require an API key!
+
+### Model Selection
+
+Choose different AI models for each task:
+
+| Task | Description | Recommended Model |
+|------|-------------|-------------------|
+| **Analysis** | Analyzing challenge files | gemini-2.5-flash |
+| **Writeup** | Generating writeups | gemini-2.5-pro |
+| **Extraction** | Flag extraction | gemini-2.5-flash |
+
+### System Updates
+
+Updates can be triggered from the Settings page:
+1. Click "Check Updates" to check for new versions
+2. If update is available, click "Update Now"
+3. System will automatically backup, update, and restart
+
+Manual update:
+```bash
+sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh
+```
 
 ---
 
@@ -313,58 +369,63 @@ When the backend is unavailable, the frontend operates in **Demo Mode**:
 1. **Provide Full Context**
    - Include complete challenge description
    - Add any hints provided
+   - Mention the CTF name and category
 
 2. **Use Accurate Flag Format**
    - Specify exact regex pattern
    - Example: `flag\{[a-zA-Z0-9_]+\}`
+   - Include CTF-specific prefix
 
 3. **Upload All Relevant Files**
    - Include all challenge files
    - Don't forget related configs
+   - Upload source code if available
 
-4. **Choose Appropriate Models**
-   - Complex challenges: Use larger models
-   - Simple challenges: Fast models work fine
+4. **Let Full Autopilot Run**
+   - Don't interrupt the process
+   - Wait for all 4 phases
+   - Check generated solve script
 
 ### Performance Tips
 
-1. **Monitor Job Status**
-   - Check running jobs periodically
-   - Stop stuck jobs and retry
+1. **Use Cloud Mode for Quick Analysis**
+   - Works without local backend
+   - Fast AI responses
+   - Great for initial exploration
 
-2. **Clean Up Old Jobs**
+2. **Use Connected Mode for Deep Analysis**
+   - Real tool execution
+   - Persistent results
+   - Better for complex challenges
+
+3. **Clean Up Old Jobs**
    - Delete completed jobs you no longer need
    - Free up disk space
-
-3. **Update Regularly**
-   - Check for updates weekly
-   - New features and bug fixes
 
 ---
 
 ## FAQ
 
-### Q: How long does analysis take?
+### Q: How do I start analyzing a challenge?
 
-**A:** Depends on file size and complexity:
-- Small text files: 10-30 seconds
-- Medium binaries: 1-3 minutes
-- Large archives: 3-10 minutes
+**A:** 
+1. Create a job with challenge files
+2. Open the job detail page
+3. Click "Solve Challenge" button
+4. Wait for Full Autopilot to complete
 
-### Q: What if analysis fails?
+### Q: What's the difference between Cloud Mode and Connected Mode?
 
-**A:** Check:
-1. File type is supported
-2. File size within limits (200MB)
-3. API key is configured correctly
-4. Check job error message for details
+**A:**
+- **Connected Mode**: Full local backend with Docker sandbox, real tool execution
+- **Cloud Mode**: Uses Lovable Cloud Edge Functions, simulated execution, AI analysis
 
 ### Q: Why am I seeing "Demo Mode"?
 
-**A:** The frontend couldn't connect to the backend:
-1. Backend container may still be starting
-2. Check if services are running: `docker compose ps`
-3. Click the "Demo Mode" badge to retry
+**A:** Neither backend nor cloud is available:
+1. Check if backend containers are running: `docker compose ps`
+2. Check internet connection for Cloud Mode
+3. Click the badge to retry connection
 
 ### Q: Can I use this during a live CTF?
 
@@ -372,26 +433,40 @@ When the backend is unavailable, the frontend operates in **Demo Mode**:
 - This is for analysis assistance
 - Always verify flags manually
 - Learn the techniques
+- Cloud Mode is fast for quick analysis
 
 ### Q: Are my files kept private?
 
-**A:** Yes, all data stays local:
-- Files stored on your server only
-- No data sent to cloud (except MegaLLM API for AI features)
-- You control data retention
+**A:** Yes, all data stays local (Connected Mode) or in your Lovable project (Cloud Mode):
+- Connected: Files stored on your server only
+- Cloud: Processed via Edge Functions, not stored
+- No data sent to third parties
 
-### Q: How do I stop a stuck job?
+### Q: How do I get the solve script?
 
-**A:** Multiple options:
-1. Click Stop button on the job card
-2. Select "Stop Analysis" from menu
-3. Restart worker: `docker compose restart worker`
+**A:**
+1. Run Full Autopilot on a job
+2. Wait for Phase 3 (AI Reasoning)
+3. Script appears in the "Solve Script" section
+4. Click "Download" to save it
 
-### Q: How do I update the system?
+### Q: What categories are supported?
 
-**A:** Two options:
-1. Via Settings page → "Update Now" button
-2. Via command: `sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh`
+**A:**
+- **Crypto**: RSA, AES, XOR, hashing
+- **Pwn**: Buffer overflow, ROP, format string
+- **Web**: SQLi, XSS, SSRF, file upload
+- **Rev**: Crackme, keygen, obfuscation
+- **Forensics**: Memory, disk, network, stego
+- **Misc**: Encoding, OSINT, misc
+
+### Q: How accurate is the AI analysis?
+
+**A:** The AI provides:
+- Good initial direction
+- Category-specific strategies
+- Working solve scripts for common patterns
+- May need manual adjustments for complex challenges
 
 ---
 
@@ -399,4 +474,5 @@ When the backend is unavailable, the frontend operates in **Demo Mode**:
 
 - **Debug Guide**: [DEBUG.md](DEBUG.md)
 - **Runbook**: [RUNBOOK.md](RUNBOOK.md)
+- **Architecture**: [ARCHITECTURE.md](ARCHITECTURE.md)
 - **GitHub**: [github.com/huynhtrungcipp/ctf-compass](https://github.com/huynhtrungcipp/ctf-compass)
