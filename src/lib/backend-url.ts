@@ -6,6 +6,19 @@ function stripTrailingSlash(url: string) {
   return url.endsWith('/') ? url.slice(0, -1) : url;
 }
 
+function isAllowedHostname(hostname: string): boolean {
+  if (!hostname) return false;
+  if (hostname === 'localhost') return true;
+
+  // IPv4
+  if (/^(\d{1,3}\.){3}\d{1,3}$/.test(hostname)) return true;
+  // IPv6 (loose)
+  if (hostname.includes(':')) return true;
+
+  // Require a dot for domains (prevents single-word values like "bimat")
+  return hostname.includes('.');
+}
+
 /**
  * Normalizes and validates a backend URL.
  * - Accepts full URLs: https://example.com:8000
@@ -20,7 +33,7 @@ export function normalizeBackendUrl(input: string): string | null {
 
   try {
     const url = new URL(withScheme);
-    if (!url.hostname) return null;
+    if (!isAllowedHostname(url.hostname)) return null;
     return stripTrailingSlash(url.toString());
   } catch {
     return null;
