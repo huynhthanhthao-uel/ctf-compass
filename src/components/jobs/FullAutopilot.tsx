@@ -24,7 +24,9 @@ import {
   EyeOff,
   MessageSquare,
   Clock,
-  TrendingUp
+  TrendingUp,
+  Wifi,
+  WifiOff
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -38,6 +40,7 @@ import * as api from '@/lib/api';
 import { toast } from 'sonner';
 import { grandFinale, miniCelebrate } from '@/lib/confetti';
 import { playFlagFound, playGrandFinale, playStepComplete, playError } from '@/lib/sound';
+import { useJobProgress } from '@/hooks/use-job-progress';
 
 // Workflow phases
 type Phase = 
@@ -316,6 +319,24 @@ export function FullAutopilot({
   const [aiTrace, setAiTrace] = useState<AITraceEntry[]>([]);
   const [showAiTrace, setShowAiTrace] = useState(false);
 
+  // Real-time progress tracking via WebSocket
+  const {
+    isConnected: progressConnected,
+    addLog: emitLog,
+    setStatus: emitStatus,
+    updateProgress: emitProgress,
+    updateStep: emitStep,
+  } = useJobProgress({
+    jobId,
+    enabled: isRunning,
+    onComplete: (progressData) => {
+      console.log('[FullAutopilot] Progress completed:', progressData);
+    },
+    onError: (error) => {
+      console.error('[FullAutopilot] Progress error:', error);
+    },
+  });
+
   const addTraceEntry = useCallback((entry: Omit<AITraceEntry, 'id' | 'timestamp'>) => {
     setAiTrace(prev => [...prev, {
       ...entry,
@@ -406,6 +427,10 @@ export function FullAutopilot({
     setPhaseMessage('🔍 Phase 1: Running reconnaissance...');
     setProgress(10);
 
+    // Emit progress update
+    emitProgress({ progress: 10, currentStep: 'Reconnaissance', status: 'running' });
+    emitLog('🔍 Starting reconnaissance phase...');
+
     const fileOutputs: Record<string, string> = {};
     const stringsOutputs: Record<string, string> = {};
     const earlyFlags: string[] = [];
@@ -422,6 +447,7 @@ export function FullAutopilot({
         aiAnalysis: 'Identifying file type',
       });
 
+      emitLog(`📁 Analyzing file: ${file}`);
       const fileResult = await executeCommand('file', [file]);
       fileOutputs[file] = fileResult.output;
 
@@ -446,6 +472,7 @@ export function FullAutopilot({
         earlyFlags.push(...stringsResult.flags);
         setFoundFlags(prev => [...new Set([...prev, ...stringsResult.flags])]);
         stringsResult.flags.forEach(flag => onFlagFound?.(flag));
+        emitLog(`🚩 Flag found in strings: ${stringsResult.flags.join(', ')}`);
       }
 
       updateStep(stringsStepId, {
@@ -456,8 +483,9 @@ export function FullAutopilot({
       });
     }
 
+    emitLog(`✅ Reconnaissance complete. Analyzed ${Object.keys(fileOutputs).length} files.`);
     return { fileOutputs, stringsOutputs, earlyFlags };
-  }, [files, addStep, updateStep, executeCommand, onFlagFound]);
+  }, [files, addStep, updateStep, executeCommand, onFlagFound, emitProgress, emitLog]);
 
   // PHASE 2: Category Detection
   const detectCategoryPhase = useCallback(async (
@@ -467,6 +495,10 @@ export function FullAutopilot({
     setCurrentPhase('category_detection');
     setPhaseMessage('🧠 Phase 2: Detecting challenge category...');
     setProgress(25);
+
+    // Emit progress update
+    emitProgress({ progress: 25, currentStep: 'Category Detection', status: 'analyzing' });
+    emitLog('🧠 Analyzing challenge category with AI...');
 
     const stepId = addStep({
       phase: 'category_detection',
@@ -495,6 +527,7 @@ export function FullAutopilot({
       });
 
       setDetectedCategory(result.category);
+      emitLog(`✅ Detected category: ${result.category} (${Math.round(result.confidence * 100)}% confidence)`);
 
       updateStep(stepId, {
         status: 'success',
@@ -533,6 +566,8 @@ export function FullAutopilot({
       }
 
       setDetectedCategory(category);
+      emitLog(`⚠️ Fallback category detection: ${category}`);
+      
       updateStep(stepId, {
         status: 'success',
         output: `Fallback detection: ${category}`,
@@ -540,7 +575,7 @@ export function FullAutopilot({
 
       return { category, confidence: 0.5 };
     }
-  }, [files, description, addStep, updateStep, addTraceEntry]);
+  }, [files, description, addStep, updateStep, addTraceEntry, emitProgress, emitLog]);
 
   // PHASE 3: AI Analysis Loop - Now with auto script generation and execution
   const runAIAnalysis = useCallback(async (
@@ -550,6 +585,10 @@ export function FullAutopilot({
     setCurrentPhase('ai_analysis');
     setPhaseMessage(`🤖 Phase 3: AI-driven analysis (${category})...`);
     setProgress(40);
+
+    // Emit progress update
+    emitProgress({ progress: 40, currentStep: 'AI Analysis', status: 'analyzing' });
+    emitLog(`🤖 Starting AI-driven analysis for ${category} challenge...`);
 
     let attempts = 0;
     let localFlags: string[] = [...earlyFlags];
@@ -562,7 +601,12 @@ export function FullAutopilot({
       setTotalAttempts(attempts + 1);
       const requestScript = attempts >= 2; // Request script after 2 attempts
       setPhaseMessage(`🤖 AI analyzing... (attempt ${attempts + 1}/${maxAttempts})${requestScript ? ' - generating solve script' : ''}`);
-      setProgress(40 + (attempts / maxAttempts) * 30);
+      const currentProgress = 40 + (attempts / maxAttempts) * 30;
+      setProgress(currentProgress);
+
+      // Emit attempt progress
+      emitProgress({ progress: Math.round(currentProgress), currentStep: `AI Analysis (attempt ${attempts + 1})` });
+      emitLog(`🔄 AI analysis attempt ${attempts + 1}/${maxAttempts}${requestScript ? ' - requesting solve script' : ''}`);
 
       const requestPayload = {
         job_id: jobId,
@@ -621,11 +665,13 @@ export function FullAutopilot({
           localFlags.push(...aiResponse.flag_candidates);
           setFoundFlags(prev => [...new Set([...prev, ...aiResponse.flag_candidates])]);
           aiResponse.flag_candidates.forEach(flag => onFlagFound?.(flag));
+          emitLog(`🚩 Flag candidates found: ${aiResponse.flag_candidates.join(', ')}`);
         }
 
         // Execute AI-generated solve script if provided
         if (aiResponse.solve_script && aiResponse.solve_script.code) {
           setPhaseMessage(`🚀 Executing AI-generated solve script...`);
+          emitLog('🚀 Executing AI-generated solve script...');
           
           const scriptStepId = addStep({
             phase: 'ai_analysis',
@@ -644,6 +690,7 @@ export function FullAutopilot({
               localFlags.push(...scriptFlags);
               setFoundFlags(prev => [...new Set([...prev, ...scriptFlags])]);
               scriptFlags.forEach(flag => onFlagFound?.(flag));
+              emitLog(`🎯 Script found flags: ${scriptFlags.join(', ')}`);
             }
 
             setGeneratedScript(aiResponse.solve_script.code);
@@ -656,9 +703,11 @@ export function FullAutopilot({
 
             if (scriptFlags.length > 0) break;
           } catch (scriptErr) {
+            const scriptError = scriptErr instanceof Error ? scriptErr.message : 'Script failed';
+            emitLog(`❌ Script execution failed: ${scriptError}`);
             updateStep(scriptStepId, {
               status: 'failed',
-              error: scriptErr instanceof Error ? scriptErr.message : 'Script failed',
+              error: scriptError,
             });
           }
         }
@@ -673,6 +722,8 @@ export function FullAutopilot({
           await waitWhilePaused();
 
           const commandStr = `${cmd.tool} ${cmd.args.join(' ')}`;
+          emitLog(`⚡ Executing: ${commandStr}`);
+          
           const stepId = addStep({
             phase: 'ai_analysis',
             command: commandStr,
@@ -688,6 +739,7 @@ export function FullAutopilot({
             localFlags.push(...result.flags);
             setFoundFlags(prev => [...new Set([...prev, ...result.flags])]);
             result.flags.forEach(flag => onFlagFound?.(flag));
+            emitLog(`🚩 Flag found in command output: ${result.flags.join(', ')}`);
           }
 
           updateStep(stepId, {
@@ -710,6 +762,8 @@ export function FullAutopilot({
           duration: Date.now() - startTime,
         });
 
+        emitLog(`❌ AI analysis error: ${errorMsg}`);
+
         if (err instanceof api.RateLimitError) {
           toast.error('Rate limit exceeded', { description: 'Please wait a moment and try again.' });
           break;
@@ -725,8 +779,9 @@ export function FullAutopilot({
       await new Promise(resolve => setTimeout(resolve, 300));
     }
 
+    emitLog(`✅ AI analysis complete. Attempts: ${attempts}, Flags found: ${localFlags.length}`);
     return { flagsFound: localFlags, insights: latestInsight };
-  }, [jobId, files, description, expectedFormat, maxAttempts, addStep, updateStep, executeCommand, onFlagFound, addTraceEntry]);
+  }, [jobId, files, description, expectedFormat, maxAttempts, addStep, updateStep, executeCommand, onFlagFound, addTraceEntry, emitProgress, emitLog]);
 
   // PHASE 4: Script Generation
   const generateSolveScript = useCallback(async (
@@ -736,6 +791,10 @@ export function FullAutopilot({
     setCurrentPhase('script_generation');
     setPhaseMessage('📝 Phase 4: Generating solve script...');
     setProgress(75);
+
+    // Emit progress update
+    emitProgress({ progress: 75, currentStep: 'Script Generation', status: 'running' });
+    emitLog('📝 Generating category-specific solve script...');
 
     const strategy = CATEGORY_STRATEGIES[category] || CATEGORY_STRATEGIES.misc;
 
@@ -772,6 +831,7 @@ ${insight ? `# AI Analysis: ${insight.analysis.slice(0, 200)}` : ''}
     }
 
     setGeneratedScript(script);
+    emitLog(`✅ Generated ${strategy.name} script (${script.split('\n').length} lines)`);
 
     updateStep(stepId, {
       status: 'success',
@@ -781,7 +841,7 @@ ${insight ? `# AI Analysis: ${insight.analysis.slice(0, 200)}` : ''}
     });
 
     return script;
-  }, [files, expectedFormat, addStep, updateStep]);
+  }, [files, expectedFormat, addStep, updateStep, emitProgress, emitLog]);
 
   // PHASE 5: Script Execution
   const executeSolveScript = useCallback(async (
@@ -791,6 +851,10 @@ ${insight ? `# AI Analysis: ${insight.analysis.slice(0, 200)}` : ''}
     setCurrentPhase('script_execution');
     setPhaseMessage('🚀 Phase 5: Executing solve script...');
     setProgress(85);
+
+    // Emit progress update
+    emitProgress({ progress: 85, currentStep: 'Script Execution', status: 'running' });
+    emitLog('🚀 Executing solve script in sandbox...');
 
     const strategy = CATEGORY_STRATEGIES[category] || CATEGORY_STRATEGIES.misc;
     const stepId = addStep({
@@ -817,6 +881,9 @@ ${insight ? `# AI Analysis: ${insight.analysis.slice(0, 200)}` : ''}
       if (flags.length > 0) {
         setFoundFlags(prev => [...new Set([...prev, ...flags])]);
         flags.forEach(flag => onFlagFound?.(flag));
+        emitLog(`🎯 Script found flags: ${flags.join(', ')}`);
+      } else {
+        emitLog('⚠️ Script completed but no flags found');
       }
 
       updateStep(stepId, {
@@ -828,13 +895,15 @@ ${insight ? `# AI Analysis: ${insight.analysis.slice(0, 200)}` : ''}
 
       return flags;
     } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Script execution failed';
+      emitLog(`❌ Script execution failed: ${errorMsg}`);
       updateStep(stepId, {
         status: 'failed',
-        error: err instanceof Error ? err.message : 'Script execution failed',
+        error: errorMsg,
       });
       return [];
     }
-  }, [addStep, updateStep, onFlagFound]);
+  }, [addStep, updateStep, onFlagFound, emitProgress, emitLog]);
 
   // MAIN AUTOPILOT WORKFLOW
   const runFullAutopilot = useCallback(async () => {
@@ -856,6 +925,11 @@ ${insight ? `# AI Analysis: ${insight.analysis.slice(0, 200)}` : ''}
     setAnalysisStartTime(Date.now());
     setAnalysisTimeMs(0);
     setAiConfidence(0);
+
+    // Emit initial status
+    emitStatus('running');
+    emitProgress({ progress: 0, currentStep: 'Starting', status: 'running' });
+    emitLog('🚀 Starting Full Autopilot analysis...');
 
     let allFlags: string[] = [];
 
@@ -907,7 +981,9 @@ ${insight ? `# AI Analysis: ${insight.analysis.slice(0, 200)}` : ''}
         setCurrentPhase('completed');
         setPhaseMessage(`🎉 SUCCESS! Found ${allFlags.length} flag(s)`);
         setProgress(100);
-        // Grand finale confetti and sound!
+        emitStatus('completed');
+        emitProgress({ progress: 100, currentStep: 'Complete', status: 'completed' });
+        emitLog(`🎉 SUCCESS! Found ${allFlags.length} flag(s): ${allFlags.join(', ')}`);
         grandFinale();
         playGrandFinale();
         onComplete?.(true, allFlags);
@@ -937,7 +1013,9 @@ ${insight ? `# AI Analysis: ${insight.analysis.slice(0, 200)}` : ''}
         setCurrentPhase('completed');
         setPhaseMessage(`🎉 SUCCESS! Found ${allFlags.length} flag(s)`);
         setProgress(100);
-        // Grand finale confetti and sound!
+        emitStatus('completed');
+        emitProgress({ progress: 100, currentStep: 'Complete', status: 'completed' });
+        emitLog(`🎉 SUCCESS! Found ${allFlags.length} flag(s): ${allFlags.join(', ')}`);
         grandFinale();
         playGrandFinale();
         onComplete?.(true, allFlags);
@@ -945,10 +1023,16 @@ ${insight ? `# AI Analysis: ${insight.analysis.slice(0, 200)}` : ''}
         setCurrentPhase('completed');
         setPhaseMessage('Analysis complete - manual review recommended');
         setProgress(100);
+        emitStatus('completed');
+        emitProgress({ progress: 100, currentStep: 'Complete', status: 'completed' });
+        emitLog('⚠️ Analysis complete - no flags found, manual review recommended');
         onComplete?.(false, []);
       }
     } catch (err) {
       console.error('Autopilot error:', err);
+      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+      emitStatus('failed', errorMsg);
+      emitLog(`❌ Autopilot error: ${errorMsg}`);
       const endTime = Date.now();
       setAnalysisTimeMs(endTime - (analysisStartTime || endTime));
       setCurrentPhase('failed');
@@ -957,7 +1041,7 @@ ${insight ? `# AI Analysis: ${insight.analysis.slice(0, 200)}` : ''}
     }
 
     setIsRunning(false);
-  }, [runReconnaissance, detectCategoryPhase, runAIAnalysis, generateSolveScript, executeSolveScript, onComplete, analysisStartTime]);
+  }, [runReconnaissance, detectCategoryPhase, runAIAnalysis, generateSolveScript, executeSolveScript, onComplete, analysisStartTime, emitStatus, emitProgress, emitLog]);
 
   // Expose start function to parent via callback - run immediately on mount
   useEffect(() => {
