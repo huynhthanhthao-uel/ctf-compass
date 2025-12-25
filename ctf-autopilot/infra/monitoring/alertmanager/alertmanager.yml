@@ -1,0 +1,69 @@
+# CTF Compass - Alertmanager Configuration
+# Replace placeholders with your actual webhook URLs
+
+global:
+  resolve_timeout: 5m
+  # SMTP settings (optional)
+  # smtp_smarthost: 'smtp.gmail.com:587'
+  # smtp_from: 'alerts@ctf-compass.local'
+  # smtp_auth_username: 'your-email@gmail.com'
+  # smtp_auth_password: 'your-app-password'
+
+# Templates for notifications
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# Routing tree
+route:
+  group_by: ['alertname', 'severity']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  receiver: 'default-receiver'
+  
+  routes:
+    # Critical alerts go to all channels
+    - match:
+        severity: critical
+      receiver: 'critical-receiver'
+      continue: true
+    
+    # Warning alerts
+    - match:
+        severity: warning
+      receiver: 'warning-receiver'
+
+# Inhibition rules
+inhibit_rules:
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'instance']
+
+# Receivers
+receivers:
+  - name: 'default-receiver'
+    # Webhook for custom integrations
+    webhook_configs:
+      - url: 'http://localhost:5001/webhook'
+        send_resolved: true
+
+  - name: 'critical-receiver'
+    # Discord webhook (replace with your URL)
+    webhook_configs:
+      - url: 'DISCORD_WEBHOOK_URL_HERE'
+        send_resolved: true
+    
+    # Telegram (via webhook proxy)
+    # webhook_configs:
+    #   - url: 'http://telegram-proxy:8080/alert'
+    #     send_resolved: true
+
+  - name: 'warning-receiver'
+    webhook_configs:
+      - url: 'DISCORD_WEBHOOK_URL_HERE'
+        send_resolved: true
+
+# Note: To use Telegram directly, you'll need a webhook-to-telegram proxy
+# Or use the health-check.sh script which has native Telegram support

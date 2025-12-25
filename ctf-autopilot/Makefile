@@ -14,7 +14,8 @@ NC := \033[0m
 
 .PHONY: help status start stop restart logs logs-api logs-worker logs-web \
         update rebuild rebuild-api rebuild-worker rebuild-web clean \
-        backup restore shell-api shell-db health test
+        backup restore shell-api shell-db health test \
+        monitor-start monitor-stop monitor-status health-check health-setup
 
 # Default target
 help:
@@ -51,6 +52,16 @@ help:
 	@echo "  make shell-api   - Open shell in API container"
 	@echo "  make health      - Check API health"
 	@echo "  make test        - Run tests"
+	@echo ""
+	@echo "$(YELLOW)Monitoring:$(NC)"
+	@echo "  make monitor-start  - Start Prometheus + Grafana stack"
+	@echo "  make monitor-stop   - Stop monitoring stack"
+	@echo "  make monitor-status - Show monitoring status"
+	@echo ""
+	@echo "$(YELLOW)Health Checks & Alerts:$(NC)"
+	@echo "  make health-check   - Run single health check"
+	@echo "  make health-status  - Show service health status"
+	@echo "  make health-setup   - Configure Telegram/Discord alerts"
 	@echo ""
 	@echo "$(YELLOW)Cleanup:$(NC)"
 	@echo "  make clean       - Remove unused Docker resources"
@@ -188,5 +199,47 @@ clean-all:
 	@echo "$(RED)⚠️  WARNING: This will remove ALL unused Docker resources!$(NC)"
 	@read -p "Are you sure? [y/N] " confirm && [ "$$confirm" = "y" ] || exit 1
 	@docker system prune -af
+	@docker volume prune -f
+	@echo "$(GREEN)✅ Full cleanup complete$(NC)"
+
+# ============================================
+# Monitoring (Prometheus + Grafana)
+# ============================================
+
+monitor-start:
+	@echo "$(GREEN)📊 Starting monitoring stack...$(NC)"
+	@bash $(INSTALL_DIR)/ctf-autopilot/infra/scripts/monitoring.sh start
+
+monitor-stop:
+	@echo "$(YELLOW)🛑 Stopping monitoring stack...$(NC)"
+	@bash $(INSTALL_DIR)/ctf-autopilot/infra/scripts/monitoring.sh stop
+
+monitor-status:
+	@bash $(INSTALL_DIR)/ctf-autopilot/infra/scripts/monitoring.sh status
+
+monitor-urls:
+	@bash $(INSTALL_DIR)/ctf-autopilot/infra/scripts/monitoring.sh urls
+
+monitor-setup:
+	@bash $(INSTALL_DIR)/ctf-autopilot/infra/scripts/monitoring.sh setup
+
+# ============================================
+# Health Checks & Alerts
+# ============================================
+
+health-check:
+	@bash $(INSTALL_DIR)/ctf-autopilot/infra/scripts/health-check.sh --check
+
+health-status:
+	@bash $(INSTALL_DIR)/ctf-autopilot/infra/scripts/health-check.sh --status
+
+health-setup:
+	@bash $(INSTALL_DIR)/ctf-autopilot/infra/scripts/health-check.sh --setup
+
+health-test:
+	@bash $(INSTALL_DIR)/ctf-autopilot/infra/scripts/health-check.sh --test
+
+health-cron:
+	@bash $(INSTALL_DIR)/ctf-autopilot/infra/scripts/health-check.sh --setup-cron
 	@docker volume prune -f
 	@echo "$(GREEN)✅ Full cleanup complete$(NC)"

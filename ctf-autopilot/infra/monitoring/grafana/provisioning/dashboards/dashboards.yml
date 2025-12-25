@@ -1,0 +1,15 @@
+# CTF Compass - Grafana Dashboard Provisioning
+
+apiVersion: 1
+
+providers:
+  - name: 'CTF Compass Dashboards'
+    orgId: 1
+    folder: 'CTF Compass'
+    folderUid: 'ctf-compass'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
