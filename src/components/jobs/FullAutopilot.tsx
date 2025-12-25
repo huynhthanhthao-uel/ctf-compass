@@ -1109,14 +1109,6 @@ ${insight ? `# AI Analysis: ${insight.analysis.slice(0, 200)}` : ''}
 
   return (
     <div className="space-y-4">
-      {/* Simulation Mode Warning */}
-      <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-sm">
-        <AlertTriangle className="h-4 w-4 flex-shrink-0" />
-        <div>
-          <span className="font-medium">Cloud Simulation Mode:</span> Sandbox commands are simulated. 
-          For real execution, deploy the Docker backend from <code className="bg-amber-500/20 px-1 rounded">ctf-autopilot/</code> folder.
-        </div>
-      </div>
 
       {/* Main Control Card */}
       <Card className={cn(
