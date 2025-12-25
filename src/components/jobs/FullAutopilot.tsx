@@ -22,7 +22,9 @@ import {
   Zap,
   Eye,
   EyeOff,
-  MessageSquare
+  MessageSquare,
+  Clock,
+  TrendingUp
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -34,6 +36,7 @@ import { cn } from '@/lib/utils';
 import { detectFlags } from '@/lib/ctf-tools';
 import * as api from '@/lib/api';
 import { toast } from 'sonner';
+import { grandFinale, miniCelebrate } from '@/lib/confetti';
 
 // Workflow phases
 type Phase = 
@@ -289,6 +292,12 @@ export function FullAutopilot({
   const [totalAttempts, setTotalAttempts] = useState(0);
   const [maxAttempts] = useState(50);
 
+  // Statistics tracking
+  const [commandsRun, setCommandsRun] = useState(0);
+  const [analysisStartTime, setAnalysisStartTime] = useState<number | null>(null);
+  const [analysisTimeMs, setAnalysisTimeMs] = useState(0);
+  const [aiConfidence, setAiConfidence] = useState(0);
+
   const abortRef = useRef(false);
   const pauseRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -345,8 +354,16 @@ export function FullAutopilot({
         exit_code: result.exit_code,
       });
 
+      // Update command count
+      setCommandsRun(prev => prev + 1);
+
       if (commandHistoryRef.current.length > 30) {
         commandHistoryRef.current = commandHistoryRef.current.slice(-30);
+      }
+
+      // Mini confetti when flag found in command output
+      if (flags.length > 0) {
+        miniCelebrate();
       }
 
       return { output, flags, error, exitCode: result.exit_code };
@@ -587,6 +604,8 @@ export function FullAutopilot({
           playbook: aiResponse.playbook,
         };
         setAiInsight(latestInsight);
+        // Update AI confidence
+        setAiConfidence(aiResponse.confidence);
 
         if (aiResponse.flag_candidates.length > 0) {
           localFlags.push(...aiResponse.flag_candidates);
@@ -821,6 +840,12 @@ ${insight ? `# AI Analysis: ${insight.analysis.slice(0, 200)}` : ''}
     setAiInsight(null);
     setDetectedCategory('unknown');
     setGeneratedScript('');
+    
+    // Reset stats
+    setCommandsRun(0);
+    setAnalysisStartTime(Date.now());
+    setAnalysisTimeMs(0);
+    setAiConfidence(0);
 
     let allFlags: string[] = [];
 
@@ -867,9 +892,13 @@ ${insight ? `# AI Analysis: ${insight.analysis.slice(0, 200)}` : ''}
 
       // If we already have flags, complete successfully
       if (allFlags.length > 0) {
+        const endTime = Date.now();
+        setAnalysisTimeMs(endTime - (analysisStartTime || endTime));
         setCurrentPhase('completed');
         setPhaseMessage(`🎉 SUCCESS! Found ${allFlags.length} flag(s)`);
         setProgress(100);
+        // Grand finale confetti!
+        grandFinale();
         onComplete?.(true, allFlags);
         setIsRunning(false);
         return;
@@ -890,10 +919,15 @@ ${insight ? `# AI Analysis: ${insight.analysis.slice(0, 200)}` : ''}
       }
 
       // Final status
+      const endTime = Date.now();
+      setAnalysisTimeMs(endTime - (analysisStartTime || endTime));
+      
       if (allFlags.length > 0) {
         setCurrentPhase('completed');
         setPhaseMessage(`🎉 SUCCESS! Found ${allFlags.length} flag(s)`);
         setProgress(100);
+        // Grand finale confetti!
+        grandFinale();
         onComplete?.(true, allFlags);
       } else {
         setCurrentPhase('completed');
@@ -903,13 +937,15 @@ ${insight ? `# AI Analysis: ${insight.analysis.slice(0, 200)}` : ''}
       }
     } catch (err) {
       console.error('Autopilot error:', err);
+      const endTime = Date.now();
+      setAnalysisTimeMs(endTime - (analysisStartTime || endTime));
       setCurrentPhase('failed');
       setPhaseMessage(`Error: ${err instanceof Error ? err.message : 'Unknown error'}`);
       onComplete?.(false, []);
     }
 
     setIsRunning(false);
-  }, [runReconnaissance, detectCategoryPhase, runAIAnalysis, generateSolveScript, executeSolveScript, onComplete]);
+  }, [runReconnaissance, detectCategoryPhase, runAIAnalysis, generateSolveScript, executeSolveScript, onComplete, analysisStartTime]);
 
   // Expose start function to parent via callback - run immediately on mount
   useEffect(() => {
@@ -1123,6 +1159,104 @@ ${insight ? `# AI Analysis: ${insight.analysis.slice(0, 200)}` : ''}
               )}
             </div>
           </div>
+
+          {/* Stats Display */}
+          {(isRunning || currentPhase === 'completed' || currentPhase === 'failed') && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 animate-fade-in">
+              {/* Commands Run */}
+              <div className={cn(
+                "p-3 rounded-lg border bg-card transition-all duration-300",
+                isRunning && "animate-pulse border-primary/30"
+              )}>
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-md bg-primary/10">
+                    <Terminal className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xl font-bold tabular-nums">{commandsRun}</p>
+                    <p className="text-xs text-muted-foreground">Commands</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Analysis Time */}
+              <div className="p-3 rounded-lg border bg-card">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-md bg-info/10">
+                    <Clock className="h-4 w-4 text-info" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xl font-bold tabular-nums">
+                      {isRunning && analysisStartTime 
+                        ? `${((Date.now() - analysisStartTime) / 1000).toFixed(1)}s`
+                        : analysisTimeMs < 1000 
+                          ? `${analysisTimeMs}ms` 
+                          : `${(analysisTimeMs / 1000).toFixed(1)}s`
+                      }
+                    </p>
+                    <p className="text-xs text-muted-foreground">Time</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* AI Confidence */}
+              <div className="p-3 rounded-lg border bg-card">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-md bg-success/10">
+                    <TrendingUp className="h-4 w-4 text-success" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className={cn(
+                      "text-xl font-bold tabular-nums",
+                      aiConfidence >= 0.9 && "text-success",
+                      aiConfidence >= 0.7 && aiConfidence < 0.9 && "text-amber-500"
+                    )}>
+                      {(aiConfidence * 100).toFixed(0)}%
+                    </p>
+                    <p className="text-xs text-muted-foreground">Confidence</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Category */}
+              <div className={cn(
+                "p-3 rounded-lg border bg-card",
+                detectedCategory === 'crypto' && "border-amber-500/30",
+                detectedCategory === 'forensics' && "border-blue-500/30",
+                detectedCategory === 'pwn' && "border-red-500/30",
+                detectedCategory === 'rev' && "border-purple-500/30",
+                detectedCategory === 'web' && "border-green-500/30",
+                detectedCategory === 'misc' && "border-cyan-500/30"
+              )}>
+                <div className="flex items-center gap-2">
+                  <div className={cn(
+                    "p-1.5 rounded-md",
+                    detectedCategory === 'crypto' && "bg-amber-500/10",
+                    detectedCategory === 'forensics' && "bg-blue-500/10",
+                    detectedCategory === 'pwn' && "bg-red-500/10",
+                    detectedCategory === 'rev' && "bg-purple-500/10",
+                    detectedCategory === 'web' && "bg-green-500/10",
+                    detectedCategory === 'misc' && "bg-cyan-500/10",
+                    detectedCategory === 'unknown' && "bg-muted"
+                  )}>
+                    <Target className={cn(
+                      "h-4 w-4",
+                      detectedCategory === 'crypto' && "text-amber-500",
+                      detectedCategory === 'forensics' && "text-blue-500",
+                      detectedCategory === 'pwn' && "text-red-500",
+                      detectedCategory === 'rev' && "text-purple-500",
+                      detectedCategory === 'web' && "text-green-500",
+                      detectedCategory === 'misc' && "text-cyan-500"
+                    )} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-lg font-bold capitalize truncate">{detectedCategory}</p>
+                    <p className="text-xs text-muted-foreground">Category</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Detected Category & Strategy */}
           {detectedCategory !== 'unknown' && strategy && (
