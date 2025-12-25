@@ -1,6 +1,6 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Upload, X, FileText, AlertCircle, FolderOpen, Link } from 'lucide-react';
+import { Upload, X, AlertCircle, FolderOpen, Link, Sparkles, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,6 +16,9 @@ import {
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { FilePreview } from './FilePreview';
+import { useCategoryDetector } from '@/hooks/use-category-detector';
+import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
 
 const CHALLENGE_CATEGORIES = [
   { value: 'crypto', label: 'Crypto' },
@@ -39,11 +42,35 @@ export function JobForm({ onSubmit, isLoading }: JobFormProps) {
   const [challengeUrl, setChallengeUrl] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [autoDetected, setAutoDetected] = useState(false);
+
+  const { detectFromFiles, isDetecting, result: detectionResult } = useCategoryDetector();
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     setFiles(prev => [...prev, ...acceptedFiles]);
     setError(null);
   }, []);
+
+  // Auto-detect category when files change
+  useEffect(() => {
+    if (files.length > 0 && !category) {
+      detectFromFiles(files, description).then(result => {
+        if (result && result.confidence > 0.5) {
+          setCategory(result.category);
+          setAutoDetected(true);
+          toast.success(`Auto-detected category: ${result.category}`, {
+            description: `Confidence: ${Math.round(result.confidence * 100)}% • Keywords: ${result.detectedKeywords.slice(0, 3).join(', ')}`
+          });
+        }
+      });
+    }
+  }, [files, detectFromFiles, description, category]);
+
+  // Reset auto-detected flag when category changes manually
+  const handleCategoryChange = (value: string) => {
+    setCategory(value);
+    setAutoDetected(false);
+  };
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -52,6 +79,9 @@ export function JobForm({ onSubmit, isLoading }: JobFormProps) {
 
   const removeFile = (index: number) => {
     setFiles(prev => prev.filter((_, i) => i !== index));
+    if (files.length === 1) {
+      setAutoDetected(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -83,12 +113,6 @@ export function JobForm({ onSubmit, isLoading }: JobFormProps) {
     await onSubmit(title, description, flagFormat, files, category || undefined, challengeUrl.trim() || undefined);
   };
 
-  const formatFileSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
-
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {error && (
@@ -117,8 +141,22 @@ export function JobForm({ onSubmit, isLoading }: JobFormProps) {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="category">Category</Label>
-              <Select value={category} onValueChange={setCategory} disabled={isLoading}>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="category">Category</Label>
+                {isDetecting && (
+                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Detecting...
+                  </span>
+                )}
+                {autoDetected && detectionResult && (
+                  <Badge variant="secondary" className="text-xs gap-1">
+                    <Sparkles className="h-3 w-3" />
+                    Auto-detected ({Math.round(detectionResult.confidence * 100)}%)
+                  </Badge>
+                )}
+              </div>
+              <Select value={category} onValueChange={handleCategoryChange} disabled={isLoading}>
                 <SelectTrigger id="category" className="bg-background">
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
@@ -130,6 +168,15 @@ export function JobForm({ onSubmit, isLoading }: JobFormProps) {
                   ))}
                 </SelectContent>
               </Select>
+              {autoDetected && detectionResult && detectionResult.detectedKeywords.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {detectionResult.detectedKeywords.slice(0, 5).map((keyword, idx) => (
+                    <Badge key={idx} variant="outline" className="text-xs font-mono">
+                      {keyword}
+                    </Badge>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
