@@ -37,6 +37,7 @@ import { detectFlags } from '@/lib/ctf-tools';
 import * as api from '@/lib/api';
 import { toast } from 'sonner';
 import { grandFinale, miniCelebrate } from '@/lib/confetti';
+import { playFlagFound, playGrandFinale, playStepComplete, playError } from '@/lib/sound';
 
 // Workflow phases
 type Phase = 
@@ -369,9 +370,10 @@ export function FullAutopilot({
         commandHistoryRef.current = commandHistoryRef.current.slice(-30);
       }
 
-      // Mini confetti when flag found in command output
+      // Mini confetti and sound when flag found in command output
       if (flags.length > 0) {
         miniCelebrate();
+        playFlagFound();
       }
 
       return { output, flags, error, exitCode: result.exit_code };
@@ -905,8 +907,9 @@ ${insight ? `# AI Analysis: ${insight.analysis.slice(0, 200)}` : ''}
         setCurrentPhase('completed');
         setPhaseMessage(`🎉 SUCCESS! Found ${allFlags.length} flag(s)`);
         setProgress(100);
-        // Grand finale confetti!
+        // Grand finale confetti and sound!
         grandFinale();
+        playGrandFinale();
         onComplete?.(true, allFlags);
         setIsRunning(false);
         return;
@@ -934,8 +937,9 @@ ${insight ? `# AI Analysis: ${insight.analysis.slice(0, 200)}` : ''}
         setCurrentPhase('completed');
         setPhaseMessage(`🎉 SUCCESS! Found ${allFlags.length} flag(s)`);
         setProgress(100);
-        // Grand finale confetti!
+        // Grand finale confetti and sound!
         grandFinale();
+        playGrandFinale();
         onComplete?.(true, allFlags);
       } else {
         setCurrentPhase('completed');

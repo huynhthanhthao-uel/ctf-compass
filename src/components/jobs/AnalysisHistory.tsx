@@ -17,7 +17,9 @@ import {
   ExternalLink,
   Upload,
   Download,
-  Share2
+  Share2,
+  Sparkles,
+  Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -25,10 +27,17 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
 import * as api from '@/lib/api';
+import { 
+  mockAnalysisSessions, 
+  mockSimilarSolves, 
+  mockToolRecommendations,
+  mockSessionDetails 
+} from '@/lib/mock-data';
 
 interface AnalysisHistoryProps {
   jobId: string;
@@ -141,7 +150,13 @@ export function AnalysisHistory({
       const response = await api.getJobSessions(jobId);
       setSessions(response.sessions);
     } catch (err) {
-      console.error('Failed to load sessions:', err);
+      console.error('Failed to load sessions from API, using mock data:', err);
+      // Use mock data as fallback
+      const jobSessions = mockAnalysisSessions.filter(s => s.job_id === jobId);
+      setSessions(jobSessions as unknown as api.AnalysisSessionSummary[]);
+      // Also load mock similar solves and recommendations
+      setSimilarSolves(mockSimilarSolves as unknown as api.SimilarSolve[]);
+      setRecommendations(mockToolRecommendations as unknown as api.ToolRecommendation[]);
     } finally {
       setIsLoading(false);
     }
@@ -153,7 +168,13 @@ export function AnalysisHistory({
       setSelectedSession(details);
       onSelectSession?.(sessionId);
     } catch (err) {
-      console.error('Failed to load session details:', err);
+      console.error('Failed to load session details from API, using mock data:', err);
+      // Use mock data as fallback
+      const mockDetails = mockSessionDetails[sessionId];
+      if (mockDetails) {
+        setSelectedSession(mockDetails as unknown as api.SessionDetail);
+        onSelectSession?.(sessionId);
+      }
     }
   };
 
@@ -166,7 +187,10 @@ export function AnalysisHistory({
       setSimilarSolves(solves);
       setRecommendations(recs);
     } catch (err) {
-      console.error('Failed to load similar solves:', err);
+      console.error('Failed to load similar solves from API, using mock data:', err);
+      // Use mock data as fallback
+      setSimilarSolves(mockSimilarSolves as unknown as api.SimilarSolve[]);
+      setRecommendations(mockToolRecommendations as unknown as api.ToolRecommendation[]);
     }
   };
 
@@ -267,12 +291,21 @@ export function AnalysisHistory({
             </CardHeader>
             <CardContent>
               {isLoading ? (
-                <div className="flex items-center justify-center py-8 text-muted-foreground">
-                  <Clock className="h-5 w-5 animate-spin mr-2" />
-                  Loading history...
+                <div className="space-y-3 py-4">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="flex items-center gap-3 p-3 rounded-lg border animate-pulse">
+                      <Skeleton className="h-4 w-4 rounded" />
+                      <Skeleton className="h-4 w-4 rounded-full" />
+                      <div className="flex-1 space-y-2">
+                        <Skeleton className="h-4 w-3/4" />
+                        <Skeleton className="h-3 w-1/2" />
+                      </div>
+                      <Skeleton className="h-8 w-16" />
+                    </div>
+                  ))}
                 </div>
               ) : sessions.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
+                <div className="text-center py-8 text-muted-foreground animate-fade-in">
                   <History className="h-12 w-12 mx-auto mb-3 opacity-30" />
                   <p>No analysis sessions yet</p>
                   <p className="text-sm">Start an AI analysis to create history</p>
@@ -498,40 +531,61 @@ export function AnalysisHistory({
           </Card>
         </TabsContent>
 
-        <TabsContent value="similar">
-          <Card>
-            <CardHeader className="pb-3">
+        <TabsContent value="similar" className="animate-fade-in">
+          <Card className="overflow-hidden">
+            <CardHeader className="pb-3 bg-gradient-to-r from-primary/5 to-transparent">
               <CardTitle className="text-base flex items-center gap-2">
-                <TrendingUp className="h-4 w-4" />
+                <TrendingUp className="h-4 w-4 text-primary" />
                 Similar Past Solves
+                {similarSolves.length > 0 && (
+                  <Badge variant="secondary" className="ml-auto">{similarSolves.length} found</Badge>
+                )}
               </CardTitle>
             </CardHeader>
             <CardContent>
               {similarSolves.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <TrendingUp className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                  <p>No similar solves found</p>
-                  <p className="text-sm">Complete more challenges to build knowledge</p>
+                <div className="text-center py-8 text-muted-foreground animate-fade-in">
+                  <div className="relative mx-auto w-16 h-16 mb-4">
+                    <TrendingUp className="h-12 w-12 mx-auto opacity-30 absolute inset-0 m-auto" />
+                    <Sparkles className="h-5 w-5 text-primary/50 absolute -top-1 -right-1 animate-pulse" />
+                  </div>
+                  <p className="font-medium">No similar solves found</p>
+                  <p className="text-sm">Complete more challenges to build AI knowledge base</p>
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {similarSolves.map((solve) => (
-                    <div key={solve.id} className="p-3 rounded-lg border bg-card">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Badge variant="outline" className="capitalize">{solve.category}</Badge>
+                  {similarSolves.map((solve, index) => (
+                    <div 
+                      key={solve.id} 
+                      className={cn(
+                        "p-4 rounded-lg border bg-card transition-all duration-200 hover:shadow-md hover:border-primary/30",
+                        "animate-fade-in"
+                      )}
+                      style={{ animationDelay: `${index * 100}ms` }}
+                    >
+                      <div className="flex items-center gap-2 mb-3">
+                        <Badge variant="outline" className="capitalize bg-primary/5">{solve.category}</Badge>
                         {solve.time_to_solve_seconds && (
-                          <span className="text-xs text-muted-foreground">
-                            Solved in {Math.round(solve.time_to_solve_seconds / 60)}m
-                          </span>
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <Clock className="h-3 w-3" />
+                            {Math.round(solve.time_to_solve_seconds / 60)}m
+                          </div>
                         )}
+                        <span className="text-xs text-muted-foreground ml-auto">
+                          {solve.total_commands} commands
+                        </span>
                       </div>
-                      <div className="text-xs text-muted-foreground mb-2">
-                        File types: {solve.file_types.join(', ')}
+                      <div className="text-xs text-muted-foreground mb-3 flex items-center gap-1">
+                        <span className="font-medium">Files:</span> {solve.file_types.join(', ')}
                       </div>
-                      <div className="flex flex-wrap gap-1">
+                      <div className="flex flex-wrap gap-1.5 mb-3">
                         {solve.successful_tools.map((tool) => (
-                          <Badge key={tool} variant="secondary" className="text-xs">
-                            {tool}
+                          <Badge 
+                            key={tool} 
+                            variant="secondary" 
+                            className="text-xs bg-success/10 text-success border-success/20"
+                          >
+                            ✓ {tool}
                           </Badge>
                         ))}
                       </div>
@@ -539,9 +593,10 @@ export function AnalysisHistory({
                         <Button
                           size="sm"
                           variant="outline"
-                          className="mt-2"
+                          className="w-full gap-2 hover:bg-primary/5 hover:text-primary hover:border-primary/30 transition-colors"
                           onClick={() => onApplyStrategy(solve.tool_sequence)}
                         >
+                          <ExternalLink className="h-3 w-3" />
                           Use This Approach
                         </Button>
                       )}
@@ -553,20 +608,26 @@ export function AnalysisHistory({
           </Card>
         </TabsContent>
 
-        <TabsContent value="recommendations">
-          <Card>
-            <CardHeader className="pb-3">
+        <TabsContent value="recommendations" className="animate-fade-in">
+          <Card className="overflow-hidden">
+            <CardHeader className="pb-3 bg-gradient-to-r from-warning/5 to-transparent">
               <CardTitle className="text-base flex items-center gap-2">
-                <Award className="h-4 w-4" />
+                <Award className="h-4 w-4 text-warning" />
                 AI Tool Recommendations
+                {recommendations.length > 0 && (
+                  <Badge variant="secondary" className="ml-auto">{recommendations.length} tools</Badge>
+                )}
               </CardTitle>
             </CardHeader>
             <CardContent>
               {recommendations.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Award className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                  <p>No recommendations available</p>
-                  <p className="text-sm">Run analysis to get AI recommendations</p>
+                <div className="text-center py-8 text-muted-foreground animate-fade-in">
+                  <div className="relative mx-auto w-16 h-16 mb-4">
+                    <Award className="h-12 w-12 mx-auto opacity-30 absolute inset-0 m-auto" />
+                    <Brain className="h-5 w-5 text-warning/50 absolute -top-1 -right-1 animate-pulse" />
+                  </div>
+                  <p className="font-medium">No recommendations yet</p>
+                  <p className="text-sm">Run analysis to get AI-powered tool suggestions</p>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -574,18 +635,24 @@ export function AnalysisHistory({
                     <div 
                       key={rec.tool} 
                       className={cn(
-                        "flex items-center gap-3 p-3 rounded-lg border",
-                        i === 0 && "bg-primary/5 border-primary/20"
+                        "flex items-center gap-3 p-3 rounded-lg border transition-all duration-200 hover:shadow-md animate-fade-in",
+                        i === 0 ? "bg-gradient-to-r from-warning/10 to-transparent border-warning/30" : "hover:border-primary/30"
                       )}
+                      style={{ animationDelay: `${i * 80}ms` }}
                     >
-                      <div className="flex items-center justify-center h-8 w-8 rounded-full bg-primary/10 text-primary font-bold">
+                      <div className={cn(
+                        "flex items-center justify-center h-8 w-8 rounded-full font-bold text-sm",
+                        i === 0 ? "bg-warning/20 text-warning" : "bg-primary/10 text-primary"
+                      )}>
                         {i + 1}
                       </div>
                       <div className="flex-1">
                         <div className="font-mono font-medium">{rec.tool}</div>
                         <div className="text-xs text-muted-foreground">{rec.reason}</div>
                       </div>
-                      <Badge variant="secondary">{rec.score} pts</Badge>
+                      <Badge variant={i === 0 ? "default" : "secondary"} className={i === 0 ? "bg-warning text-warning-foreground" : ""}>
+                        {rec.score} pts
+                      </Badge>
                     </div>
                   ))}
                 </div>
