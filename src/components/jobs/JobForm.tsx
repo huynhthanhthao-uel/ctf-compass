@@ -1,8 +1,9 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Upload, X, AlertCircle, FolderOpen, Link, Sparkles, Loader2, BarChart3 } from 'lucide-react';
+import { Upload, X, AlertCircle, FolderOpen, Link, Sparkles, Loader2, BarChart3, Terminal, Wifi } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -34,7 +35,7 @@ const CHALLENGE_CATEGORIES = [
 ] as const;
 
 interface JobFormProps {
-  onSubmit: (title: string, description: string, flagFormat: string, files: File[], category?: string, challengeUrl?: string) => Promise<void>;
+  onSubmit: (title: string, description: string, flagFormat: string, files: File[], category?: string, challengeUrl?: string, netcatHost?: string, netcatPort?: string) => Promise<void>;
   isLoading?: boolean;
 }
 
@@ -51,6 +52,11 @@ export function JobForm({ onSubmit, isLoading }: JobFormProps) {
   const [lastDetectedDesc, setLastDetectedDesc] = useState<string>('');
   const [showChart, setShowChart] = useState(false);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Netcat fields
+  const [hasNetcat, setHasNetcat] = useState(false);
+  const [netcatHost, setNetcatHost] = useState('');
+  const [netcatPort, setNetcatPort] = useState('');
 
   const { detectFromFiles, isDetecting, result: detectionResult } = useCategoryDetector();
 
@@ -133,6 +139,21 @@ export function JobForm({ onSubmit, isLoading }: JobFormProps) {
     };
   }, [description, files, detectFromFiles, lastDetectedDesc, category, isDetecting]);
 
+  // Auto-detect netcat from description
+  useEffect(() => {
+    const ncPattern = /nc\s+[\w.-]+\s+\d+|netcat|host:?\s*[\w.-]+.*port/i;
+    const hostPattern = /nc\s+([\w.-]+)\s+(\d+)/i;
+    
+    if (ncPattern.test(description)) {
+      setHasNetcat(true);
+      const match = description.match(hostPattern);
+      if (match) {
+        setNetcatHost(match[1]);
+        setNetcatPort(match[2]);
+      }
+    }
+  }, [description]);
+
   // Check if re-detection might give different results
   const canRedetect = files.length > 0 || description.trim().length > 10;
   const hasChangedSinceLastDetect = filesSignature !== lastDetectedFiles || description !== lastDetectedDesc;
@@ -200,7 +221,28 @@ export function JobForm({ onSubmit, isLoading }: JobFormProps) {
       return;
     }
 
-    await onSubmit(title, description, flagFormat, files, category || undefined, challengeUrl.trim() || undefined);
+    // Validate netcat if enabled
+    if (hasNetcat) {
+      if (!netcatHost.trim()) {
+        setError('Netcat host is required when netcat is enabled');
+        return;
+      }
+      if (!netcatPort.trim() || isNaN(parseInt(netcatPort))) {
+        setError('Valid netcat port is required');
+        return;
+      }
+    }
+
+    await onSubmit(
+      title, 
+      description, 
+      flagFormat, 
+      files, 
+      category || undefined, 
+      challengeUrl.trim() || undefined,
+      hasNetcat ? netcatHost.trim() : undefined,
+      hasNetcat ? netcatPort.trim() : undefined
+    );
   };
 
   return (
@@ -355,11 +397,70 @@ export function JobForm({ onSubmit, isLoading }: JobFormProps) {
             </div>
           </div>
 
+          {/* Netcat Connection Section */}
+          <div className="space-y-3 pt-2 border-t border-border/50">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Terminal className="h-4 w-4 text-muted-foreground" />
+                <Label htmlFor="hasNetcat" className="font-medium cursor-pointer">
+                  Remote Connection (nc)
+                </Label>
+                {hasNetcat && (
+                  <Wifi className="h-3.5 w-3.5 text-success" />
+                )}
+              </div>
+              <Switch
+                id="hasNetcat"
+                checked={hasNetcat}
+                onCheckedChange={setHasNetcat}
+                disabled={isLoading}
+              />
+            </div>
+            
+            {hasNetcat && (
+              <div className="grid gap-3 sm:grid-cols-2 p-3 rounded-lg bg-secondary/30 border border-border/50">
+                <div className="space-y-2">
+                  <Label htmlFor="netcatHost" className="text-sm">
+                    Host <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="netcatHost"
+                    placeholder="pwn.example.com"
+                    value={netcatHost}
+                    onChange={(e) => setNetcatHost(e.target.value)}
+                    disabled={isLoading}
+                    className="font-mono text-sm"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="netcatPort" className="text-sm">
+                    Port <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="netcatPort"
+                    placeholder="9999"
+                    value={netcatPort}
+                    onChange={(e) => setNetcatPort(e.target.value.replace(/\D/g, ''))}
+                    disabled={isLoading}
+                    className="font-mono text-sm"
+                    type="number"
+                    min={1}
+                    max={65535}
+                  />
+                </div>
+                <div className="sm:col-span-2 text-xs text-muted-foreground flex items-center gap-1.5">
+                  <Terminal className="h-3 w-3" />
+                  Command: <code className="bg-background/50 px-1.5 py-0.5 rounded">nc {netcatHost || 'host'} {netcatPort || 'port'}</code>
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="description">Description</Label>
             <Textarea
               id="description"
-              placeholder="Describe the challenge, any hints, or notes..."
+              placeholder="Describe the challenge, any hints, or notes... (e.g., 'nc pwn.ctf.com 9999')"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}

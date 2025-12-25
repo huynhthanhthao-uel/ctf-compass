@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { Wifi, WifiOff, Send, Play, Square, Terminal, Sparkles, Copy, Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,6 +38,18 @@ export function NetcatPanel({ jobId, onFlagFound, onGenerateSolveScript }: Netca
   const [copied, setCopied] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Load saved netcat config for this job
+  useEffect(() => {
+    const saved = localStorage.getItem(`job-${jobId}-netcat`);
+    if (saved) {
+      try {
+        const { host: savedHost, port: savedPort } = JSON.parse(saved);
+        if (savedHost) setHost(savedHost);
+        if (savedPort) setPort(savedPort);
+      } catch {}
+    }
+  }, [jobId]);
 
   const addLine = useCallback((type: NetcatLine['type'], content: string) => {
     setLines(prev => [...prev, {
