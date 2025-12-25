@@ -17,13 +17,14 @@
 #
 #===============================================================================
 
-set -euo pipefail
+# Use -eo instead of -euo to handle potential unbound BASH_SOURCE
+set -eo pipefail
 
 #-------------------------------------------------------------------------------
 # Configuration
 #-------------------------------------------------------------------------------
 INSTALL_DIR="${INSTALL_DIR:-/opt/ctf-compass}"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd)" || SCRIPT_DIR="/opt/ctf-compass/ctf-autopilot/infra/scripts"
 INSTALL_SCRIPT="$SCRIPT_DIR/install_ubuntu_24.04.sh"
 REMOTE_SCRIPT="https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh"
 

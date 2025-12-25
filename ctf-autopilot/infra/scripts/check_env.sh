@@ -24,7 +24,8 @@
 #
 #===============================================================================
 
-set -euo pipefail
+# Use -eo instead of -euo to handle potential unbound variables when piped
+set -eo pipefail
 
 #-------------------------------------------------------------------------------
 # Configuration

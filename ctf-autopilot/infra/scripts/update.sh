@@ -18,7 +18,8 @@
 #
 #===============================================================================
 
-set -euo pipefail
+# Use -eo instead of -euo to handle potential unbound BASH_SOURCE when piped
+set -eo pipefail
 
 #-------------------------------------------------------------------------------
 # Auto-detect Installation Directory
@@ -30,11 +31,17 @@ detect_install_dir() {
         return
     fi
     
+    # Try to get script directory (handle unbound BASH_SOURCE)
+    local script_based_path=""
+    if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
+        script_based_path="$(dirname "$(dirname "$(dirname "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")")")" 2>/dev/null || script_based_path=""
+    fi
+    
     # Common installation paths
     local candidates=(
         "/opt/ctf-compass"
         "/app"
-        "$(dirname "$(dirname "$(dirname "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")")")"
+        "$script_based_path"
         "$(pwd)"
     )
     

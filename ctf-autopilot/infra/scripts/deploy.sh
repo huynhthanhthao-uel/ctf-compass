@@ -12,7 +12,8 @@
 #
 #===============================================================================
 
-set -euo pipefail
+# Don't use 'set -u' because BASH_SOURCE may be unbound when piping from curl
+set -eo pipefail
 
 # Colors
 RED='\033[0;31m'
@@ -28,35 +29,97 @@ echo "║           Password: admin                                         ║"
 echo "╚═══════════════════════════════════════════════════════════════════╝"
 echo -e "${NC}"
 
-# Detect if running from repo or remote
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [[ -f "$SCRIPT_DIR/../../docker-compose.yml" ]]; then
-    COMPOSE_DIR="$SCRIPT_DIR/.."
-    SANDBOX_DIR="$SCRIPT_DIR/../../sandbox/image"
-elif [[ -f "/opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml" ]]; then
+#-------------------------------------------------------------------------------
+# Check Docker first (before cloning)
+#-------------------------------------------------------------------------------
+install_docker() {
+    echo -e "${YELLOW}🔧 Installing Docker...${NC}"
+    
+    # Check if running as root
+    if [[ $EUID -ne 0 ]]; then
+        echo -e "${RED}❌ Docker installation requires root. Please run:${NC}"
+        echo -e "   ${CYAN}curl -fsSL https://get.docker.com | sudo sh${NC}"
+        echo -e "   ${CYAN}sudo usermod -aG docker \$USER${NC}"
+        echo -e "   Then logout and login again, and re-run this script."
+        exit 1
+    fi
+    
+    # Install Docker
+    curl -fsSL https://get.docker.com | sh
+    
+    # Start Docker
+    systemctl start docker 2>/dev/null || service docker start 2>/dev/null || true
+    systemctl enable docker 2>/dev/null || true
+    
+    echo -e "${GREEN}✅ Docker installed successfully${NC}"
+}
+
+if ! command -v docker &> /dev/null; then
+    echo -e "${YELLOW}⚠️ Docker not installed.${NC}"
+    echo ""
+    read -p "Do you want to install Docker now? (y/N) " -n 1 -r REPLY
+    echo ""
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        install_docker
+    else
+        echo -e "${RED}❌ Docker is required. Please install Docker first:${NC}"
+        echo -e "   ${CYAN}curl -fsSL https://get.docker.com | sudo sh${NC}"
+        exit 1
+    fi
+fi
+
+# Check if Docker daemon is running
+if ! docker info &> /dev/null 2>&1; then
+    echo -e "${RED}❌ Docker daemon is not running.${NC}"
+    echo -e "   Start Docker with: ${CYAN}sudo systemctl start docker${NC}"
+    exit 1
+fi
+
+#-------------------------------------------------------------------------------
+# Detect script location or clone repository
+#-------------------------------------------------------------------------------
+COMPOSE_DIR=""
+SANDBOX_DIR=""
+
+# Try to detect if running from local repo
+# Use ${BASH_SOURCE[0]:-} to handle unbound variable when piping from curl
+if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)" || SCRIPT_DIR=""
+    if [[ -n "$SCRIPT_DIR" && -f "$SCRIPT_DIR/../docker-compose.yml" ]]; then
+        COMPOSE_DIR="$SCRIPT_DIR/.."
+        SANDBOX_DIR="$SCRIPT_DIR/../../sandbox/image"
+    fi
+fi
+
+# Check if already installed at /opt/ctf-compass
+if [[ -z "$COMPOSE_DIR" && -f "/opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml" ]]; then
     COMPOSE_DIR="/opt/ctf-compass/ctf-autopilot/infra"
     SANDBOX_DIR="/opt/ctf-compass/ctf-autopilot/sandbox/image"
-else
+fi
+
+# Clone if not found locally
+if [[ -z "$COMPOSE_DIR" ]]; then
     echo -e "${YELLOW}📥 Cloning repository...${NC}"
     cd /tmp
     rm -rf ctf-compass
-    git clone --depth 1 https://github.com/huynhtrungpc01/ctf-compass.git
+    if ! git clone --depth 1 https://github.com/huynhtrungpc01/ctf-compass.git; then
+        echo -e "${RED}❌ Failed to clone repository. Check your internet connection.${NC}"
+        exit 1
+    fi
     COMPOSE_DIR="/tmp/ctf-compass/ctf-autopilot/infra"
     SANDBOX_DIR="/tmp/ctf-compass/ctf-autopilot/sandbox/image"
 fi
 
-cd "$COMPOSE_DIR"
-
-# Check Docker
-if ! command -v docker &> /dev/null; then
-    echo -e "${RED}❌ Docker not installed. Please install Docker first.${NC}"
-    echo "   Run: curl -fsSL https://get.docker.com | sh"
+cd "$COMPOSE_DIR" || {
+    echo -e "${RED}❌ Failed to change to compose directory: $COMPOSE_DIR${NC}"
     exit 1
-fi
+}
 
-# Create simple .env if not exists
+#-------------------------------------------------------------------------------
+# Create .env configuration
+#-------------------------------------------------------------------------------
 if [[ ! -f ".env" ]]; then
-    echo -e "${YELLOW}📝 Creating simple config...${NC}"
+    echo -e "${YELLOW}📝 Creating configuration...${NC}"
     cat > .env << 'EOF'
 # CTF Compass - Simple Local Config
 ADMIN_PASSWORD=admin
@@ -73,7 +136,9 @@ SANDBOX_CPU_LIMIT=1
 EOF
 fi
 
-# Build sandbox image if Dockerfile exists
+#-------------------------------------------------------------------------------
+# Build sandbox image (optional)
+#-------------------------------------------------------------------------------
 if [[ -f "$SANDBOX_DIR/Dockerfile" ]]; then
     echo -e "${YELLOW}🔨 Building sandbox image...${NC}"
     docker build -t ctf-autopilot-sandbox:latest "$SANDBOX_DIR/" 2>/dev/null || {
@@ -81,33 +146,54 @@ if [[ -f "$SANDBOX_DIR/Dockerfile" ]]; then
     }
 fi
 
-# Stop existing containers
+#-------------------------------------------------------------------------------
+# Start services
+#-------------------------------------------------------------------------------
 echo -e "${YELLOW}🛑 Stopping existing containers...${NC}"
 docker compose down 2>/dev/null || true
 
-# Start services
 echo -e "${YELLOW}🚀 Starting services...${NC}"
-docker compose up -d
+if ! docker compose up -d; then
+    echo -e "${RED}❌ Failed to start services. Check docker-compose.yml${NC}"
+    docker compose logs --tail 50
+    exit 1
+fi
 
-# Wait for healthy
+#-------------------------------------------------------------------------------
+# Wait for services to be ready
+#-------------------------------------------------------------------------------
 echo -e "${YELLOW}⏳ Waiting for services to be ready...${NC}"
 sleep 10
 
-# Check health
-MAX_WAIT=60
+MAX_WAIT=90
 WAITED=0
 while [[ $WAITED -lt $MAX_WAIT ]]; do
-    if docker compose ps | grep -q "healthy"; then
-        break
+    # Check if any service is healthy
+    if docker compose ps 2>/dev/null | grep -q "healthy\|running"; then
+        # Check if API is responding
+        if curl -sf http://localhost:8000/api/health > /dev/null 2>&1; then
+            break
+        fi
     fi
     sleep 5
     WAITED=$((WAITED + 5))
     echo -e "   Waiting... ($WAITED/${MAX_WAIT}s)"
 done
 
-# Get IP
-IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")
+#-------------------------------------------------------------------------------
+# Get local IP address
+#-------------------------------------------------------------------------------
+IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+if [[ -z "$IP" ]]; then
+    IP=$(ip route get 1 2>/dev/null | awk '{print $(NF-2);exit}')
+fi
+if [[ -z "$IP" ]]; then
+    IP="localhost"
+fi
 
+#-------------------------------------------------------------------------------
+# Display success message
+#-------------------------------------------------------------------------------
 echo ""
 echo -e "${GREEN}╔═══════════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${GREEN}║                    ✅ DEPLOY SUCCESSFUL                           ║${NC}"
@@ -120,9 +206,11 @@ echo -e "${GREEN}║${NC}  🔑 Password: ${YELLOW}admin${NC}                   
 echo -e "${GREEN}║${NC}                                                                   ${GREEN}║${NC}"
 echo -e "${GREEN}╚═══════════════════════════════════════════════════════════════════╝${NC}"
 echo ""
-echo -e "📋 Commands:"
+echo -e "📋 Useful Commands:"
 echo -e "   ${CYAN}docker compose logs -f${NC}      # View logs"
-echo -e "   ${CYAN}docker compose restart${NC}      # Restart"
-echo -e "   ${CYAN}docker compose down${NC}         # Stop"
+echo -e "   ${CYAN}docker compose restart${NC}      # Restart services"
+echo -e "   ${CYAN}docker compose down${NC}         # Stop services"
 echo -e "   ${CYAN}docker compose down -v${NC}      # Stop + delete data"
+echo ""
+echo -e "📚 Documentation: ${CYAN}https://github.com/huynhtrungpc01/ctf-compass${NC}"
 echo ""
