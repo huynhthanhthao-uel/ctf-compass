@@ -43,6 +43,8 @@ export function JobForm({ onSubmit, isLoading }: JobFormProps) {
   const [files, setFiles] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [autoDetected, setAutoDetected] = useState(false);
+  const [lastDetectedFiles, setLastDetectedFiles] = useState<string>('');
+  const [lastDetectedDesc, setLastDetectedDesc] = useState<string>('');
 
   const { detectFromFiles, isDetecting, result: detectionResult } = useCategoryDetector();
 
@@ -51,20 +53,52 @@ export function JobForm({ onSubmit, isLoading }: JobFormProps) {
     setError(null);
   }, []);
 
-  // Auto-detect category when files change
+  // Create a signature for current files
+  const filesSignature = files.map(f => `${f.name}:${f.size}`).join('|');
+
+  // Manual re-detect function
+  const handleRedetect = useCallback(async () => {
+    if (files.length === 0 && !description.trim()) {
+      toast.error('Add files or description to detect category');
+      return;
+    }
+
+    const result = await detectFromFiles(files, description);
+    if (result) {
+      setCategory(result.category);
+      setAutoDetected(true);
+      setLastDetectedFiles(filesSignature);
+      setLastDetectedDesc(description);
+      toast.success(`Detected category: ${result.category}`, {
+        description: `Confidence: ${Math.round(result.confidence * 100)}% • Keywords: ${result.detectedKeywords.slice(0, 3).join(', ')}`
+      });
+    }
+  }, [files, description, detectFromFiles, filesSignature]);
+
+  // Auto-detect when files are added (first time only, or when re-detect is needed)
   useEffect(() => {
-    if (files.length > 0 && !category) {
+    const shouldAutoDetect = files.length > 0 && 
+      !category && 
+      filesSignature !== lastDetectedFiles;
+
+    if (shouldAutoDetect) {
       detectFromFiles(files, description).then(result => {
         if (result && result.confidence > 0.5) {
           setCategory(result.category);
           setAutoDetected(true);
+          setLastDetectedFiles(filesSignature);
+          setLastDetectedDesc(description);
           toast.success(`Auto-detected category: ${result.category}`, {
             description: `Confidence: ${Math.round(result.confidence * 100)}% • Keywords: ${result.detectedKeywords.slice(0, 3).join(', ')}`
           });
         }
       });
     }
-  }, [files, detectFromFiles, description, category]);
+  }, [filesSignature, files, detectFromFiles, description, category, lastDetectedFiles]);
+
+  // Check if re-detection might give different results
+  const canRedetect = files.length > 0 || description.trim().length > 10;
+  const hasChangedSinceLastDetect = filesSignature !== lastDetectedFiles || description !== lastDetectedDesc;
 
   // Reset auto-detected flag when category changes manually
   const handleCategoryChange = (value: string) => {
@@ -141,7 +175,7 @@ export function JobForm({ onSubmit, isLoading }: JobFormProps) {
             </div>
 
             <div className="space-y-2">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <Label htmlFor="category">Category</Label>
                 {isDetecting && (
                   <span className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -152,8 +186,20 @@ export function JobForm({ onSubmit, isLoading }: JobFormProps) {
                 {autoDetected && detectionResult && (
                   <Badge variant="secondary" className="text-xs gap-1">
                     <Sparkles className="h-3 w-3" />
-                    Auto-detected ({Math.round(detectionResult.confidence * 100)}%)
+                    Auto ({Math.round(detectionResult.confidence * 100)}%)
                   </Badge>
+                )}
+                {canRedetect && hasChangedSinceLastDetect && !isDetecting && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 text-xs px-2 text-primary hover:text-primary"
+                    onClick={handleRedetect}
+                  >
+                    <Sparkles className="h-3 w-3 mr-1" />
+                    {category ? 'Re-detect' : 'Detect'}
+                  </Button>
                 )}
               </div>
               <Select value={category} onValueChange={handleCategoryChange} disabled={isLoading}>
@@ -168,13 +214,18 @@ export function JobForm({ onSubmit, isLoading }: JobFormProps) {
                   ))}
                 </SelectContent>
               </Select>
-              {autoDetected && detectionResult && detectionResult.detectedKeywords.length > 0 && (
+              {detectionResult && detectionResult.detectedKeywords.length > 0 && (
                 <div className="flex flex-wrap gap-1 mt-1">
                   {detectionResult.detectedKeywords.slice(0, 5).map((keyword, idx) => (
                     <Badge key={idx} variant="outline" className="text-xs font-mono">
                       {keyword}
                     </Badge>
                   ))}
+                  {hasChangedSinceLastDetect && (
+                    <Badge variant="outline" className="text-xs text-amber-500 border-amber-500/50">
+                      Changed
+                    </Badge>
+                  )}
                 </div>
               )}
             </div>
