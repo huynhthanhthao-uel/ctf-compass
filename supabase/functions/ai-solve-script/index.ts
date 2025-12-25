@@ -118,12 +118,10 @@ Create a complete, working solve script that:
   } catch (error) {
     console.error('[ai-solve-script] Error:', error);
     
-    // Return fallback script on error
-    const { host = 'localhost', port = '9999', interactions = [] } = await req.json().catch(() => ({}));
-    
+    // Return fallback script on error - use default values since body was already consumed
     return new Response(JSON.stringify({ 
       error: error instanceof Error ? error.message : 'Unknown error',
-      script: generateFallbackScript(host, port, interactions)
+      script: generateFallbackScript('localhost', '9999', [])
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

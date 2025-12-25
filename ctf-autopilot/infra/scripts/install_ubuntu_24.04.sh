@@ -121,7 +121,7 @@ print_banner() {
     echo "║     ╚██████╗   ██║   ██║         ╚██████╗╚██████╔╝██║ ╚═╝ ██║    ║"
     echo "║      ╚═════╝   ╚═╝   ╚═╝          ╚═════╝ ╚═════╝ ╚═╝     ╚═╝    ║"
     echo "║                                                                   ║"
-    echo "║                   CTF Compass v1.0.0                              ║"
+    echo "║                   CTF Compass v1.1.0                              ║"
     echo "║             Automated CTF Challenge Analyzer                      ║"
     echo "║                                                                   ║"
     echo "║     GitHub: github.com/HaryLya/ctf-compass                        ║"
