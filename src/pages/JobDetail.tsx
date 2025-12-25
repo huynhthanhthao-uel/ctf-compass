@@ -21,7 +21,8 @@ import {
   FileDown,
   PlayCircle,
   Square,
-  FileCode
+  FileCode,
+  Activity
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -40,6 +41,7 @@ import { AutopilotPanel } from '@/components/jobs/AutopilotPanel';
 import { AnalysisHistory } from '@/components/jobs/AnalysisHistory';
 import { SolveScriptGenerator } from '@/components/jobs/SolveScriptGenerator';
 import { NetcatPanel } from '@/components/jobs/NetcatPanel';
+import { JobProgressTracker } from '@/components/jobs/JobProgressTracker';
 import { useJobDetail } from '@/hooks/use-jobs';
 import { useJobWebSocket, JobUpdate } from '@/hooks/use-websocket';
 import { cn } from '@/lib/utils';
@@ -912,6 +914,10 @@ if __name__ == "__main__":
               <Wifi className="h-4 w-4" />
               Netcat
             </TabsTrigger>
+            <TabsTrigger value="progress" className="flex items-center gap-2 data-[state=active]:bg-background">
+              <Activity className="h-4 w-4" />
+              Progress
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="analysis" className="space-y-6">
@@ -1023,6 +1029,17 @@ if __name__ == "__main__":
             <NetcatPanel 
               jobId={jobDetail.id}
               onFlagFound={handleFlagFound}
+            />
+          </TabsContent>
+
+          <TabsContent value="progress">
+            <JobProgressTracker
+              jobId={jobDetail.id}
+              enabled={currentStatus === 'running' || currentStatus === 'analyzing'}
+              onComplete={() => {
+                fetchJobDetail();
+                toast.success('Analysis completed!');
+              }}
             />
           </TabsContent>
         </Tabs>
