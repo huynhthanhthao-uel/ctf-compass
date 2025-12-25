@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, forwardRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Shield, Lock, AlertCircle, Eye, EyeOff, Wifi, WifiOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/use-auth';
 
-export default function Login() {
+const Login = forwardRef<HTMLDivElement, object>(function Login(_props, ref) {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,7 +30,7 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+    <div ref={ref} className="min-h-screen flex items-center justify-center bg-background p-4">
       {/* Subtle background pattern */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-50">
         <div className="absolute inset-0" style={{
@@ -136,4 +136,6 @@ export default function Login() {
       </Card>
     </div>
   );
-}
+});
+
+export default Login;
