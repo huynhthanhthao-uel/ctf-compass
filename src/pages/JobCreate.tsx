@@ -17,10 +17,24 @@ export default function JobCreate() {
     flagFormat: string,
     files: File[],
     category?: string,
-    challengeUrl?: string
+    challengeUrl?: string,
+    netcatHost?: string,
+    netcatPort?: string
   ) => {
     try {
-      const job = await createJob(title, description, flagFormat, files, category, challengeUrl);
+      // Include netcat info in description if provided
+      let fullDescription = description;
+      if (netcatHost && netcatPort) {
+        fullDescription = `${description}\n\n[Remote Connection]\nnc ${netcatHost} ${netcatPort}`;
+      }
+      
+      const job = await createJob(title, fullDescription, flagFormat, files, category, challengeUrl);
+      
+      // Store netcat info in localStorage for the job
+      if (netcatHost && netcatPort) {
+        localStorage.setItem(`job-${job.id}-netcat`, JSON.stringify({ host: netcatHost, port: netcatPort }));
+      }
+      
       toast({
         title: 'Analysis Created',
         description: `Job "${title}" has been queued for analysis.`,
