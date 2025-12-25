@@ -48,11 +48,29 @@ A production-grade, security-first, local-only CTF challenge analyzer and writeu
 curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash
 ```
 
-### Clean Installation (Remove Old Files First)
+### Installation Options
 
 ```bash
+# Clean install (remove old installation first)
 curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --clean
+
+# Force install (skip confirmation prompts)
+curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --force
+
+# Install without starting services
+curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --no-start
+
+# Complete purge and reinstall (removes backups too)
+curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --clean --purge
 ```
+
+| Option | Description |
+|--------|-------------|
+| `--clean` | Remove old installation before installing |
+| `--clean-only` | Only cleanup, don't install (for uninstall) |
+| `--purge` | Remove everything including backups |
+| `--force` | Skip confirmation prompts |
+| `--no-start` | Don't start services after install |
 
 ### Post-Installation
 
@@ -108,18 +126,47 @@ sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh --clean
 
 ## 🗑️ Complete Uninstall
 
+### Using Uninstall Script
+
 ```bash
-# Interactive uninstall
+# Interactive uninstall (keeps backups)
 sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/uninstall.sh
 
 # Force uninstall (no prompts)
 sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/uninstall.sh --force
 
-# Keep database data
-sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/uninstall.sh --keep-data
+# Complete purge (removes backups too)
+sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/uninstall.sh --purge
+
+# Force purge (no prompts, removes everything)
+sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/uninstall.sh --force --purge
 ```
 
-### Manual Cleanup
+### Using Install Script (Alternative)
+
+```bash
+# Uninstall only (no reinstall)
+curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --clean-only
+
+# Uninstall and purge backups
+curl -fsSL https://raw.githubusercontent.com/HaryLya/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --clean-only --purge
+```
+
+### What Gets Cleaned
+
+| Component | `--clean` | `--purge` |
+|-----------|-----------|-----------|
+| Docker containers/images/volumes | ✅ | ✅ |
+| Installation directory | ✅ | ✅ |
+| Log files | ✅ | ✅ |
+| Systemd services | ✅ | ✅ |
+| Cron jobs | ✅ | ✅ |
+| Temp files | ✅ | ✅ |
+| Configuration files | ✅ | ✅ |
+| **Backups** | ❌ Preserved | ✅ Removed |
+| **User data exports** | ❌ Preserved | ✅ Removed |
+
+### Manual Cleanup (If Needed)
 
 ```bash
 # Stop all services
