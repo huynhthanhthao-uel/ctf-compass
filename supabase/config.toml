@@ -1,10 +1,1 @@
-project_id = "gstqoduzlutgtybisbff"
-
-[functions.sandbox-terminal]
-verify_jwt = false
-
-[functions.ai-analyze]
-verify_jwt = false
-
-[functions.detect-category]
-verify_jwt = false
+project_id = "ahxwjrwslhgitlugglzi"
