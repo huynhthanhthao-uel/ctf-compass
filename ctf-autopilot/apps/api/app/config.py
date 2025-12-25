@@ -32,8 +32,8 @@ class Settings(BaseSettings):
         auth = f":{self.redis_password}@" if self.redis_password else ""
         return f"redis://{auth}{self.redis_host}:{self.redis_port}/0"
     
-    # Auth - default for dev, MUST override in production
-    admin_password: str = "changeme"
+    # Auth - simple default for local deployment
+    admin_password: str = "admin"
     session_timeout_seconds: int = 3600
     
     # MegaLLM - optional, features disabled if not set

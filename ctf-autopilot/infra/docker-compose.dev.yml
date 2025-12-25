@@ -15,7 +15,7 @@ services:
       - "5432:5432"
     environment:
       - POSTGRES_USER=ctfautopilot
-      - POSTGRES_PASSWORD=devpassword
+      - POSTGRES_PASSWORD=ctfautopilot
       - POSTGRES_DB=ctfautopilot
     volumes:
       - postgres_dev_data:/var/lib/postgresql/data
