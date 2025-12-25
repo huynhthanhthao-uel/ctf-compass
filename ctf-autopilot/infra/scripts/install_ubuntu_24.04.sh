@@ -447,7 +447,7 @@ preflight_checks() {
 # System Update
 #-------------------------------------------------------------------------------
 update_system() {
-    log_step "Step 1/8: Updating system packages..."
+    log_step "Step 1/10: Updating system packages..."
     
     apt-get update -qq 2>&1 | tee -a "$LOG_FILE"
     DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq 2>&1 | tee -a "$LOG_FILE"
@@ -465,6 +465,7 @@ update_system() {
         jq \
         htop \
         net-tools \
+        make \
         2>&1 | tee -a "$LOG_FILE"
     
     log_success "System packages updated"
@@ -474,7 +475,7 @@ update_system() {
 # Docker Installation
 #-------------------------------------------------------------------------------
 install_docker() {
-    log_step "Step 2/8: Installing Docker..."
+    log_step "Step 2/10: Installing Docker..."
     
     if command -v docker &> /dev/null && docker compose version &> /dev/null; then
         DOCKER_VERSION=$(docker --version | awk '{print $3}' | tr -d ',')
@@ -525,7 +526,7 @@ install_docker() {
 # Firewall Configuration
 #-------------------------------------------------------------------------------
 configure_firewall() {
-    log_step "Step 3/8: Configuring firewall..."
+    log_step "Step 3/10: Configuring firewall..."
     
     ufw --force reset > /dev/null 2>&1
     ufw default deny incoming > /dev/null
@@ -537,6 +538,11 @@ configure_firewall() {
     ufw allow 3000/tcp comment 'CTF Compass Web' > /dev/null
     ufw allow 8000/tcp comment 'CTF Compass API' > /dev/null
     
+    # Monitoring ports (optional - uncomment if needed externally)
+    # ufw allow 3001/tcp comment 'Grafana' > /dev/null
+    # ufw allow 9090/tcp comment 'Prometheus' > /dev/null
+    # ufw allow 9093/tcp comment 'Alertmanager' > /dev/null
+    
     ufw --force enable > /dev/null
     
     log_success "Firewall configured"
@@ -546,7 +552,7 @@ configure_firewall() {
 # Fail2ban Configuration
 #-------------------------------------------------------------------------------
 configure_fail2ban() {
-    log_step "Step 4/8: Configuring fail2ban..."
+    log_step "Step 4/10: Configuring fail2ban..."
     
     cat > /etc/fail2ban/jail.local << 'EOF'
 [DEFAULT]
@@ -574,7 +580,7 @@ EOF
 # Repository Setup
 #-------------------------------------------------------------------------------
 setup_repository() {
-    log_step "Step 5/8: Setting up repository..."
+    log_step "Step 5/10: Setting up repository..."
     
     # Ensure we're in a valid directory before git operations
     cd /tmp || cd /root || cd /
@@ -588,6 +594,9 @@ setup_repository() {
     CURRENT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
     log_info "Version: $CURRENT_COMMIT"
     
+    # Make scripts executable
+    chmod +x ctf-autopilot/infra/scripts/*.sh 2>/dev/null || true
+    
     log_success "Repository ready at $INSTALL_DIR"
 }
 
@@ -595,7 +604,7 @@ setup_repository() {
 # Environment Configuration
 #-------------------------------------------------------------------------------
 configure_environment() {
-    log_step "Step 6/8: Configuring environment..."
+    log_step "Step 6/10: Configuring environment..."
     
     cd "$INSTALL_DIR"
     
@@ -604,6 +613,7 @@ configure_environment() {
     POSTGRES_PASSWORD=$(openssl rand -base64 32 | tr -dc 'a-zA-Z0-9' | head -c 32)
     ADMIN_PASSWORD=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 16)
     REDIS_PASSWORD=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 24)
+    GRAFANA_PASSWORD=$(openssl rand -base64 16 | tr -dc 'a-zA-Z0-9' | head -c 12)
     
     # Create .env file
     cat > .env << EOF
@@ -639,6 +649,9 @@ DEBUG=false
 
 # TLS (set to true for HTTPS)
 ENABLE_TLS=false
+
+# Monitoring (Grafana)
+GRAFANA_PASSWORD=$GRAFANA_PASSWORD
 EOF
 
     # Keep secrets readable by the installing user (so they can run docker compose without sudo)
@@ -649,10 +662,12 @@ EOF
 
     # Copy to infra directory for docker-compose (compose loads .env from the compose file directory)
     cp .env ctf-autopilot/infra/.env
+    cp .env ctf-autopilot/infra/monitoring/.env 2>/dev/null || true
     if [[ -n "${SUDO_USER:-}" ]]; then
         chown "$SUDO_USER":"$SUDO_USER" ctf-autopilot/infra/.env
     fi
     chmod 600 ctf-autopilot/infra/.env
+    
     # Save credentials
     cat > CREDENTIALS.txt << EOF
 #===============================================================================
@@ -669,6 +684,11 @@ Database:
   Database: ctfautopilot
 
 Redis Password: $REDIS_PASSWORD
+
+Monitoring:
+  Grafana URL: http://YOUR_IP:3001
+  Grafana User: admin
+  Grafana Password: $GRAFANA_PASSWORD
 
 #===============================================================================
 # IMPORTANT: Set your MegaLLM API key!
@@ -692,6 +712,7 @@ EOF
     echo -e "${YELLOW}╠═══════════════════════════════════════════════════════════════════╣${NC}"
     echo -e "${YELLOW}║${NC}                                                                   ${YELLOW}║${NC}"
     echo -e "${YELLOW}║${NC}  Admin Password: ${CYAN}${ADMIN_PASSWORD}${NC}                                  ${YELLOW}║${NC}"
+    echo -e "${YELLOW}║${NC}  Grafana Password: ${CYAN}${GRAFANA_PASSWORD}${NC}                              ${YELLOW}║${NC}"
     echo -e "${YELLOW}║${NC}                                                                   ${YELLOW}║${NC}"
     echo -e "${YELLOW}║${NC}  Credentials saved to: ${CYAN}$INSTALL_DIR/CREDENTIALS.txt${NC}  ${YELLOW}║${NC}"
     echo -e "${YELLOW}║${NC}                                                                   ${YELLOW}║${NC}"
@@ -705,7 +726,7 @@ EOF
 # Build Sandbox Image
 #-------------------------------------------------------------------------------
 build_sandbox() {
-    log_step "Step 7/8: Building sandbox image..."
+    log_step "Step 7/10: Building sandbox image..."
     
     cd "$INSTALL_DIR"
     
@@ -734,6 +755,47 @@ build_sandbox() {
 }
 
 #-------------------------------------------------------------------------------
+# Setup Backup & Health Check
+#-------------------------------------------------------------------------------
+setup_maintenance() {
+    log_step "Step 8/10: Setting up backup & health check..."
+    
+    cd "$INSTALL_DIR"
+    
+    # Create backup directory
+    mkdir -p "$BACKUP_DIR"
+    chmod 700 "$BACKUP_DIR"
+    
+    # Setup daily backup cron (2 AM)
+    local backup_script="$INSTALL_DIR/ctf-autopilot/infra/scripts/backup.sh"
+    if [[ -f "$backup_script" ]]; then
+        chmod +x "$backup_script"
+        
+        # Add to cron
+        local cron_entry="0 2 * * * $backup_script --backup >> /var/log/ctf-compass-backup.log 2>&1"
+        if ! crontab -l 2>/dev/null | grep -q "backup.sh"; then
+            (crontab -l 2>/dev/null; echo "$cron_entry") | crontab -
+            log_info "Daily backup cron job added (2 AM)"
+        fi
+    fi
+    
+    # Setup health check cron (every 5 minutes)
+    local health_script="$INSTALL_DIR/ctf-autopilot/infra/scripts/health-check.sh"
+    if [[ -f "$health_script" ]]; then
+        chmod +x "$health_script"
+        
+        # Add to cron
+        local health_cron="*/5 * * * * $health_script --check >> /var/log/ctf-compass-health.log 2>&1"
+        if ! crontab -l 2>/dev/null | grep -q "health-check.sh"; then
+            (crontab -l 2>/dev/null; echo "$health_cron") | crontab -
+            log_info "Health check cron job added (every 5 minutes)"
+        fi
+    fi
+    
+    log_success "Backup & health check configured"
+}
+
+#-------------------------------------------------------------------------------
 # Start Services
 #-------------------------------------------------------------------------------
 start_services() {
@@ -742,12 +804,12 @@ start_services() {
         return 0
     fi
     
-    log_step "Step 8/8: Starting services..."
+    log_step "Step 9/10: Starting services..."
     
     cd "$INSTALL_DIR"
     
     # Create data directories
-    mkdir -p data/runs ctf-autopilot/data/runs
+    mkdir -p data/runs ctf-autopilot/data/runs backups
     
     # Export environment
     set -a
@@ -802,6 +864,8 @@ start_services() {
 # Print Summary
 #-------------------------------------------------------------------------------
 print_summary() {
+    log_step "Step 10/10: Installation complete!"
+    
     VERSION=$(cd "$INSTALL_DIR" && git rev-parse --short HEAD 2>/dev/null || echo 'unknown')
     SERVER_IP=$(hostname -I | awk '{print $1}')
     
@@ -826,14 +890,22 @@ print_summary() {
     echo -e "${CYAN}Next Steps:${NC}"
     echo "  1. Open the Web UI and log in with your admin password"
     echo "  2. Go to Configuration page to set your MegaLLM API key"
-    echo "  3. Start analyzing CTF challenges!"
+    echo "  3. (Optional) Configure alerts: make health-setup"
+    echo "  4. (Optional) Start monitoring: make monitor-start"
+    echo "  5. Start analyzing CTF challenges!"
     echo ""
-    echo -e "${CYAN}Useful Commands:${NC}"
-    echo "  View logs:     docker compose -f $INSTALL_DIR/ctf-autopilot/infra/docker-compose.yml logs -f"
-    echo "  Stop:          docker compose -f $INSTALL_DIR/ctf-autopilot/infra/docker-compose.yml down"
-    echo "  Start:         docker compose -f $INSTALL_DIR/ctf-autopilot/infra/docker-compose.yml up -d"
-    echo "  Update:        sudo bash $INSTALL_DIR/ctf-autopilot/infra/scripts/update.sh"
-    echo "  Uninstall:     sudo bash $INSTALL_DIR/ctf-autopilot/infra/scripts/uninstall.sh"
+    echo -e "${CYAN}Quick Commands (from $INSTALL_DIR/ctf-autopilot):${NC}"
+    echo "  make help          # Show all available commands"
+    echo "  make status        # Check service status"
+    echo "  make logs          # View logs"
+    echo "  make update        # Pull latest & rebuild"
+    echo "  make backup        # Create database backup"
+    echo "  make health-setup  # Configure Telegram/Discord alerts"
+    echo "  make monitor-start # Start Prometheus + Grafana"
+    echo ""
+    echo -e "${CYAN}Monitoring (after 'make monitor-start'):${NC}"
+    echo "  Grafana:      http://${SERVER_IP}:3001 (admin / see CREDENTIALS.txt)"
+    echo "  Prometheus:   http://${SERVER_IP}:9090"
     echo ""
     echo -e "${CYAN}Documentation:${NC}"
     echo "  README:        $INSTALL_DIR/ctf-autopilot/README.md"
@@ -867,6 +939,7 @@ main() {
     setup_repository
     configure_environment
     build_sandbox
+    setup_maintenance
     start_services
     print_summary
     
