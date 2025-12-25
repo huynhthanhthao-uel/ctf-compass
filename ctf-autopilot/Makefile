@@ -241,5 +241,18 @@ health-test:
 
 health-cron:
 	@bash $(INSTALL_DIR)/ctf-autopilot/infra/scripts/health-check.sh --setup-cron
-	@docker volume prune -f
-	@echo "$(GREEN)✅ Full cleanup complete$(NC)"
+
+# ============================================
+# Backup Cron
+# ============================================
+
+backup-cron:
+	@echo "$(GREEN)⏰ Setting up daily backup cron job...$(NC)"
+	@bash $(INSTALL_DIR)/ctf-autopilot/infra/scripts/backup.sh --setup-cron
+	@echo "$(GREEN)✅ Backup cron setup complete$(NC)"
+
+backup-list:
+	@bash $(INSTALL_DIR)/ctf-autopilot/infra/scripts/backup.sh --list
+
+backup-cleanup:
+	@bash $(INSTALL_DIR)/ctf-autopilot/infra/scripts/backup.sh --cleanup
