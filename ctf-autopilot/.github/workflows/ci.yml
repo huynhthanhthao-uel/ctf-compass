@@ -1,4 +1,5 @@
-# CTF Autopilot - CI/CD Pipeline
+# CTF Compass - CI/CD Pipeline
+# Repository: https://github.com/HaryLya/ctf-compass.git
 # Runs on push to main and pull requests
 
 name: CI
