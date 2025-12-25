@@ -14,9 +14,10 @@
 #
 #===============================================================================
 
-set -euo pipefail
+# Use -eo instead of -euo to handle potential unbound BASH_SOURCE
+set -eo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
 
 # Colors
