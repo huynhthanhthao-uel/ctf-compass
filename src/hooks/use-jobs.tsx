@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Job, JobDetail } from '@/lib/types';
-import { mockJobs, mockJobDetail, mockJob003Commands, mockJob003Artifacts, mockJob003Flags, mockJob003Writeup, updateMockJobStatus } from '@/lib/mock-data';
+import { mockJobs, mockJobDetail, mockJob003Commands, mockJob003Artifacts, mockJob003Flags, mockJob003Writeup, mockJob006Commands, mockJob006Artifacts, mockJob006Flags, mockJob006Writeup, updateMockJobStatus } from '@/lib/mock-data';
 import * as api from '@/lib/api';
 import { useNotifications } from './use-notifications';
 
@@ -477,6 +477,19 @@ export function useJobDetail(jobId: string) {
             artifacts: isCompleted ? mockJob003Artifacts : [],
             flagCandidates: isCompleted ? mockJob003Flags : [],
             writeup: isCompleted ? mockJob003Writeup : undefined,
+          });
+        }
+      } else if (jobId === 'job-006') {
+        const job = mockJobs.find(j => j.id === jobId);
+        if (job) {
+          const isCompleted = job.status === 'done';
+          setJobDetail({
+            ...job,
+            inputFiles: ['encoded.txt'],
+            commands: isCompleted ? mockJob006Commands : [],
+            artifacts: isCompleted ? mockJob006Artifacts : [],
+            flagCandidates: isCompleted ? mockJob006Flags : [],
+            writeup: isCompleted ? mockJob006Writeup : undefined,
           });
         }
       } else {
