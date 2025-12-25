@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { FilePreview } from './FilePreview';
 
 const CHALLENGE_CATEGORIES = [
   { value: 'crypto', label: 'Crypto' },
@@ -215,29 +216,20 @@ export function JobForm({ onSubmit, isLoading }: JobFormProps) {
           </div>
 
           {files.length > 0 && (
-            <div className="space-y-2">
+            <div className="space-y-3">
               <div className="text-sm text-muted-foreground flex items-center gap-2">
                 <FolderOpen className="h-4 w-4" />
                 {files.length} file{files.length > 1 ? 's' : ''} selected
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 {files.map((file, index) => (
-                  <div
-                    key={`${file.name}-${index}`}
-                    className="flex items-center justify-between p-2.5 rounded-lg bg-secondary/50 border border-border"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                      <span className="text-sm text-foreground truncate">{file.name}</span>
-                      <span className="text-xs text-muted-foreground shrink-0">
-                        {formatFileSize(file.size)}
-                      </span>
-                    </div>
+                  <div key={`${file.name}-${index}`} className="relative">
+                    <FilePreview file={file} />
                     <Button
                       type="button"
-                      variant="ghost"
+                      variant="destructive"
                       size="icon"
-                      className="h-7 w-7 shrink-0"
+                      className="absolute top-2 right-2 h-7 w-7 z-10"
                       onClick={() => removeFile(index)}
                       disabled={isLoading}
                     >
