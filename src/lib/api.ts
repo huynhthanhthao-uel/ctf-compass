@@ -1,35 +1,31 @@
-import { getBackendUrlHeaders, getBackendUrlFromStorage } from "@/lib/backend-url";
+import { getBackendUrlFromStorage } from "@/lib/backend-url";
+
+// Custom error classes for specific handling
+export class RateLimitError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RateLimitError';
+  }
+}
+
+export class PaymentRequiredError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'PaymentRequiredError';
+  }
+}
 
 /**
- * API client for CTF Autopilot backend
- * Supabase is loaded lazily only when needed (for Lovable Cloud fallback)
+ * API client for CTF Autopilot Docker backend
+ * All operations require a configured Docker backend URL
  */
 
 function getApiBase(): string {
   const backendUrl = getBackendUrlFromStorage();
-  return backendUrl ? `${backendUrl}/api` : "/api";
-}
-
-// Lazy-loaded Supabase client (only loaded when edge functions are needed)
-let supabaseClient: Awaited<typeof import("@/integrations/supabase/client")>["supabase"] | null = null;
-
-async function getSupabaseClient() {
-  if (supabaseClient) return supabaseClient;
-  
-  try {
-    // Only import Supabase when actually needed
-    const { supabase } = await import("@/integrations/supabase/client");
-    supabaseClient = supabase;
-    return supabaseClient;
-  } catch (err) {
-    console.warn('[API] Supabase not available:', err);
-    return null;
+  if (!backendUrl) {
+    throw new Error('Backend URL not configured. Go to Settings → Docker Backend URL to configure.');
   }
-}
-
-// Check if Supabase is configured
-function isSupabaseConfigured(): boolean {
-  return !!(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY);
+  return `${backendUrl}/api`;
 }
 
 // Get CSRF token from cookie
@@ -52,6 +48,7 @@ async function apiFetch<T>(
 
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
+    'Accept': 'application/json',
     ...options.headers,
   };
 
@@ -74,7 +71,7 @@ async function apiFetch<T>(
 
   // Check if we got HTML instead of JSON (backend not running)
   if (isHtmlResponse(text)) {
-    throw new Error('Backend API not available. Please deploy the backend first.');
+    throw new Error('Backend not reachable. Check your Docker Backend URL in Settings.');
   }
 
   if (!response.ok) {
@@ -82,9 +79,9 @@ async function apiFetch<T>(
     if (text) {
       try {
         const parsed = JSON.parse(text);
-        detail = parsed?.detail || parsed?.error || detail;
+        detail = parsed?.detail || parsed?.error || parsed?.message || detail;
       } catch {
-        detail = text;
+        detail = text.substring(0, 200);
       }
     }
     throw new Error(detail);
@@ -93,7 +90,11 @@ async function apiFetch<T>(
   // Handle empty responses
   if (!text) return {} as T;
 
-  return JSON.parse(text);
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error('Invalid JSON response from backend');
+  }
 }
 
 
@@ -181,6 +182,11 @@ export async function createJob(
   category?: string,
   challengeUrl?: string
 ): Promise<Job> {
+  const backendUrl = getBackendUrlFromStorage();
+  if (!backendUrl) {
+    throw new Error('Backend URL not configured. Go to Settings to configure.');
+  }
+
   const formData = new FormData();
   formData.append('title', title);
   formData.append('description', description);
@@ -190,27 +196,34 @@ export async function createJob(
   files.forEach((file) => formData.append('files', file));
   
   const csrfToken = getCsrfToken();
-  const headers: HeadersInit = {};
+  const headers: HeadersInit = {
+    'Accept': 'application/json',
+  };
   if (csrfToken) {
     headers['X-CSRF-Token'] = csrfToken;
   }
   
-  const response = await fetch(`${getApiBase()}/jobs`, {
+  const response = await fetch(`${backendUrl}/api/jobs`, {
     method: 'POST',
     body: formData,
     credentials: 'include',
     headers,
   });
   
-  // Check for HTML response (backend not available)
   const text = await response.text();
+  
   if (isHtmlResponse(text)) {
-    throw new Error('Backend API not available. Using mock mode.');
+    throw new Error('Backend not reachable. Check your Docker Backend URL in Settings.');
   }
   
   if (!response.ok) {
-    const error = text ? JSON.parse(text) : { detail: 'Unknown error' };
-    throw new Error(error.detail || `HTTP ${response.status}`);
+    let error = { detail: `HTTP ${response.status}` };
+    try {
+      error = JSON.parse(text);
+    } catch {
+      error.detail = text.substring(0, 200) || error.detail;
+    }
+    throw new Error(error.detail || error.toString());
   }
   
   return JSON.parse(text);
@@ -262,6 +275,11 @@ export async function checkForUpdates(): Promise<UpdateCheckResponse> {
 }
 
 export async function performUpdate(): Promise<Response> {
+  const backendUrl = getBackendUrlFromStorage();
+  if (!backendUrl) {
+    throw new Error('Backend URL not configured');
+  }
+
   const csrfToken = getCsrfToken();
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
@@ -270,7 +288,7 @@ export async function performUpdate(): Promise<Response> {
     headers['X-CSRF-Token'] = csrfToken;
   }
   
-  return fetch(`${getApiBase()}/system/update`, {
+  return fetch(`${backendUrl}/api/system/update`, {
     method: 'POST',
     headers,
     credentials: 'include',
@@ -337,138 +355,19 @@ export interface TerminalCommandResult {
   duration_ms?: number;
 }
 
-// Retry config with exponential backoff
-const MAX_RETRIES = 3;
-const INITIAL_DELAY_MS = 1000;
-
-async function invokeEdgeFunctionWithRetry<T>(
-  functionName: string,
-  body: unknown,
-  retries = MAX_RETRIES,
-  headers?: Record<string, string>
-): Promise<T> {
-  // Check if Supabase is configured before attempting
-  if (!isSupabaseConfigured()) {
-    throw new Error('Supabase not configured. Using local backend only.');
-  }
-
-  const supabase = await getSupabaseClient();
-  if (!supabase) {
-    throw new Error('Supabase client not available. Using local backend only.');
-  }
-
-  let lastError: Error | null = null;
-  let delay = INITIAL_DELAY_MS;
-
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      const { data, error } = await supabase.functions.invoke(functionName, { 
-        body,
-        headers,
-      });
-
-      if (error) {
-        const msg = error.message || '';
-        // Handle rate limit (429) and payment required (402)
-        if (msg.includes('429') || msg.toLowerCase().includes('rate limit')) {
-          throw new RateLimitError('Rate limit exceeded. Please wait and try again.');
-        }
-        if (msg.includes('402') || msg.toLowerCase().includes('payment')) {
-          throw new PaymentRequiredError('AI credits exhausted. Please add funds to your workspace.');
-        }
-        throw new Error(msg || 'Edge function error');
-      }
-
-      return data as T;
-    } catch (err) {
-      lastError = err instanceof Error ? err : new Error('Unknown error');
-
-      // Don't retry for non-retriable errors
-      if (err instanceof RateLimitError || err instanceof PaymentRequiredError) {
-        throw err;
-      }
-
-      if (attempt < retries) {
-        console.log(`[API] Retry ${attempt + 1}/${retries} for ${functionName} after ${delay}ms`);
-        await new Promise((resolve) => setTimeout(resolve, delay));
-        delay *= 2; // exponential backoff
-      }
-    }
-  }
-
-  throw lastError ?? new Error('Edge function failed after retries');
-}
-
-// Custom error classes for specific handling
-export class RateLimitError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'RateLimitError';
-  }
-}
-
-export class PaymentRequiredError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'PaymentRequiredError';
-  }
-}
-
-async function invokeEdgeFunction<T>(functionName: string, body: unknown, headers?: Record<string, string>): Promise<T> {
-  return invokeEdgeFunctionWithRetry<T>(functionName, body, MAX_RETRIES, headers);
-}
-
-async function executeViaEdgeFunction(
-  jobId: string,
-  tool: string,
-  args: string[]
-): Promise<TerminalCommandResult> {
-  return invokeEdgeFunction<TerminalCommandResult>('sandbox-terminal', {
-    job_id: jobId,
-    tool,
-    args,
-  }, getBackendUrlHeaders());
-}
-
-
 export async function executeTerminalCommand(
   jobId: string,
   tool: string,
   args: string[]
 ): Promise<TerminalCommandResult> {
-  try {
-    // Try Docker backend first
-    return await apiFetch(`/jobs/${jobId}/terminal`, {
-      method: 'POST',
-      body: JSON.stringify({ tool, arguments: args }),
-    });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : '';
-    
-    // If Docker backend not available, fallback to Lovable Cloud edge function
-    if (message.includes('Backend API not available') || message.includes('HTTP 404')) {
-      console.log('[API] Docker backend unavailable, using Lovable Cloud edge function');
-      return executeViaEdgeFunction(jobId, tool, args);
-    }
-    
-    throw err;
-  }
+  return apiFetch(`/jobs/${jobId}/terminal`, {
+    method: 'POST',
+    body: JSON.stringify({ tool, arguments: args }),
+  });
 }
 
 export async function getJobFiles(jobId: string): Promise<{ files: string[] }> {
-  try {
-    return await apiFetch(`/jobs/${jobId}/files`);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : '';
-    // Return mock files for demo when backend unavailable
-    if (message.includes('Backend API not available') || message.includes('HTTP 404')) {
-      if (jobId === 'job-003') {
-        return { files: ['challenge'] };
-      }
-      return { files: [] };
-    }
-    throw err;
-  }
+  return apiFetch(`/jobs/${jobId}/files`);
 }
 
 // ============ AI Analysis API ============
@@ -520,43 +419,20 @@ export async function analyzeWithAI(
   requestScript: boolean = false,
   earlyFlags: string[] = []
 ): Promise<AIAnalysisResponse> {
-  try {
-    return await apiFetch('/ai/analyze', {
-      method: 'POST',
-      body: JSON.stringify({
-        job_id: jobId,
-        files,
-        command_history: commandHistory,
-        description,
-        flag_format: flagFormat,
-        current_category: currentCategory,
-        attempt_number: attemptNumber,
-        request_script: requestScript,
-        early_flags: earlyFlags,
-      }),
-    });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : '';
-    if (
-      message.includes('Backend API not available') ||
-      message.includes('HTTP 404') ||
-      message.toLowerCase().includes('not found')
-    ) {
-      console.log('[API] AI backend unavailable, using Lovable Cloud function');
-      return invokeEdgeFunction<AIAnalysisResponse>('ai-analyze', {
-        job_id: jobId,
-        files,
-        command_history: commandHistory,
-        description,
-        flag_format: flagFormat,
-        current_category: currentCategory,
-        attempt_number: attemptNumber,
-        request_script: requestScript,
-        early_flags: earlyFlags,
-      });
-    }
-    throw err;
-  }
+  return apiFetch('/ai/analyze', {
+    method: 'POST',
+    body: JSON.stringify({
+      job_id: jobId,
+      files,
+      command_history: commandHistory,
+      description,
+      flag_format: flagFormat,
+      current_category: currentCategory,
+      attempt_number: attemptNumber,
+      request_script: requestScript,
+      early_flags: earlyFlags,
+    }),
+  });
 }
 
 // Execute Python script in sandbox
@@ -564,32 +440,15 @@ export async function executePythonInSandbox(
   jobId: string,
   script: string
 ): Promise<TerminalCommandResult> {
-  try {
-    return await apiFetch(`/jobs/${jobId}/terminal`, {
-      method: 'POST',
-      body: JSON.stringify({ 
-        tool: 'python3', 
-        arguments: ['-c', script],
-        script,
-        script_type: 'python'
-      }),
-    });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : '';
-    
-    // Fallback to edge function
-    if (message.includes('Backend API not available') || message.includes('HTTP 404')) {
-      console.log('[API] Using Lovable Cloud for script execution');
-      return invokeEdgeFunction<TerminalCommandResult>('sandbox-terminal', {
-        job_id: jobId,
-        tool: 'python3',
-        script,
-        script_type: 'python',
-      });
-    }
-    
-    throw err;
-  }
+  return apiFetch(`/jobs/${jobId}/terminal`, {
+    method: 'POST',
+    body: JSON.stringify({ 
+      tool: 'python3', 
+      arguments: ['-c', script],
+      script,
+      script_type: 'python'
+    }),
+  });
 }
 
 export interface DetectCategoryResponse {
@@ -602,31 +461,14 @@ export async function detectCategory(
   fileOutputs: Record<string, string> = {},
   stringsOutputs: Record<string, string> = {}
 ): Promise<DetectCategoryResponse> {
-  try {
-    return await apiFetch('/ai/detect-category', {
-      method: 'POST',
-      body: JSON.stringify({
-        files,
-        file_outputs: fileOutputs,
-        strings_outputs: stringsOutputs,
-      }),
-    });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : '';
-    if (
-      message.includes('Backend API not available') ||
-      message.includes('HTTP 404') ||
-      message.toLowerCase().includes('not found')
-    ) {
-      console.log('[API] detect-category backend unavailable, using Lovable Cloud function');
-      return invokeEdgeFunction<DetectCategoryResponse>('detect-category', {
-        files,
-        file_outputs: fileOutputs,
-        strings_outputs: stringsOutputs,
-      });
-    }
-    throw err;
-  }
+  return apiFetch('/ai/detect-category', {
+    method: 'POST',
+    body: JSON.stringify({
+      files,
+      file_outputs: fileOutputs,
+      strings_outputs: stringsOutputs,
+    }),
+  });
 }
 
 
@@ -857,85 +699,6 @@ export async function runPythonScript(request: RunScriptRequest): Promise<RunScr
   });
 }
 
-// ============ File Upload to Edge Function ============
-
-export interface FileUploadResult {
-  success: boolean;
-  message: string;
-  analysis?: {
-    type: string;
-    category: string;
-    findings: string[];
-    flags_found: number;
-  };
-}
-
-/**
- * Upload file content to edge function for analysis
- */
-export async function uploadFileForAnalysis(
-  jobId: string,
-  fileName: string,
-  fileContent: string,
-  fileType: string = 'unknown'
-): Promise<FileUploadResult> {
-  return invokeEdgeFunction<FileUploadResult>('sandbox-terminal', {
-    job_id: jobId,
-    action: 'upload',
-    file_name: fileName,
-    file_content: fileContent,
-    file_type: fileType,
-  });
-}
-
-/**
- * Upload multiple files for a job
- */
-export async function uploadFilesForJob(
-  jobId: string,
-  files: File[]
-): Promise<FileUploadResult[]> {
-  const results: FileUploadResult[] = [];
-  
-  for (const file of files) {
-    try {
-      const content = await readFileAsText(file);
-      const result = await uploadFileForAnalysis(
-        jobId,
-        file.name,
-        content,
-        file.type || 'unknown'
-      );
-      results.push(result);
-    } catch (error) {
-      console.error(`Failed to upload file ${file.name}:`, error);
-      results.push({
-        success: false,
-        message: `Failed to upload ${file.name}: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      });
-    }
-  }
-  
-  return results;
-}
-
-/**
- * Read file as text (with binary fallback to base64)
- */
-async function readFileAsText(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      resolve(result);
-    };
-    reader.onerror = () => reject(reader.error);
-    
-    // Try to read as text, fallback handled by edge function
-    reader.readAsText(file);
-  });
-}
-
 // ============ Netcat Challenge Support ============
 
 export interface NetcatConnectionResult {
@@ -946,9 +709,6 @@ export interface NetcatConnectionResult {
   interaction_log?: string[];
 }
 
-/**
- * Execute netcat connection to remote server
- */
 export async function executeNetcatCommand(
   jobId: string,
   host: string,
@@ -956,18 +716,17 @@ export async function executeNetcatCommand(
   payload?: string,
   timeout: number = 10
 ): Promise<NetcatConnectionResult> {
-  return invokeEdgeFunction<NetcatConnectionResult>('sandbox-terminal', {
-    job_id: jobId,
-    tool: 'nc',
-    args: [host, String(port)],
-    payload,
-    timeout,
+  return apiFetch(`/jobs/${jobId}/terminal`, {
+    method: 'POST',
+    body: JSON.stringify({
+      tool: 'nc',
+      arguments: [host, String(port)],
+      payload,
+      timeout,
+    }),
   });
 }
 
-/**
- * Simulate netcat interaction with script
- */
 export async function executeNetcatInteraction(
   jobId: string,
   host: string,
@@ -975,11 +734,13 @@ export async function executeNetcatInteraction(
   script: string[],
   timeout: number = 30
 ): Promise<NetcatConnectionResult> {
-  return invokeEdgeFunction<NetcatConnectionResult>('sandbox-terminal', {
-    job_id: jobId,
-    tool: 'nc_interact',
-    args: [host, String(port)],
-    interaction_script: script,
-    timeout,
+  return apiFetch(`/jobs/${jobId}/terminal`, {
+    method: 'POST',
+    body: JSON.stringify({
+      tool: 'nc_interact',
+      arguments: [host, String(port)],
+      interaction_script: script,
+      timeout,
+    }),
   });
 }
