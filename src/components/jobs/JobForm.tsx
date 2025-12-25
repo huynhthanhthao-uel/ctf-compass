@@ -21,6 +21,8 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { CategoryConfidenceChart } from './CategoryConfidenceChart';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { TemplateSelector } from './TemplateSelector';
+import { ChallengeTemplate } from '@/hooks/use-challenge-templates';
 
 const CHALLENGE_CATEGORIES = [
   { value: 'crypto', label: 'Crypto' },
@@ -148,6 +150,18 @@ export function JobForm({ onSubmit, isLoading }: JobFormProps) {
     toast.success(`Selected category: ${cat}`);
   };
 
+  // Handle template selection
+  const handleSelectTemplate = useCallback((template: ChallengeTemplate) => {
+    setTitle(template.titlePattern);
+    setDescription(template.description);
+    setFlagFormat(template.flagFormat);
+    setCategory(template.category);
+    setAutoDetected(false);
+    toast.success(`Template "${template.name}" applied!`, {
+      description: `Category: ${template.category} • Flag format loaded`
+    });
+  }, []);
+
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     maxSize: 200 * 1024 * 1024,
@@ -200,8 +214,22 @@ export function JobForm({ onSubmit, isLoading }: JobFormProps) {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Challenge Information</CardTitle>
-          <CardDescription>Enter the details of the CTF challenge</CardDescription>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <CardTitle className="text-base">Challenge Information</CardTitle>
+              <CardDescription>Enter the details of the CTF challenge</CardDescription>
+            </div>
+            <TemplateSelector
+              onSelectTemplate={handleSelectTemplate}
+              currentData={{
+                category,
+                title,
+                description,
+                flagFormat
+              }}
+              disabled={isLoading}
+            />
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
