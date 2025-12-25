@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Save, RotateCcw, Shield, Clock, Upload, Wrench, Key, Cpu, CheckCircle, Eye, EyeOff, Loader2, RefreshCw, Download, Trash2, AlertTriangle, Github, Play, Terminal } from 'lucide-react';
+import { Save, RotateCcw, Shield, Clock, Upload, Wrench, Key, Cpu, CheckCircle, Eye, EyeOff, Loader2, RefreshCw, Download, Trash2, AlertTriangle, Github, Play, Terminal, Server } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -128,6 +128,9 @@ export default function Configuration() {
   const [apiKeyValid, setApiKeyValid] = useState<boolean | null>(null);
   const [isTesting, setIsTesting] = useState(false);
   const [isBackendConnected, setIsBackendConnected] = useState(false);
+  const [backendUrl, setBackendUrl] = useState('http://localhost:8000');
+  const [isTestingBackend, setIsTestingBackend] = useState(false);
+  const [backendStatus, setBackendStatus] = useState<'unknown' | 'connected' | 'error'>('unknown');
   const [selectedModels, setSelectedModels] = useState({
     analysis: 'llama3.3-70b-instruct',
     writeup: 'llama3.3-70b-instruct',
@@ -210,10 +213,59 @@ export default function Configuration() {
           }
         }
       }
+      
+      // Always load backend URL from localStorage
+      const storedBackendUrl = localStorage.getItem('ctf_backend_url');
+      if (storedBackendUrl) {
+        setBackendUrl(storedBackendUrl);
+      }
     };
     
     init();
   }, []);
+  
+  // Test backend connection
+  const testBackendConnection = async () => {
+    setIsTestingBackend(true);
+    setBackendStatus('unknown');
+    
+    try {
+      const response = await fetch(`${backendUrl}/api/health`, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.status === 'healthy') {
+          setBackendStatus('connected');
+          localStorage.setItem('ctf_backend_url', backendUrl);
+          toast({
+            title: 'Backend Connected',
+            description: `Successfully connected to ${backendUrl}`,
+          });
+        } else {
+          setBackendStatus('error');
+        }
+      } else {
+        setBackendStatus('error');
+        toast({
+          title: 'Connection Failed',
+          description: `Backend returned status ${response.status}`,
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      setBackendStatus('error');
+      toast({
+        title: 'Connection Failed',
+        description: error instanceof Error ? error.message : 'Could not reach backend',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsTestingBackend(false);
+    }
+  };
   
   // Check for updates
   const checkForUpdates = async () => {
@@ -718,7 +770,77 @@ export default function Configuration() {
             </CardContent>
           </Card>
 
-          {/* API Key Configuration */}
+          {/* Docker Backend URL Configuration */}
+          <Card className="border-cyan-500/40 bg-gradient-to-r from-cyan-500/5 to-transparent">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Server className="h-5 w-5 text-cyan-500" />
+                Docker Backend URL
+              </CardTitle>
+              <CardDescription>
+                Configure the URL of your self-hosted CTF Autopilot Docker backend
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="backendUrl">Backend URL</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="backendUrl"
+                    type="text"
+                    placeholder="http://localhost:8000"
+                    value={backendUrl}
+                    onChange={(e) => {
+                      setBackendUrl(e.target.value);
+                      setBackendStatus('unknown');
+                      setIsDirty(true);
+                    }}
+                    className="flex-1 font-mono"
+                    disabled={isTestingBackend}
+                  />
+                  <Button 
+                    variant="outline" 
+                    onClick={testBackendConnection}
+                    disabled={isTestingBackend || !backendUrl}
+                  >
+                    {isTestingBackend ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Testing...
+                      </>
+                    ) : (
+                      <>
+                        <Play className="h-4 w-4 mr-2" />
+                        Test
+                      </>
+                    )}
+                  </Button>
+                </div>
+                {backendStatus === 'connected' && (
+                  <p className="text-sm text-success flex items-center gap-1">
+                    <CheckCircle className="h-4 w-4" />
+                    Backend connected and healthy
+                  </p>
+                )}
+                {backendStatus === 'error' && (
+                  <p className="text-sm text-destructive flex items-center gap-1">
+                    <AlertTriangle className="h-4 w-4" />
+                    Could not connect to backend
+                  </p>
+                )}
+              </div>
+              
+              <div className="text-sm text-muted-foreground space-y-2 pt-2 border-t">
+                <p><strong>Common values:</strong></p>
+                <ul className="list-disc list-inside space-y-1 ml-2">
+                  <li><code className="text-xs bg-muted px-1 rounded">http://localhost:8000</code> - Local development</li>
+                  <li><code className="text-xs bg-muted px-1 rounded">http://YOUR_SERVER_IP:8000</code> - Remote server</li>
+                  <li><code className="text-xs bg-muted px-1 rounded">https://ctf-api.yourdomain.com</code> - With reverse proxy</li>
+                </ul>
+              </div>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">

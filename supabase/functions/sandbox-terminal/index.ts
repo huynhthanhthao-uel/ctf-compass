@@ -2,11 +2,17 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-backend-url',
 };
 
-// Backend API URL - configure via environment variable
-const BACKEND_API_URL = Deno.env.get('CTF_BACKEND_URL') || '';
+// Backend API URL - can be overridden by x-backend-url header
+const ENV_BACKEND_URL = Deno.env.get('CTF_BACKEND_URL') || '';
+
+// Get backend URL from header or fallback to env
+function getBackendUrl(req: Request): string {
+  const headerUrl = req.headers.get('x-backend-url');
+  return headerUrl || ENV_BACKEND_URL;
+}
 
 // Allowed tools for security (whitelist)
 const ALLOWED_TOOLS = [
@@ -35,11 +41,12 @@ function isToolAllowed(tool: string): boolean {
 
 // Call real Docker backend API
 async function executeOnBackend(
+  backendUrl: string,
   jobId: string,
   tool: string,
   args: string[]
 ): Promise<{ stdout: string; stderr: string; exit_code: number; error?: string }> {
-  const url = `${BACKEND_API_URL}/api/jobs/${jobId}/terminal`;
+  const url = `${backendUrl}/api/jobs/${jobId}/terminal`;
   
   console.log(`[sandbox-terminal] Calling backend: ${url}`);
   
@@ -73,11 +80,12 @@ async function executeOnBackend(
 
 // Execute Python script on backend
 async function executePythonOnBackend(
+  backendUrl: string,
   jobId: string,
   script: string,
   fileName?: string
 ): Promise<{ stdout: string; stderr: string; exit_code: number; error?: string }> {
-  const url = `${BACKEND_API_URL}/api/jobs/${jobId}/script`;
+  const url = `${backendUrl}/api/jobs/${jobId}/script`;
   
   console.log(`[sandbox-terminal] Executing Python script on backend: ${url}`);
   
@@ -110,11 +118,12 @@ async function executePythonOnBackend(
 
 // Upload file to backend
 async function uploadFileToBackend(
+  backendUrl: string,
   jobId: string,
   fileName: string,
   content: string
 ): Promise<{ success: boolean; error?: string }> {
-  const url = `${BACKEND_API_URL}/api/jobs/${jobId}/files`;
+  const url = `${backendUrl}/api/jobs/${jobId}/files`;
   
   console.log(`[sandbox-terminal] Uploading file to backend: ${fileName}`);
   
@@ -140,8 +149,8 @@ async function uploadFileToBackend(
 }
 
 // List files on backend
-async function listFilesOnBackend(jobId: string): Promise<string[]> {
-  const url = `${BACKEND_API_URL}/api/jobs/${jobId}/files`;
+async function listFilesOnBackend(backendUrl: string, jobId: string): Promise<string[]> {
+  const url = `${backendUrl}/api/jobs/${jobId}/files`;
   
   const response = await fetch(url, {
     method: 'GET',
@@ -193,13 +202,16 @@ serve(async (req) => {
       );
     }
 
+    // Get backend URL from header or env
+    const backendUrl = getBackendUrl(req);
+    
     // Check if backend is configured
-    if (!BACKEND_API_URL) {
-      console.error('[sandbox-terminal] CTF_BACKEND_URL not configured');
+    if (!backendUrl) {
+      console.error('[sandbox-terminal] Backend URL not configured');
       return new Response(
         JSON.stringify({
-          error: 'Backend not configured. Set CTF_BACKEND_URL environment variable.',
-          hint: 'Deploy the Docker backend and configure the URL in Supabase secrets',
+          error: 'Backend not configured. Set backend URL in Configuration page or CTF_BACKEND_URL secret.',
+          hint: 'Go to Settings → Docker Backend URL and enter your backend address',
           stdout: '',
           stderr: 'Backend API URL not configured',
           exit_code: 1,
@@ -207,10 +219,12 @@ serve(async (req) => {
         { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+    
+    console.log(`[sandbox-terminal] Using backend URL: ${backendUrl}`);
 
     // Handle file upload action
     if (action === 'upload' && fileName && fileContent) {
-      const result = await uploadFileToBackend(jobId, fileName, fileContent);
+      const result = await uploadFileToBackend(backendUrl, jobId, fileName, fileContent);
       return new Response(
         JSON.stringify(result),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -219,7 +233,7 @@ serve(async (req) => {
 
     // Handle list files action
     if (action === 'list_files') {
-      const files = await listFilesOnBackend(jobId);
+      const files = await listFilesOnBackend(backendUrl, jobId);
       return new Response(
         JSON.stringify({ files }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -228,7 +242,7 @@ serve(async (req) => {
 
     // Handle Python script execution
     if (script) {
-      const result = await executePythonOnBackend(jobId, script, fileName);
+      const result = await executePythonOnBackend(backendUrl, jobId, script, fileName);
       console.log(`[sandbox-terminal] Script result: {
   stdout_length: ${result.stdout.length},
   stderr_length: ${result.stderr.length},
@@ -263,7 +277,7 @@ serve(async (req) => {
     }
 
     // Execute command on real backend
-    const result = await executeOnBackend(jobId, tool, args);
+    const result = await executeOnBackend(backendUrl, jobId, tool, args);
 
     console.log(`[sandbox-terminal] Result: {
   job_id: "${jobId}",

@@ -63,9 +63,13 @@ export function BackendHealthIndicator() {
     let sandboxStatus: HealthStatus['sandboxTerminal'] = 'error';
     let sandboxError: string | undefined;
     
+    // Get backend URL from localStorage
+    const backendUrl = localStorage.getItem('ctf_backend_url') || '';
+    
     try {
       const { data, error } = await supabase.functions.invoke('sandbox-terminal', {
         body: { job_id: 'health-check', tool: 'echo', args: ['ok'] },
+        headers: backendUrl ? { 'x-backend-url': backendUrl } : undefined,
       });
       
       if (error) {
@@ -271,8 +275,9 @@ export function BackendHealthIndicator() {
                 <p className="text-xs font-medium text-warning mb-2">Configuration Required:</p>
                 <ol className="text-xs text-warning/80 list-decimal list-inside space-y-1">
                   <li>Deploy Docker backend on your server</li>
-                  <li>Set <code className="bg-warning/20 px-1 rounded">CTF_BACKEND_URL</code> secret</li>
-                  <li>Use format: <code className="bg-warning/20 px-1 rounded">http://YOUR_IP:8000</code></li>
+                  <li>Go to <strong>Settings</strong> page</li>
+                  <li>Enter your backend URL (e.g., <code className="bg-warning/20 px-1 rounded">http://YOUR_IP:8000</code>)</li>
+                  <li>Click <strong>Test</strong> to verify connection</li>
                 </ol>
               </div>
             )}
