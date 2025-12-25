@@ -97,8 +97,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Required for some Python packages
     libffi-dev \
     libssl-dev \
+    # Ruby for steganography tools (zsteg, one_gadget)
+    ruby \
+    ruby-dev \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
+
+# Install Ruby gems for CTF tools
+RUN gem install --no-document \
+    zsteg \
+    one_gadget
 
 # Install RetDec decompiler
 RUN mkdir -p /opt/retdec && cd /opt/retdec \
@@ -123,7 +131,6 @@ RUN pip3 install --no-cache-dir --break-system-packages \
     # PDF analysis
     pypdf2 \
     # Steganography
-    zsteg \
     stegcracker \
     # Hash identification
     name-that-hash \
@@ -131,7 +138,6 @@ RUN pip3 install --no-cache-dir --break-system-packages \
     # ROP tools
     ropper \
     ROPgadget \
-    one_gadget \
     # Symbolic execution (lightweight)
     z3-solver \
     # Disassembly
