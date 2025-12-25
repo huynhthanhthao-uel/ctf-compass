@@ -5,13 +5,14 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-backend-url',
 };
 
-// Backend API URL - can be overridden by x-backend-url header
+// Backend API URL - legacy env fallback (prefer client-provided header)
 const ENV_BACKEND_URL = Deno.env.get('CTF_BACKEND_URL') || '';
 
-// Get backend URL from header or fallback to env
+// Get backend URL from header (preferred). We intentionally do NOT fall back to ENV here
+// because stale/mis-set env values (e.g. "bimat") can break all clients.
 function getBackendUrl(req: Request): string {
   const headerUrl = req.headers.get('x-backend-url');
-  return (headerUrl || ENV_BACKEND_URL || '').trim();
+  return (headerUrl || '').trim();
 }
 
 function isAllowedHostname(hostname: string): boolean {
