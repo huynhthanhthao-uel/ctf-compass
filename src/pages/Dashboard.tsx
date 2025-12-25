@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { JobCard } from '@/components/jobs/JobCard';
+import { BackendHealthIndicator } from '@/components/BackendHealthIndicator';
 import { useJobs } from '@/hooks/use-jobs';
 import { useJobsWithWebSocket } from '@/hooks/use-websocket';
 import { useToast } from '@/hooks/use-toast';
@@ -172,6 +173,10 @@ export default function Dashboard() {
             <Plus className="h-4 w-4 mr-2" />
             New Analysis
           </Button>
+        </div>
+
+        {/* Backend Health Indicator */}
+        <BackendHealthIndicator />
         </div>
 
         {/* Stats Cards */}
