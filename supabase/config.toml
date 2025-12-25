@@ -1,13 +1,1 @@
-project_id = "ahxwjrwslhgitlugglzi"
-
-[functions.ai-analyze]
-verify_jwt = false
-
-[functions.detect-category]
-verify_jwt = false
-
-[functions.sandbox-terminal]
-verify_jwt = false
-
-[functions.ai-solve-script]
-verify_jwt = false
+project_id = "mjnunfojcevetemeynut"
