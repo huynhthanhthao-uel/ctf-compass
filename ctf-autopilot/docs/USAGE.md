@@ -1,6 +1,6 @@
 # User Guide
 
-Complete guide for using CTF Compass. This document covers the web interface, Full Autopilot, job creation, and analysis workflow.
+Complete guide for using CTF Compass v2.0.0. This document covers the web interface, Full Autopilot, job creation, and analysis workflow.
 
 **GitHub:** [github.com/huynhtrungpc01/ctf-compass](https://github.com/huynhtrungpc01/ctf-compass)
 
@@ -9,16 +9,18 @@ Complete guide for using CTF Compass. This document covers the web interface, Fu
 ## Table of Contents
 
 1. [Getting Started](#getting-started)
-2. [Web Interface Overview](#web-interface-overview)
-3. [Dashboard Features](#dashboard-features)
-4. [Full Autopilot Mode](#full-autopilot-mode)
-5. [Creating Analysis Jobs](#creating-analysis-jobs)
-6. [Managing Jobs](#managing-jobs)
-7. [Understanding Results](#understanding-results)
-8. [Operation Modes](#operation-modes)
-9. [Configuration](#configuration)
-10. [Best Practices](#best-practices)
-11. [FAQ](#faq)
+2. [Setup Wizard](#setup-wizard)
+3. [CORS Tester](#cors-tester)
+4. [Web Interface Overview](#web-interface-overview)
+5. [Dashboard Features](#dashboard-features)
+6. [Full Autopilot Mode](#full-autopilot-mode)
+7. [Creating Analysis Jobs](#creating-analysis-jobs)
+8. [Managing Jobs](#managing-jobs)
+9. [Understanding Results](#understanding-results)
+10. [Operation Modes](#operation-modes)
+11. [Configuration](#configuration)
+12. [Best Practices](#best-practices)
+13. [FAQ](#faq)
 
 ---
 
@@ -30,24 +32,95 @@ Complete guide for using CTF Compass. This document covers the web interface, Fu
    - **Local**: `http://localhost:3000`
    - **Server**: `http://<your-server-ip>:3000`
 
-2. Login with your admin credentials:
-   - **Password**: `admin` (default)
+2. **No Login Required**: CTF Compass v2.0.0 removes authentication for simpler single-user deployments
 
 ### First-Time Setup
 
-1. **Check Operation Mode**: 
+1. **Setup Wizard**: The app opens to the Setup page (`/`) where you can:
+   - Configure Backend URL (for Docker deployments)
+   - Test connection and CORS headers
+   - Verify everything works before proceeding
+
+2. **Check Operation Mode**: 
    - Look at the status badge in the header
    - "Connected" = Full backend available
-   - "Cloud Mode" = Using Lovable Cloud Edge Functions
+   - "Cloud Mode" = Using Lovable Cloud Edge Functions  
    - "Demo Mode" = Using mock data
 
-2. **Configure API Key** (Optional for Cloud Mode): 
-   - Click the Settings icon (⚙️) in the navigation
-   - Enter your MegaLLM API key in the "API Configuration" section
-   - Click "Test Connection" to verify
-   - Click "Save Changes"
+3. **Start Analyzing**: Navigate to Dashboard and click "Solve Challenge" on any job!
 
-3. **Start Analyzing**: Click "Solve Challenge" on any job!
+---
+
+## Setup Wizard
+
+The Setup Wizard (`/` or `/setup`) is the first page you see. It helps configure the Docker backend connection.
+
+### Features
+
+| Feature | Description |
+|---------|-------------|
+| **Backend URL Input** | Enter your Docker backend URL (e.g., `http://192.168.1.100:8000`) |
+| **Test Connection** | Verify API connectivity and CORS headers |
+| **Status Indicator** | Shows connection state (idle, testing, connected, error) |
+| **CORS Headers Display** | Shows received CORS headers for debugging |
+
+### How to Use
+
+1. **Enter Backend URL**: 
+   - For local Docker: `http://localhost:8000`
+   - For remote server: `http://<server-ip>:8000`
+
+2. **Click "Test Connection"**: 
+   - Sends OPTIONS preflight request
+   - Checks CORS headers
+   - Verifies API health endpoint
+
+3. **Review Results**:
+   - ✅ Green "Connected" badge = Ready to use
+   - ❌ Red "Error" badge = Check URL or CORS config
+
+4. **Continue to Dashboard**: Click the button to proceed
+
+### Troubleshooting Setup
+
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| "Connection error" | Backend not running | Start Docker containers |
+| "CORS blocked" | Missing CORS headers | Check `CORS_ORIGINS` in `.env` |
+| "Network error" | Firewall blocking | Open port 8000 |
+
+---
+
+## CORS Tester
+
+The built-in CORS Tester (`/cors-tester`) helps diagnose cross-origin issues.
+
+### Features
+
+- **Preflight Test**: Sends OPTIONS request to check CORS policy
+- **GET Request Test**: Tests actual API calls
+- **POST Request Test**: Tests data submission
+- **Health Check**: Verifies API status
+- **Headers Display**: Shows all response headers
+- **Response Body**: Shows API response content
+
+### How to Use
+
+1. Navigate to `/cors-tester` or click "CORS Tester" in Settings
+2. Enter your backend URL
+3. Click test buttons to run different request types
+4. Review headers and response body
+
+### Expected CORS Headers
+
+For proper operation, your backend should return:
+
+```
+Access-Control-Allow-Origin: * (or your frontend origin)
+Access-Control-Allow-Methods: GET, POST, PATCH, DELETE, OPTIONS
+Access-Control-Allow-Headers: Content-Type, Authorization
+Access-Control-Max-Age: 600
+```
 
 ---
 
@@ -59,13 +132,12 @@ CTF Compass uses a modern top navigation bar:
 
 | Element | Location | Description |
 |---------|----------|-------------|
-| **Logo** | Top left | Click to go to Dashboard |
+| **Logo** | Top left | Click to go to Setup/Dashboard |
 | **Dashboard** | Top nav | View all jobs and statistics |
 | **New Analysis** | Top nav | Create a new analysis job |
 | **Backend Status** | Top right | Shows operation mode |
 | **Notifications** | Top right (🔔) | View alerts and updates |
 | **Settings** | Top right (⚙️) | System configuration |
-| **User Menu** | Top right | Profile, logout options |
 
 ### Status Indicators
 
@@ -316,6 +388,8 @@ After analysis completes, you'll see several tabs:
 - ✅ File upload and storage
 - ✅ Complete job history
 
+**Setup**: Configure Backend URL in Setup Wizard
+
 ### Cloud Mode
 
 **When**: Local backend unavailable, Lovable Cloud accessible
@@ -343,21 +417,41 @@ After analysis completes, you'll see several tabs:
 - ⚠️ No real analysis
 - ⚠️ No AI features
 
+**Escape Demo Mode**: 
+1. Go to Setup Wizard (`/`)
+2. Configure Backend URL
+3. Test connection
+4. Or ensure Cloud is accessible
+
 ---
 
 ## Configuration
 
+### Backend URL Setup (v2.0.0)
+
+The Backend URL can be configured in:
+
+**1. Setup Wizard (Recommended):**
+- Navigate to `/` or `/setup`
+- Enter your Docker backend URL
+- Test connection to verify CORS
+- URL is saved to localStorage
+
+**2. Settings Page:**
+- Click Settings icon (⚙️)
+- Enter Backend URL in configuration section
+- Save changes
+
 ### API Key Setup
 
-The API key can be configured in two ways:
+For AI analysis, configure the MegaLLM API key:
 
-**1. Via Web Interface (Recommended):**
-- Go to Settings page (⚙️ icon)
+**Via Settings Page:**
+- Go to Settings (⚙️ icon)
 - Enter your MegaLLM API key
 - Click "Test Connection" then "Save Changes"
-- Key is automatically synced to backend
 
-**2. Via Environment File:**
+**Via Environment File:**
 ```bash
 sudo nano /opt/ctf-compass/.env
 # Add: MEGALLM_API_KEY=your-key-here
@@ -379,17 +473,16 @@ Choose different AI models for each task:
 | **Writeup** | Generating writeups | gemini-2.5-pro |
 | **Extraction** | Flag extraction | gemini-2.5-flash |
 
-### System Updates
+### CORS Configuration
 
-Updates can be triggered from the Settings page:
-1. Click "Check Updates" to check for new versions
-2. If update is available, click "Update Now"
-3. System will automatically backup, update, and restart
+For Docker deployments, ensure CORS is configured:
 
-Manual update:
 ```bash
-sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh
+# In /opt/ctf-compass/.env
+CORS_ORIGINS=http://192.168.1.100:3000,http://localhost:3000
 ```
+
+Use the CORS Tester (`/cors-tester`) to verify configuration.
 
 ---
 
@@ -419,17 +512,22 @@ sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh
 
 ### Performance Tips
 
-1. **Use Cloud Mode for Quick Analysis**
-   - Works without local backend
-   - Fast AI responses
-   - Great for initial exploration
+1. **Use Setup Wizard First**
+   - Always test connection before use
+   - Verify CORS headers are correct
+   - Troubleshoot with CORS Tester
 
 2. **Use Connected Mode for Deep Analysis**
    - Real tool execution
    - Persistent results
    - Better for complex challenges
 
-3. **Clean Up Old Jobs**
+3. **Use Cloud Mode for Quick Analysis**
+   - Works without local backend
+   - Fast AI responses
+   - Great for initial exploration
+
+4. **Clean Up Old Jobs**
    - Delete completed jobs you no longer need
    - Free up disk space
 
@@ -440,10 +538,23 @@ sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh
 ### Q: How do I start analyzing a challenge?
 
 **A:** 
-1. Create a job with challenge files
-2. Open the job detail page
-3. Click "Solve Challenge" button
-4. Wait for Full Autopilot to complete
+1. Configure backend in Setup Wizard (if using Docker)
+2. Create a job with challenge files
+3. Open the job detail page
+4. Click "Solve Challenge" button
+5. Wait for Full Autopilot to complete
+
+### Q: Why is there no login page?
+
+**A:** CTF Compass v2.0.0 removes authentication for simpler single-user deployments. The app is designed for personal CTF practice and doesn't require user management.
+
+### Q: How do I configure the Docker backend?
+
+**A:**
+1. Go to Setup Wizard (`/`)
+2. Enter your backend URL (e.g., `http://192.168.1.100:8000`)
+3. Click "Test Connection"
+4. If successful, click "Continue to Dashboard"
 
 ### Q: What's the difference between Cloud Mode and Connected Mode?
 
@@ -455,8 +566,18 @@ sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh
 
 **A:** Neither backend nor cloud is available:
 1. Check if backend containers are running: `docker compose ps`
-2. Check internet connection for Cloud Mode
-3. Click the badge to retry connection
+2. Configure Backend URL in Setup Wizard
+3. Use CORS Tester to diagnose issues
+4. Check internet connection for Cloud Mode
+
+### Q: How do I fix CORS errors?
+
+**A:**
+1. Go to CORS Tester (`/cors-tester`)
+2. Test your backend URL
+3. Check if `Access-Control-Allow-Origin` header is present
+4. Update `CORS_ORIGINS` in your `.env` file
+5. Restart Docker containers
 
 ### Q: Can I use this during a live CTF?
 
@@ -503,7 +624,8 @@ sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh
 
 ## Getting Help
 
-- **Debug Guide**: [DEBUG.md](DEBUG.md)
-- **Runbook**: [RUNBOOK.md](RUNBOOK.md)
-- **Architecture**: [ARCHITECTURE.md](ARCHITECTURE.md)
-- **GitHub**: [github.com/huynhtrungpc01/ctf-compass](https://github.com/huynhtrungpc01/ctf-compass)
+- **Setup Issues**: Use CORS Tester (`/cors-tester`) to diagnose
+- **Debugging Guide**: [DEBUG.md](./DEBUG.md)
+- **Runbook**: [RUNBOOK.md](./RUNBOOK.md)
+- **Architecture**: [ARCHITECTURE.md](./ARCHITECTURE.md)
+- **GitHub Issues**: [github.com/huynhtrungpc01/ctf-compass/issues](https://github.com/huynhtrungpc01/ctf-compass/issues)

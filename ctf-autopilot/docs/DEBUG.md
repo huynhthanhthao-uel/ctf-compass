@@ -1,6 +1,6 @@
 # Debug & Troubleshooting Guide
 
-Complete debugging guide for CTF Compass. This document covers common issues, Cloud Mode debugging, and step-by-step troubleshooting procedures.
+Complete debugging guide for CTF Compass v2.0.0. This document covers common issues, CORS debugging, Cloud Mode, and step-by-step troubleshooting procedures.
 
 **GitHub:** [github.com/huynhtrungpc01/ctf-compass](https://github.com/huynhtrungpc01/ctf-compass)
 
@@ -9,14 +9,16 @@ Complete debugging guide for CTF Compass. This document covers common issues, Cl
 ## Table of Contents
 
 1. [Quick Diagnostics](#quick-diagnostics)
-2. [Operation Mode Issues](#operation-mode-issues)
-3. [Cloud Mode Debugging](#cloud-mode-debugging)
-4. [Common Issues](#common-issues)
-5. [Log Analysis](#log-analysis)
-6. [Database Debugging](#database-debugging)
-7. [Sandbox Debugging](#sandbox-debugging)
-8. [API & Frontend Debugging](#api--frontend-debugging)
-9. [Recovery Procedures](#recovery-procedures)
+2. [Setup Wizard Troubleshooting](#setup-wizard-troubleshooting)
+3. [CORS Debugging](#cors-debugging)
+4. [Operation Mode Issues](#operation-mode-issues)
+5. [Cloud Mode Debugging](#cloud-mode-debugging)
+6. [Common Issues](#common-issues)
+7. [Log Analysis](#log-analysis)
+8. [Database Debugging](#database-debugging)
+9. [Sandbox Debugging](#sandbox-debugging)
+10. [API & Frontend Debugging](#api--frontend-debugging)
+11. [Recovery Procedures](#recovery-procedures)
 
 ---
 
@@ -47,6 +49,154 @@ echo -e "\n=== CPU ===" && top -bn1 | head -5
 echo -e "\n=== Docker Stats ===" && docker stats --no-stream
 ```
 
+### CORS Quick Check
+
+```bash
+# Test CORS preflight from command line
+curl -s -D- -o /dev/null -X OPTIONS http://localhost:8000/api/health \
+  -H "Origin: http://localhost:3000" \
+  -H "Access-Control-Request-Method: GET" | grep -i "access-control"
+```
+
+Expected output:
+```
+access-control-allow-origin: *
+access-control-allow-methods: GET, POST, PATCH, DELETE, OPTIONS
+access-control-max-age: 600
+```
+
+---
+
+## Setup Wizard Troubleshooting
+
+### Cannot Connect to Backend
+
+**Symptoms:**
+- "Connection error" in Setup Wizard
+- Red error badge
+- Cannot proceed to Dashboard
+
+**Diagnosis:**
+
+1. **Check Docker containers:**
+   ```bash
+   docker compose -f ctf-autopilot/infra/docker-compose.yml ps
+   ```
+
+2. **Check API is responding:**
+   ```bash
+   curl -v http://localhost:8000/api/health
+   ```
+
+3. **Check CORS configuration:**
+   ```bash
+   grep CORS_ORIGINS /opt/ctf-compass/.env
+   ```
+
+**Solutions:**
+
+| Issue | Solution |
+|-------|----------|
+| Containers not running | `docker compose up -d` |
+| Wrong Backend URL | Use correct IP:port (e.g., `http://192.168.1.100:8000`) |
+| CORS not configured | Add frontend URL to `CORS_ORIGINS` in `.env` |
+| Firewall blocking | Open port 8000: `sudo ufw allow 8000` |
+
+### Backend URL Not Saved
+
+**Cause:** localStorage might be disabled or full
+
+**Solution:**
+```javascript
+// In browser console
+localStorage.setItem('ctf-compass-backend-url', 'http://your-server:8000');
+location.reload();
+```
+
+### Stuck in Setup Wizard
+
+**Solution:** Navigate directly to dashboard:
+- Go to `/dashboard` in browser
+- Or click "Skip to Demo Mode" button
+
+---
+
+## CORS Debugging
+
+### Using Built-in CORS Tester
+
+1. Navigate to `/cors-tester`
+2. Enter your backend URL
+3. Click each test button:
+   - **Preflight (OPTIONS)**: Tests CORS headers
+   - **GET Request**: Tests read operations
+   - **POST Request**: Tests write operations
+   - **Health Check**: Tests API status
+
+### Common CORS Errors
+
+#### "No 'Access-Control-Allow-Origin' header"
+
+**Cause:** Backend not sending CORS headers
+
+**Solution:**
+```bash
+# Check current CORS config
+sudo docker logs ctf_compass_api 2>&1 | grep -i "CORS"
+
+# Update .env file
+echo 'CORS_ORIGINS=http://192.168.1.100:3000,http://localhost:3000' >> /opt/ctf-compass/.env
+
+# Restart API
+docker compose -f ctf-autopilot/infra/docker-compose.yml restart api
+```
+
+#### "CORS policy: Request header field not allowed"
+
+**Cause:** Missing `Access-Control-Allow-Headers`
+
+**Solution:** The API should return:
+```
+Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With
+```
+
+#### "Preflight response is not successful"
+
+**Cause:** OPTIONS request failing
+
+**Diagnosis:**
+```bash
+# Test OPTIONS directly
+curl -v -X OPTIONS http://localhost:8000/api/health \
+  -H "Origin: http://localhost:3000" \
+  -H "Access-Control-Request-Method: GET"
+```
+
+### CORS Configuration Reference
+
+In `/opt/ctf-compass/.env`:
+
+```bash
+# Single origin
+CORS_ORIGINS=http://192.168.1.100:3000
+
+# Multiple origins (comma-separated)
+CORS_ORIGINS=http://192.168.1.100:3000,http://localhost:3000,http://10.0.0.5:3000
+
+# Allow all (development only, NOT recommended for production)
+CORS_ORIGINS=*
+```
+
+### Verify CORS in API Logs
+
+```bash
+# Check startup CORS config
+docker logs ctf_compass_api 2>&1 | grep -E "CORS|startup"
+
+# Should show something like:
+# [startup] CORS_ORIGINS env='*' dotenv=None effective=['*']
+```
+
 ---
 
 ## Operation Mode Issues
@@ -65,14 +215,14 @@ Check the status badge in the header:
 
 The frontend automatically detects the best available mode:
 
-1. **Connected Mode**: Checks `http://localhost:8000/api/health`
+1. **Connected Mode**: Checks configured Backend URL health
 2. **Cloud Mode**: Falls back if backend unavailable
 3. **Demo Mode**: Falls back if both unavailable
 
 To force a mode:
-- **Force Connected**: Ensure backend is running
-- **Force Cloud**: Stop backend containers
-- **Force Demo**: Stop backend and disconnect from internet
+- **Force Connected**: Configure Backend URL in Setup Wizard
+- **Force Cloud**: Clear Backend URL, ensure internet connected
+- **Force Demo**: Clear Backend URL, disconnect internet
 
 ### Mode Not Switching
 
@@ -80,9 +230,24 @@ If stuck in wrong mode:
 
 ```javascript
 // In browser console
+localStorage.removeItem('ctf-compass-backend-url');
 localStorage.clear();
 location.reload();
 ```
+
+### Stuck in Demo Mode
+
+**Diagnosis:**
+1. Open browser DevTools (F12)
+2. Go to Network tab
+3. Look for failed requests to `/api/health`
+4. Check Console for CORS errors
+
+**Solutions:**
+1. Configure Backend URL in Setup Wizard (`/`)
+2. Use CORS Tester (`/cors-tester`) to diagnose
+3. Check Docker containers are running
+4. Verify CORS_ORIGINS includes your frontend URL
 
 ---
 
@@ -176,7 +341,7 @@ docker compose -f ctf-autopilot/infra/docker-compose.yml logs postgres --tail 10
 
 | Cause | Solution |
 |-------|----------|
-| Missing .env file | `cp ctf-autopilot/infra/.env.local ctf-autopilot/infra/.env` |
+| Missing .env file | `cp ctf-autopilot/.env.example /opt/ctf-compass/.env` |
 | Port already in use | Change ports or stop conflicting service |
 | Docker socket permission | `sudo chmod 666 /var/run/docker.sock` |
 
@@ -275,6 +440,16 @@ docker compose -f ctf-autopilot/infra/docker-compose.yml logs api 2>&1 | grep -i
 docker compose -f ctf-autopilot/infra/docker-compose.yml logs api > /tmp/api-logs.txt 2>&1
 ```
 
+### Check CORS in Logs
+
+```bash
+# Check CORS startup config
+docker logs ctf_compass_api 2>&1 | grep -E "CORS|cors|startup"
+
+# Check for CORS-related errors
+docker logs ctf_compass_api 2>&1 | grep -i "origin\|preflight"
+```
+
 ### Browser Console Logs
 
 For frontend issues:
@@ -282,6 +457,7 @@ For frontend issues:
 2. Go to Console tab
 3. Look for red errors
 4. Filter by "error" or component name
+5. Look for "CORS" errors specifically
 
 ---
 
@@ -441,31 +617,59 @@ sessionStorage.clear();
 location.reload();
 ```
 
+### Reset Backend URL
+
+```javascript
+// In browser console
+localStorage.removeItem('ctf-compass-backend-url');
+location.reload();
+// Then reconfigure in Setup Wizard
+```
+
 ---
 
 ## Debug Checklist
 
 When debugging, follow this checklist:
 
+### Setup & Connection
+- [ ] Check Setup Wizard can connect to backend
+- [ ] Test with CORS Tester (`/cors-tester`)
+- [ ] Verify Backend URL is correct
+
+### Infrastructure
 - [ ] Check operation mode badge (Connected/Cloud/Demo)
 - [ ] Check container status: `docker compose ps -a`
 - [ ] Check service logs: `docker compose logs <service> --tail 100`
 - [ ] Check disk space: `df -h /`
 - [ ] Check memory: `free -h`
+
+### API & Network
 - [ ] Check API health: `curl http://localhost:8000/api/health`
+- [ ] Check CORS headers: `curl -X OPTIONS ...`
+- [ ] Check firewall: `sudo ufw status`
+
+### Database & Cache
 - [ ] Check database: `docker compose exec postgres pg_isready`
 - [ ] Check Redis: `docker compose exec redis redis-cli ping`
-- [ ] Check .env file exists and is configured
+
+### Configuration
+- [ ] Check .env file exists and has CORS_ORIGINS
 - [ ] Check file permissions: `ls -la /opt/ctf-compass/data`
+
+### Frontend
 - [ ] Check browser console for JS errors
 - [ ] Check network tab for failed requests
-- [ ] Check firewall: `sudo ufw status`
+- [ ] Look for CORS errors in console
+- [ ] Try clearing localStorage
 
 ---
 
 ## Getting Help
 
+- **Setup Issues**: Use Setup Wizard (`/`) and CORS Tester (`/cors-tester`)
 - **Install Logs:** `/var/log/ctf-compass-install.log`
 - **Update Logs:** `/var/log/ctf-compass-update.log`
+- **Usage Guide:** [USAGE.md](./USAGE.md)
+- **Runbook:** [RUNBOOK.md](./RUNBOOK.md)
 - **GitHub Issues:** [github.com/huynhtrungpc01/ctf-compass/issues](https://github.com/huynhtrungpc01/ctf-compass/issues)
-- **Documentation:** [ctf-autopilot/docs/](.)
