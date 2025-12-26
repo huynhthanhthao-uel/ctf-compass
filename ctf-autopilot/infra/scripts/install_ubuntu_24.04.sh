@@ -5,7 +5,7 @@
 # Version: 2.0.0 (2025-12-26)
 #===============================================================================
 #
-# GitHub Repository: https://github.com/huynhtrungpc01/ctf-compass.git
+# GitHub Repository: https://github.com/huynhthanhthao-uel/ctf-compass.git
 #
 # ARCHITECTURE:
 #   Frontend connects directly to Docker Backend via user-configured Backend URL.
@@ -22,10 +22,10 @@
 #
 # USAGE:
 #   # Fresh install
-#   curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash
+#   curl -fsSL https://raw.githubusercontent.com/huynhthanhthao-uel/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash
 #
 #   # Clean install (remove old first)
-#   curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --clean
+#   curl -fsSL https://raw.githubusercontent.com/huynhthanhthao-uel/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --clean
 #
 # OPTIONS:
 #   --clean     Remove old installation completely before installing
@@ -50,7 +50,7 @@ set -eo pipefail
 INSTALL_DIR="/opt/ctf-compass"
 BACKUP_DIR="/opt/ctf-compass-backups"
 LOG_FILE="/var/log/ctf-compass-install.log"
-GITHUB_REPO="https://github.com/huynhtrungpc01/ctf-compass.git"
+GITHUB_REPO="https://github.com/huynhthanhthao-uel/ctf-compass.git"
 GITHUB_BRANCH="main"
 MIN_MEMORY_MB=3072
 MIN_DISK_GB=15

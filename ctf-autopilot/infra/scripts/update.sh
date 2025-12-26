@@ -4,7 +4,7 @@
 # Pulls latest changes, cleans up, and restarts services
 #===============================================================================
 #
-# GitHub: https://github.com/huynhtrungpc01/ctf-compass.git
+# GitHub: https://github.com/huynhthanhthao-uel/ctf-compass.git
 #
 # USAGE:
 #   sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh
@@ -59,7 +59,7 @@ detect_install_dir() {
 INSTALL_DIR="$(detect_install_dir)"
 BACKUP_DIR="${BACKUP_DIR:-/opt/ctf-compass-backups}"
 LOG_FILE="${LOG_FILE:-/var/log/ctf-compass-update.log}"
-GITHUB_REPO="${GITHUB_REPO:-https://github.com/huynhtrungpc01/ctf-compass.git}"
+GITHUB_REPO="${GITHUB_REPO:-https://github.com/huynhthanhthao-uel/ctf-compass.git}"
 GITHUB_BRANCH="${GITHUB_BRANCH:-main}"
 
 # Flags
@@ -498,116 +498,72 @@ health_check() {
         log_success "All health checks passed"
     else
         log_warn "Some services may still be starting"
-        log_info "Check logs: docker compose logs -f"
+        log_info "Check logs with: docker compose logs -f"
     fi
 }
 
 #-------------------------------------------------------------------------------
-# Print Summary
+# Parse Arguments
 #-------------------------------------------------------------------------------
-print_summary() {
-    VERSION=$(cd "$INSTALL_DIR" && git rev-parse --short HEAD 2>/dev/null || echo 'unknown')
-    SERVER_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")
-    
-    echo ""
-    echo -e "${GREEN}╔═══════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${GREEN}║${NC}                                                                   ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}        ${BOLD}✓ CTF Compass Update Complete!${NC}                             ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}                                                                   ${GREEN}║${NC}"
-    echo -e "${GREEN}╠═══════════════════════════════════════════════════════════════════╣${NC}"
-    echo -e "${GREEN}║${NC}                                                                   ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}  ${BOLD}Version:${NC} $VERSION                                                    ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}  ${BOLD}Updated:${NC} $(date '+%Y-%m-%d %H:%M:%S')                               ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}                                                                   ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}  ${BOLD}Access:${NC}                                                           ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}    Web UI: ${CYAN}http://${SERVER_IP}:3000${NC}                             ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}    API:    ${CYAN}http://${SERVER_IP}:8000${NC}                             ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}                                                                   ${GREEN}║${NC}"
-    echo -e "${GREEN}╚═══════════════════════════════════════════════════════════════════╝${NC}"
-    echo ""
-}
-
-#-------------------------------------------------------------------------------
-# Show Help
-#-------------------------------------------------------------------------------
-show_help() {
-    echo "CTF Compass - System Update Script"
-    echo ""
-    echo "Usage: $0 [OPTIONS]"
-    echo ""
-    echo "Options:"
-    echo "  --check   Check for updates without installing"
-    echo "  --clean   Force deep cleanup before update"
-    echo "  --json    Output in JSON format (for API integration)"
-    echo "  --force   Skip confirmation prompts"
-    echo "  --help    Show this help message"
-    echo ""
-    echo "Examples:"
-    echo "  sudo bash $0                 # Normal update"
-    echo "  sudo bash $0 --check         # Check for updates only"
-    echo "  sudo bash $0 --clean         # Deep cleanup and update"
-    echo "  sudo bash $0 --json          # JSON output for API"
-    echo ""
-    echo "Installation directory: $INSTALL_DIR"
-}
+for arg in "$@"; do
+    case $arg in
+        --check)
+            CHECK_ONLY=true
+            ;;
+        --clean)
+            CLEAN_MODE=true
+            ;;
+        --json)
+            JSON_MODE=true
+            ;;
+        --force)
+            FORCE_MODE=true
+            ;;
+        --help|-h)
+            echo "CTF Compass - System Update Script"
+            echo ""
+            echo "Usage: $0 [OPTIONS]"
+            echo ""
+            echo "Options:"
+            echo "  --check     Check for updates without installing"
+            echo "  --clean     Force deep cleanup before update"
+            echo "  --json      Output in JSON format (for API)"
+            echo "  --force     Skip confirmation prompts"
+            echo "  --help      Show this help message"
+            echo ""
+            echo "Examples:"
+            echo "  # Check for updates"
+            echo "  sudo bash $0 --check"
+            echo ""
+            echo "  # Perform update"
+            echo "  sudo bash $0"
+            echo ""
+            echo "  # Deep cleanup and update"
+            echo "  sudo bash $0 --clean"
+            exit 0
+            ;;
+    esac
+done
 
 #-------------------------------------------------------------------------------
 # Main
 #-------------------------------------------------------------------------------
 main() {
-    # Parse arguments
-    for arg in "$@"; do
-        case $arg in
-            --check)
-                CHECK_ONLY=true
-                ;;
-            --clean)
-                CLEAN_MODE=true
-                ;;
-            --json)
-                JSON_MODE=true
-                ;;
-            --force)
-                FORCE_MODE=true
-                ;;
-            --help|-h)
-                show_help
-                exit 0
-                ;;
-            *)
-                echo "Unknown option: $arg"
-                echo "Use --help for usage information"
-                exit 1
-                ;;
-        esac
-    done
-    
     # Check only mode
     if [[ "$CHECK_ONLY" == "true" ]]; then
         check_updates
         exit 0
     fi
     
-    # Initialize log file
-    mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null || true
-    echo "=== CTF Compass Update Log ===" > "$LOG_FILE" 2>/dev/null || true
-    echo "Started: $(date)" >> "$LOG_FILE" 2>/dev/null || true
-    echo "Install directory: $INSTALL_DIR" >> "$LOG_FILE" 2>/dev/null || true
-    
-    # Show banner (non-JSON mode)
     if [[ "$JSON_MODE" != "true" ]]; then
         echo -e "${CYAN}"
         echo "╔═══════════════════════════════════════════════════════════════════╗"
-        echo "║                  CTF Compass - System Update                      ║"
-        echo "║            github.com/huynhtrungpc01/ctf-compass                  ║"
+        echo "║              CTF Compass - System Update                          ║"
+        echo "║            github.com/huynhthanhthao-uel/ctf-compass               ║"
         echo "╚═══════════════════════════════════════════════════════════════════╝"
         echo -e "${NC}"
-        echo ""
-        echo "Installation directory: $INSTALL_DIR"
-        echo ""
     fi
     
-    # Run update steps
     preflight_checks
     backup_config
     pull_latest
@@ -616,12 +572,15 @@ main() {
     restart_services
     health_check
     
-    # Print summary
-    if [[ "$JSON_MODE" == "true" ]]; then
-        VERSION=$(cd "$INSTALL_DIR" && git rev-parse --short HEAD 2>/dev/null || echo 'unknown')
-        echo "{\"level\":\"complete\",\"success\":true,\"version\":\"$VERSION\",\"message\":\"Update completed successfully!\",\"timestamp\":\"$(date -Iseconds)\"}"
-    else
-        print_summary
+    if [[ "$JSON_MODE" != "true" ]]; then
+        echo ""
+        echo -e "${GREEN}╔═══════════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "${GREEN}║                    ✓ UPDATE COMPLETE                              ║${NC}"
+        echo -e "${GREEN}╚═══════════════════════════════════════════════════════════════════╝${NC}"
+        echo ""
+        echo -e "Web UI: ${CYAN}http://$(hostname -I 2>/dev/null | awk '{print $1}' || echo localhost):3000${NC}"
+        echo -e "API:    ${CYAN}http://$(hostname -I 2>/dev/null | awk '{print $1}' || echo localhost):8000${NC}"
+        echo ""
     fi
 }
 

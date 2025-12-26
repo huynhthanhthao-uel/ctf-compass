@@ -4,7 +4,7 @@
 # Wrapper for install script with cleanup mode
 #===============================================================================
 #
-# GitHub: https://github.com/huynhtrungpc01/ctf-compass.git
+# GitHub: https://github.com/huynhthanhthao-uel/ctf-compass.git
 #
 # USAGE:
 #   sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/uninstall.sh
@@ -26,7 +26,7 @@ set -eo pipefail
 INSTALL_DIR="${INSTALL_DIR:-/opt/ctf-compass}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd)" || SCRIPT_DIR="/opt/ctf-compass/ctf-autopilot/infra/scripts"
 INSTALL_SCRIPT="$SCRIPT_DIR/install_ubuntu_24.04.sh"
-REMOTE_SCRIPT="https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh"
+REMOTE_SCRIPT="https://raw.githubusercontent.com/huynhthanhthao-uel/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh"
 
 #-------------------------------------------------------------------------------
 # Colors

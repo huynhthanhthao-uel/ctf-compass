@@ -5,13 +5,13 @@
 [![Docker](https://img.shields.io/badge/Docker-Required-2496ED?logo=docker)](https://www.docker.com/)
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)](https://reactjs.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-Python-009688?logo=fastapi)](https://fastapi.tiangolo.com/)
-[![Version](https://img.shields.io/badge/Version-2.0.0-blue)](https://github.com/huynhtrungpc01/ctf-compass)
+[![Version](https://img.shields.io/badge/Version-2.0.0-blue)](https://github.com/huynhthanhthao-uel/ctf-compass)
 
 A production-grade, security-first, local-only CTF challenge analyzer and writeup generator. This tool ingests challenge descriptions and attached files, runs deterministic offline analysis in an isolated Docker sandbox, extracts evidence and candidate flags, and generates professional writeups.
 
 **🆕 Version 2.0.0:** No login required - single-user local deployment!
 
-**Repository:** [github.com/huynhtrungpc01/ctf-compass](https://github.com/huynhtrungpc01/ctf-compass)
+**Repository:** [github.com/huynhthanhthao-uel/ctf-compass](https://github.com/huynhthanhthao-uel/ctf-compass)
 
 ---
 
@@ -53,7 +53,7 @@ A production-grade, security-first, local-only CTF challenge analyzer and writeu
 ### 🚀 One-Line Deploy (Simplest)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf-autopilot/infra/scripts/deploy.sh | bash
+curl -fsSL https://raw.githubusercontent.com/huynhthanhthao-uel/ctf-compass/main/ctf-autopilot/infra/scripts/deploy.sh | bash
 ```
 
 **✨ No login required - just open the Web UI!**
@@ -61,17 +61,17 @@ curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf
 ### Ubuntu 24.04 Full Installation
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/huynhthanhthao-uel/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash
 ```
 
 ### Installation Options
 
 ```bash
 # Clean install (remove old installation first)
-curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --clean
+curl -fsSL https://raw.githubusercontent.com/huynhthanhthao-uel/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --clean
 
 # Force install (skip confirmation prompts)
-curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --force
+curl -fsSL https://raw.githubusercontent.com/huynhthanhthao-uel/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --force
 ```
 
 | Option | Description |
@@ -405,4 +405,4 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 Contributions are welcome! Please read our contributing guidelines before submitting PRs.
 
-**GitHub:** [github.com/huynhtrungpc01/ctf-compass](https://github.com/huynhtrungpc01/ctf-compass)
+**GitHub:** [github.com/huynhthanhthao-uel/ctf-compass](https://github.com/huynhthanhthao-uel/ctf-compass)
