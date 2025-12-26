@@ -38,8 +38,8 @@ USER appuser
 # Expose port
 EXPOSE 8000
 
-# Health check - longer start period to allow app initialization
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=5 \
+# Health check - extended start period for DB initialization
+HEALTHCHECK --interval=15s --timeout=10s --start-period=120s --retries=10 \
     CMD curl -f http://localhost:8000/api/health || exit 1
 
 # Run application
