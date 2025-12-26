@@ -100,8 +100,8 @@ services:
       # CORS_ORIGINS is loaded from env_file (.env). Not interpolated here to avoid host empty-var overrides.
     volumes:
       - app_data:/data
+      - ./.env:/app/.env:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
-    depends_on:
       postgres:
         condition: service_healthy
       redis:
@@ -153,6 +153,7 @@ services:
       # CORS_ORIGINS is loaded from env_file (.env). Not interpolated here to avoid host empty-var overrides.
     volumes:
       - app_data:/data
+      - ./.env:/app/.env:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
     depends_on:
       postgres:
