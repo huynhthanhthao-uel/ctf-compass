@@ -362,18 +362,132 @@ The frontend connects directly to your Docker backend. You must configure the Ba
 
 ### Environment Variables
 
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `MEGALLM_API_KEY` | API key from [ai.megallm.io](https://ai.megallm.io) | No (Cloud Mode fallback) |
-| `ADMIN_PASSWORD` | Admin login password | Default: `admin` |
+All configuration is done via environment variables in the `.env` file located at `/opt/ctf-compass/ctf-autopilot/.env`.
 
-### Optional Settings
+#### Required Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MAX_UPLOAD_SIZE_MB` | 200 | Maximum file upload size |
-| `SANDBOX_TIMEOUT_SECONDS` | 60 | Per-command timeout |
-| `MEGALLM_MODEL` | llama3.3-70b-instruct | AI model to use |
+| `ADMIN_PASSWORD` | `admin` | Admin login password for the web UI |
+| `POSTGRES_PASSWORD` | `ctfautopilot` | PostgreSQL database password |
+
+#### AI Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MEGALLM_API_KEY` | *(empty)* | API key from [ai.megallm.io](https://ai.megallm.io). AI features disabled if not set |
+| `MEGALLM_API_URL` | `https://ai.megallm.io/v1/chat/completions` | MegaLLM API endpoint URL |
+| `MEGALLM_MODEL` | `llama3.3-70b-instruct` | AI model to use (llama3.3-70b, gemini-2.5-pro, etc.) |
+
+#### Database Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `POSTGRES_HOST` | `postgres` | PostgreSQL hostname (Docker service name) |
+| `POSTGRES_PORT` | `5432` | PostgreSQL port |
+| `POSTGRES_USER` | `ctfautopilot` | PostgreSQL username |
+| `POSTGRES_DB` | `ctfautopilot` | PostgreSQL database name |
+
+#### Redis Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `REDIS_HOST` | `redis` | Redis hostname (Docker service name) |
+| `REDIS_PORT` | `6379` | Redis port |
+| `REDIS_PASSWORD` | *(empty)* | Redis password (optional) |
+
+#### CORS Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `CORS_ORIGINS` | `*` | Allowed origins for CORS. Formats: `*` (all), `http://a.com,http://b.com` (CSV), or JSON array |
+
+**Examples:**
+```bash
+# Allow all origins (default, easiest for local deployment)
+CORS_ORIGINS=*
+
+# Specific origins (recommended for production)
+CORS_ORIGINS=http://192.168.1.100:3000,http://localhost:3000
+
+# JSON array format
+CORS_ORIGINS=["http://192.168.1.100:3000","http://localhost:3000"]
+```
+
+#### Sandbox Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SANDBOX_TIMEOUT_SECONDS` | `60` | Maximum execution time per command |
+| `SANDBOX_MEMORY_LIMIT` | `512m` | Memory limit for sandbox containers |
+| `SANDBOX_CPU_LIMIT` | `1.0` | CPU limit for sandbox containers |
+| `SANDBOX_IMAGE` | `ctf-autopilot-sandbox:latest` | Docker image for sandbox |
+
+#### Upload Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MAX_UPLOAD_SIZE_MB` | `200` | Maximum file upload size in MB |
+| `ALLOWED_EXTENSIONS` | `.txt,.py,.c,.cpp,...` | Comma-separated list of allowed file extensions |
+
+#### Rate Limiting
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `RATE_LIMIT_UPLOADS` | `10` | Max uploads per minute per session |
+| `RATE_LIMIT_API` | `100` | Max API requests per minute per session |
+
+#### Security & Session
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SECRET_KEY` | *(auto-generated)* | JWT signing key. Auto-generated if not set |
+| `SESSION_TIMEOUT_SECONDS` | `3600` | Session timeout (1 hour default) |
+| `ENABLE_TLS` | `false` | Enable HTTPS with SSL certificates |
+
+#### Paths
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DATA_DIR` | `/data` | Base directory for persistent data |
+
+#### Development
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ENVIRONMENT` | `production` | Environment mode (`production` or `development`) |
+| `DEBUG` | `false` | Enable debug mode (verbose logging) |
+
+### Example .env File
+
+```bash
+# /opt/ctf-compass/ctf-autopilot/.env
+
+# ===== REQUIRED =====
+ADMIN_PASSWORD=your_secure_password
+POSTGRES_PASSWORD=your_db_password
+
+# ===== AI (Optional) =====
+MEGALLM_API_KEY=your_megallm_api_key
+MEGALLM_MODEL=llama3.3-70b-instruct
+
+# ===== CORS =====
+# For local deployment, use * or your specific IPs
+CORS_ORIGINS=http://192.168.1.100:3000,http://localhost:3000
+
+# ===== Security =====
+SECRET_KEY=your_random_secret_key_here
+SESSION_TIMEOUT_SECONDS=3600
+
+# ===== Sandbox =====
+SANDBOX_TIMEOUT_SECONDS=60
+SANDBOX_MEMORY_LIMIT=512m
+MAX_UPLOAD_SIZE_MB=200
+
+# ===== Rate Limiting =====
+RATE_LIMIT_UPLOADS=10
+RATE_LIMIT_API=100
+```
 
 ---
 
