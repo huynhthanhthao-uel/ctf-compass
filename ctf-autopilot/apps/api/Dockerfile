@@ -11,8 +11,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Install poetry
-RUN pip install --no-cache-dir poetry
+# Install poetry with retry and extended timeout
+RUN pip install --no-cache-dir --timeout=120 --retries=5 poetry || \
+    pip install --no-cache-dir --timeout=120 --retries=5 poetry || \
+    pip install --no-cache-dir --timeout=120 --retries=5 poetry
 
 # Copy dependency files
 COPY pyproject.toml ./
