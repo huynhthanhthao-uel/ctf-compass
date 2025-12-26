@@ -84,10 +84,20 @@ class Settings(BaseSettings):
     @field_validator("cors_origins", mode="before")
     @classmethod
     def _parse_cors_origins(cls, v):
-        # Support env as:
-        # - JSON list: ["http://a","http://b"]
-        # - CSV: http://a,http://b
-        # - Single value: * or http://example.com
+        """Parse CORS origins from env.
+
+        Supports:
+        - JSON list: ["http://a","http://b"]
+        - CSV: http://a,http://b
+        - Single value: * or http://example.com
+
+        NOTE: In some container setups, pydantic-settings may not hydrate list fields from env.
+        We defensively fall back to reading os.getenv("CORS_ORIGINS") when defaults are used.
+        """
+        env_v = os.getenv("CORS_ORIGINS")
+        if env_v and (v is None or v == ["*"] or v == "*"):
+            v = env_v
+
         if v is None:
             return ["*"]
         if isinstance(v, str):
@@ -112,6 +122,7 @@ class Settings(BaseSettings):
         env_file=None,
         case_sensitive=False,
         extra="ignore",
+        validate_default=True,
     )
 
 
