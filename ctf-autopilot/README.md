@@ -5,15 +5,23 @@
 [![Docker](https://img.shields.io/badge/Docker-Required-2496ED?logo=docker)](https://www.docker.com/)
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)](https://reactjs.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-Python-009688?logo=fastapi)](https://fastapi.tiangolo.com/)
-[![Version](https://img.shields.io/badge/Version-1.2.0-blue)](https://github.com/huynhtrungpc01/ctf-compass)
+[![Version](https://img.shields.io/badge/Version-2.0.0-blue)](https://github.com/huynhtrungpc01/ctf-compass)
 
 A production-grade, security-first, local-only CTF challenge analyzer and writeup generator. This tool ingests challenge descriptions and attached files, runs deterministic offline analysis in an isolated Docker sandbox, extracts evidence and candidate flags, and generates professional writeups.
+
+**🆕 Version 2.0.0:** No login required - single-user local deployment!
 
 **Repository:** [github.com/huynhtrungpc01/ctf-compass](https://github.com/huynhtrungpc01/ctf-compass)
 
 ---
 
 ## ✨ Key Features
+
+### What's New in v2.0.0
+- **No Login Required**: Single-user mode - just open the Web UI and start!
+- **Setup Wizard**: Configure Backend URL on first visit
+- **Built-in CORS Tester**: Debug CORS issues directly in the app
+- **Improved CORS Handling**: Robust fallback for container environments
 
 ### Frontend (React + TypeScript)
 - **Modern Dashboard**: Real-time job statistics with grid/list views
@@ -23,10 +31,10 @@ A production-grade, security-first, local-only CTF challenge analyzer and writeu
 - **Job Management**: Create, run, stop, and delete analysis jobs
 - **Remote Connection**: Configure netcat host:port during job creation
 - **Live Updates**: WebSocket-based progress tracking with animations
-- **Backend URL Configuration**: Connect to Docker backend via Settings page
+- **Backend URL Configuration**: Connect to Docker backend via Setup page
+- **CORS Tester**: Test preflight requests and inspect headers
 - **Demo Mode**: Full UI functionality with mock data when backend unavailable
 - **Notification Center**: Real-time alerts with mark-as-read functionality
-- **Backend Status**: Visual indicator (Demo Mode / Connected)
 - **Responsive Design**: Works on desktop and mobile devices
 
 ### Backend (FastAPI + Celery + Docker)
@@ -48,7 +56,7 @@ A production-grade, security-first, local-only CTF challenge analyzer and writeu
 curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf-autopilot/infra/scripts/deploy.sh | bash
 ```
 
-**Default password: `admin`**
+**✨ No login required - just open the Web UI!**
 
 ### Ubuntu 24.04 Full Installation
 
@@ -77,10 +85,9 @@ curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf
 ### Post-Installation
 
 1. **Access the Web UI:** `http://YOUR_SERVER_IP:3000`
-2. **Login with password:** `admin`
-3. **Configure Backend URL:** Go to Configuration → Enter `http://YOUR_SERVER_IP:8000` → Click Connect
-4. **Configure API Key (Optional):** Enter MegaLLM API key for AI features
-5. **Start analyzing!** Click "Solve Challenge" on any job
+2. **Set Backend URL:** Enter `http://YOUR_SERVER_IP:8000` → Click Test
+3. **Continue to Dashboard:** Start analyzing!
+4. **Configure API Key (Optional):** Go to Configuration → Enter MegaLLM API key for AI features
 
 ---
 
@@ -110,6 +117,20 @@ curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf
 
 ---
 
+## 🧪 CORS Tester
+
+Built-in tool to diagnose CORS issues:
+
+1. **Access:** `http://YOUR_SERVER_IP:3000/cors-tester`
+2. **Features:**
+   - Test OPTIONS (preflight) requests
+   - Test GET/POST requests
+   - View all response headers
+   - Copy headers to clipboard
+   - Troubleshooting tips
+
+---
+
 ## 🔄 System Update
 
 ```bash
@@ -121,9 +142,6 @@ sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh
 
 # Force deep cleanup and update (rebuild all containers)
 sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh --clean
-
-# Update via Web UI
-# Go to Configuration page → Click "Check Updates" → Click "Update Now"
 ```
 
 ---
@@ -141,36 +159,9 @@ sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/uninstall.sh --force
 
 # Complete purge (removes backups too)
 sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/uninstall.sh --purge
-
-# Force purge (no prompts, removes everything)
-sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/uninstall.sh --force --purge
 ```
 
-### Using Install Script (Alternative)
-
-```bash
-# Uninstall only (no reinstall)
-curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --clean-only
-
-# Uninstall and purge backups
-curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --clean-only --purge
-```
-
-### What Gets Cleaned
-
-| Component | `--clean` | `--purge` |
-|-----------|-----------|-----------|
-| Docker containers/images/volumes | ✅ | ✅ |
-| Installation directory | ✅ | ✅ |
-| Log files | ✅ | ✅ |
-| Systemd services | ✅ | ✅ |
-| Cron jobs | ✅ | ✅ |
-| Temp files | ✅ | ✅ |
-| Configuration files | ✅ | ✅ |
-| **Backups** | ❌ Preserved | ✅ Removed |
-| **User data exports** | ❌ Preserved | ✅ Removed |
-
-### Manual Cleanup (If Needed)
+### Manual Cleanup
 
 ```bash
 # Stop all services
@@ -179,9 +170,6 @@ sudo docker compose -f /opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml d
 # Remove all data and files
 sudo rm -rf /opt/ctf-compass /opt/ctf-compass-backups
 sudo rm -f /var/log/ctf-compass-*.log
-
-# Remove Docker images
-sudo docker rmi $(docker images | grep -E 'ctf[-_]compass|ctf[-_]autopilot' | awk '{print $3}') 2>/dev/null || true
 
 # Clean all Docker resources
 sudo docker system prune -af
@@ -213,7 +201,7 @@ All analysis runs in isolated Docker containers with:
 │                   Frontend (React/Vite)                      │
 │                    localhost:3000                            │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐          │
-│  │  Dashboard  │  │  Job Create │  │   Config    │          │
+│  │   Setup     │  │  Dashboard  │  │ CORS Tester │          │
 │  │    Page     │  │    Page     │  │    Page     │          │
 │  └─────────────┘  └─────────────┘  └─────────────┘          │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐          │
@@ -224,16 +212,12 @@ All analysis runs in isolated Docker containers with:
           ┌───────────┴───────────┐
           │                       │
 ┌─────────▼─────────┐   ┌─────────▼─────────┐
-│  Local Backend    │   │    Cloud Mode     │
-│  (FastAPI)        │   │  (Edge Functions) │
+│  Local Backend    │   │    Demo Mode      │
+│  (FastAPI)        │   │  (Mock Data)      │
 │  localhost:8000   │   │                   │
 │  ┌─────────────┐  │   │  ┌─────────────┐  │
-│  │    Auth     │  │   │  │ ai-analyze  │  │
-│  │   Service   │  │   │  │   Function  │  │
-│  └─────────────┘  │   │  └─────────────┘  │
-│  ┌─────────────┐  │   │  ┌─────────────┐  │
-│  │    Jobs     │  │   │  │  sandbox-   │  │
-│  │   Service   │  │   │  │  terminal   │  │
+│  │    Jobs     │  │   │  │  Simulated  │  │
+│  │   Service   │  │   │  │  Responses  │  │
 │  └──────┬──────┘  │   │  └─────────────┘  │
 └─────────┼─────────┘   └───────────────────┘
           │
@@ -262,7 +246,7 @@ ctf-compass/
 │   │   ├── web/                 # Frontend Dockerfile
 │   │   └── api/                 # FastAPI backend
 │   │       └── app/
-│   │           ├── routers/     # API endpoints (auth, jobs, system, ws, ai)
+│   │           ├── routers/     # API endpoints (jobs, system, ws, ai)
 │   │           ├── services/    # Business logic (sandbox, ai_analysis)
 │   │           └── models.py    # Database models
 │   ├── sandbox/
@@ -274,52 +258,37 @@ ctf-compass/
 │   │   ├── nginx/               # Reverse proxy config
 │   │   └── scripts/
 │   │       ├── install_ubuntu_24.04.sh
+│   │       ├── deploy.sh
 │   │       ├── update.sh
-│   │       ├── uninstall.sh
-│   │       ├── prod_up.sh
-│   │       └── dev_up.sh
+│   │       └── uninstall.sh
 │   └── docs/
 │       ├── ARCHITECTURE.md
 │       ├── SECURITY.md
 │       ├── DEBUG.md
-│       ├── USAGE.md
-│       └── RUNBOOK.md
+│       └── USAGE.md
 ├── src/                         # React frontend source
+│   ├── pages/
+│   │   ├── Setup.tsx            # Backend URL configuration
+│   │   ├── Dashboard.tsx
+│   │   ├── CorsTester.tsx       # CORS debugging tool
+│   │   ├── JobCreate.tsx
+│   │   ├── JobDetail.tsx
+│   │   └── Configuration.tsx
 │   ├── components/
 │   │   ├── jobs/
-│   │   │   ├── FullAutopilot.tsx    # One-click solve component
-│   │   │   ├── AutopilotPanel.tsx   # Manual autopilot controls
-│   │   │   ├── SandboxTerminal.tsx  # Interactive terminal
-│   │   │   ├── NetcatPanel.tsx      # Netcat terminal with AI scripts
-│   │   │   ├── SolveScriptGenerator.tsx  # AI script generation
-│   │   │   └── JobCard.tsx
-│   │   ├── layout/              # AppLayout, navigation
-│   │   ├── ui/                  # shadcn/ui components
-│   │   ├── BackendStatus.tsx    # Demo/Cloud/Connected indicator
-│   │   └── NotificationDropdown.tsx
+│   │   │   ├── FullAutopilot.tsx
+│   │   │   ├── SandboxTerminal.tsx
+│   │   │   ├── NetcatPanel.tsx
+│   │   │   └── SolveScriptGenerator.tsx
+│   │   └── ui/                  # shadcn/ui components
 │   ├── hooks/
-│   │   ├── use-auth.tsx
-│   │   ├── use-jobs.tsx         # Job CRUD with mock fallback
-│   │   ├── use-backend-status.ts # Unified mode detection
+│   │   ├── use-jobs.tsx
+│   │   ├── use-backend-status.ts
 │   │   └── use-websocket.ts
-│   ├── pages/
-│   │   ├── Dashboard.tsx
-│   │   ├── JobCreate.tsx        # Job form with netcat support
-│   │   ├── JobDetail.tsx        # Full Autopilot + Netcat tab
-│   │   ├── Configuration.tsx
-│   │   └── Login.tsx
 │   └── lib/
-│       ├── api.ts               # API + netcat functions
-│       ├── mock-data.ts
-│       ├── ctf-tools.ts         # Tool definitions
+│       ├── api.ts
+│       ├── backend-url.ts
 │       └── types.ts
-├── supabase/
-│   ├── functions/
-│   │   ├── ai-analyze/          # AI analysis edge function
-│   │   ├── sandbox-terminal/    # Terminal + netcat simulation
-│   │   ├── detect-category/     # Auto category detection
-│   │   └── ai-solve-script/     # AI pwntools script generator
-│   └── config.toml
 ├── package.json
 └── README.md
 ```
@@ -331,76 +300,21 @@ ctf-compass/
 ### Web UI Configuration (Recommended)
 
 After installation:
-1. Login to the Web UI at `http://YOUR_SERVER_IP:3000`
-2. Go to **Configuration** page (⚙️ icon)
-3. **Set Backend URL**: Enter your Docker backend URL (e.g., `http://YOUR_SERVER_IP:8000`)
-4. Click **Connect** to verify connection
+1. Open the Web UI at `http://YOUR_SERVER_IP:3000`
+2. **Set Backend URL**: Enter `http://YOUR_SERVER_IP:8000` → Click Test
+3. Click **Continue to Dashboard**
+4. Go to **Configuration** page for additional settings
 5. **Set MegaLLM API Key** (optional): Enter your API key for AI features
-6. Click **Save Changes**
-
-### Backend URL Setup
-
-The frontend connects directly to your Docker backend. You must configure the Backend URL:
-
-1. **Via Web UI** (Recommended):
-   - Go to Configuration page
-   - Enter Backend URL: `http://YOUR_SERVER_IP:8000`
-   - Click Connect to save
-
-2. **URL Format**:
-   - Local: `http://localhost:8000` or `http://127.0.0.1:8000`
-   - Remote: `http://192.168.1.100:8000`
-   - With HTTPS: `https://ctf.example.com:8000`
-
-### Default Credentials
-
-| Credential | Default Value |
-|------------|---------------|
-| `ADMIN_PASSWORD` | `admin` |
-| `POSTGRES_PASSWORD` | `ctfautopilot` |
-| `POSTGRES_USER` | `ctfautopilot` |
 
 ### Environment Variables
 
-All configuration is done via environment variables in the `.env` file located at `/opt/ctf-compass/ctf-autopilot/.env`.
+All configuration is done via environment variables in the `.env` file located at `/opt/ctf-compass/ctf-autopilot/infra/.env`.
 
-#### Required Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ADMIN_PASSWORD` | `admin` | Admin login password for the web UI |
-| `POSTGRES_PASSWORD` | `ctfautopilot` | PostgreSQL database password |
-
-#### AI Configuration
+#### CORS Configuration (Important!)
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MEGALLM_API_KEY` | *(empty)* | API key from [ai.megallm.io](https://ai.megallm.io). AI features disabled if not set |
-| `MEGALLM_API_URL` | `https://ai.megallm.io/v1/chat/completions` | MegaLLM API endpoint URL |
-| `MEGALLM_MODEL` | `llama3.3-70b-instruct` | AI model to use (llama3.3-70b, gemini-2.5-pro, etc.) |
-
-#### Database Configuration
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `POSTGRES_HOST` | `postgres` | PostgreSQL hostname (Docker service name) |
-| `POSTGRES_PORT` | `5432` | PostgreSQL port |
-| `POSTGRES_USER` | `ctfautopilot` | PostgreSQL username |
-| `POSTGRES_DB` | `ctfautopilot` | PostgreSQL database name |
-
-#### Redis Configuration
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `REDIS_HOST` | `redis` | Redis hostname (Docker service name) |
-| `REDIS_PORT` | `6379` | Redis port |
-| `REDIS_PASSWORD` | *(empty)* | Redis password (optional) |
-
-#### CORS Configuration
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `CORS_ORIGINS` | `*` | Allowed origins for CORS. Formats: `*` (all), `http://a.com,http://b.com` (CSV), or JSON array |
+| `CORS_ORIGINS` | `*` | Allowed origins for CORS |
 
 **Examples:**
 ```bash
@@ -414,304 +328,81 @@ CORS_ORIGINS=http://192.168.1.100:3000,http://localhost:3000
 CORS_ORIGINS=["http://192.168.1.100:3000","http://localhost:3000"]
 ```
 
+#### AI Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MEGALLM_API_KEY` | *(empty)* | API key from [ai.megallm.io](https://ai.megallm.io). AI features disabled if not set |
+| `MEGALLM_MODEL` | `llama3.3-70b-instruct` | AI model to use |
+
+#### Database Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `POSTGRES_HOST` | `postgres` | PostgreSQL hostname |
+| `POSTGRES_PORT` | `5432` | PostgreSQL port |
+| `POSTGRES_USER` | `ctfautopilot` | PostgreSQL username |
+| `POSTGRES_PASSWORD` | `ctfautopilot` | PostgreSQL password |
+| `POSTGRES_DB` | `ctfautopilot` | PostgreSQL database name |
+
 #### Sandbox Configuration
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `SANDBOX_TIMEOUT_SECONDS` | `60` | Maximum execution time per command |
-| `SANDBOX_MEMORY_LIMIT` | `512m` | Memory limit for sandbox containers |
-| `SANDBOX_CPU_LIMIT` | `1.0` | CPU limit for sandbox containers |
-| `SANDBOX_IMAGE` | `ctf-autopilot-sandbox:latest` | Docker image for sandbox |
+| `MAX_UPLOAD_SIZE_MB` | `200` | Maximum upload size in MB |
+| `SANDBOX_TIMEOUT_SECONDS` | `60` | Sandbox timeout per command |
+| `SANDBOX_MEMORY_LIMIT` | `512m` | Sandbox memory limit |
+| `SANDBOX_CPU_LIMIT` | `1` | Sandbox CPU limit |
 
-#### Upload Configuration
+---
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `MAX_UPLOAD_SIZE_MB` | `200` | Maximum file upload size in MB |
-| `ALLOWED_EXTENSIONS` | `.txt,.py,.c,.cpp,...` | Comma-separated list of allowed file extensions |
+## 💡 Troubleshooting
 
-#### Rate Limiting
+### CORS Issues
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `RATE_LIMIT_UPLOADS` | `10` | Max uploads per minute per session |
-| `RATE_LIMIT_API` | `100` | Max API requests per minute per session |
+1. **Use the built-in CORS Tester**: `http://YOUR_SERVER_IP:3000/cors-tester`
+2. **Check browser origin**: The tester shows your current origin
+3. **Verify CORS_ORIGINS**: Must include your frontend URL
+4. **Restart backend**: After changing `.env`
 
-#### Security & Session
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `SECRET_KEY` | *(auto-generated)* | JWT signing key. Auto-generated if not set |
-| `SESSION_TIMEOUT_SECONDS` | `3600` | Session timeout (1 hour default) |
-| `ENABLE_TLS` | `false` | Enable HTTPS with SSL certificates |
-
-#### Paths
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DATA_DIR` | `/data` | Base directory for persistent data |
-
-#### Development
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ENVIRONMENT` | `production` | Environment mode (`production` or `development`) |
-| `DEBUG` | `false` | Enable debug mode (verbose logging) |
-
-### Example .env File
-
+### Check service status
 ```bash
-# /opt/ctf-compass/ctf-autopilot/.env
+docker compose ps
+docker compose logs api
+```
 
-# ===== REQUIRED =====
-ADMIN_PASSWORD=your_secure_password
-POSTGRES_PASSWORD=your_db_password
+### Test API health
+```bash
+curl http://localhost:8000/api/health
+```
 
-# ===== AI (Optional) =====
-MEGALLM_API_KEY=your_megallm_api_key
-MEGALLM_MODEL=llama3.3-70b-instruct
-
-# ===== CORS =====
-# For local deployment, use * or your specific IPs
-CORS_ORIGINS=http://192.168.1.100:3000,http://localhost:3000
-
-# ===== Security =====
-SECRET_KEY=your_random_secret_key_here
-SESSION_TIMEOUT_SECONDS=3600
-
-# ===== Sandbox =====
-SANDBOX_TIMEOUT_SECONDS=60
-SANDBOX_MEMORY_LIMIT=512m
-MAX_UPLOAD_SIZE_MB=200
-
-# ===== Rate Limiting =====
-RATE_LIMIT_UPLOADS=10
-RATE_LIMIT_API=100
+### Full reset
+```bash
+docker compose down -v --rmi local
+docker compose up -d --build
 ```
 
 ---
 
-## 🛠️ Development
+## 📚 More Documentation
 
-```bash
-# Start development environment (PostgreSQL + Redis only)
-docker compose -f ctf-autopilot/infra/docker-compose.dev.yml up -d
-
-# Run API server
-cd ctf-autopilot/apps/api && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-
-# Run frontend with Vite (hot reload)
-npm run dev
-
-# Run backend tests
-cd ctf-autopilot/apps/api && pytest
-
-# Run linting
-cd ctf-autopilot/apps/api && ruff check .
-```
-
-### Frontend Operation Modes
-
-The frontend supports multiple connection modes:
-
-| Mode | Description | When Active |
-|------|-------------|-------------|
-| **Connected** | Full backend available | Backend URL configured and reachable |
-| **Demo Mode** | Mock data, UI testing | No backend configured or unreachable |
-
-Configure Backend URL in Settings → Configuration to switch from Demo Mode to Connected Mode.
+- [QUICK_START.md](QUICK_START.md) - Quick start guide
+- [docs/USAGE.md](docs/USAGE.md) - User guide
+- [docs/DEBUG.md](docs/DEBUG.md) - Troubleshooting
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - System architecture
+- [docs/SECURITY.md](docs/SECURITY.md) - Security documentation
+- [docs/RUNBOOK.md](docs/RUNBOOK.md) - Operations guide
 
 ---
 
-## 📖 Documentation
+## 📜 License
 
-| Document | Description |
-|----------|-------------|
-| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | System design with Cloud Mode |
-| [SECURITY.md](docs/SECURITY.md) | Security controls |
-| [DEBUG.md](docs/DEBUG.md) | Troubleshooting guide with Cloud debugging |
-| [USAGE.md](docs/USAGE.md) | User guide with Full Autopilot |
-| [RUNBOOK.md](docs/RUNBOOK.md) | Operations guide |
+MIT License - see [LICENSE](LICENSE) for details.
 
 ---
 
-## 🚀 Makefile Commands
+## 🙏 Contributing
 
-CTF Compass includes a Makefile for easy management. Run from `/opt/ctf-compass/ctf-autopilot/`:
-
-```bash
-cd /opt/ctf-compass/ctf-autopilot
-
-# Show all available commands
-make help
-
-# Service Management
-make status      # Show container status
-make start       # Start all services
-make stop        # Stop all services
-make restart     # Restart all services
-
-# Logs
-make logs        # View all logs
-make logs-api    # View API logs only
-make logs-worker # View Worker logs only
-make logs-web    # View Web logs only
-
-# Updates & Builds
-make update      # Pull latest code and rebuild
-make rebuild     # Rebuild all (no cache)
-make rebuild-api # Rebuild API only
-
-# Database
-make backup      # Create database backup
-make restore     # Restore from latest backup
-make shell-db    # Open PostgreSQL shell
-
-# Debugging
-make health      # Check API health
-make shell-api   # Open API container shell
-
-# Cleanup
-make clean       # Remove unused Docker resources
-```
-
-## 💾 Database Backup
-
-### Manual Backup
-
-```bash
-# Create backup
-sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/backup.sh
-
-# List backups
-sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/backup.sh --list
-
-# Restore from latest
-sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/backup.sh --restore
-
-# Restore from specific file
-sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/backup.sh --restore-file /path/to/backup.sql.gz
-```
-
-### Setup Automatic Daily Backup (Cron)
-
-```bash
-# Setup cron job (runs daily at 2 AM, keeps 7 days)
-sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/backup.sh --setup-cron
-
-# View backup logs
-tail -f /var/log/ctf-compass-backup.log
-```
-
-Backups are stored in `/opt/ctf-compass/backups/` with automatic 7-day rotation.
-
-## 📊 Monitoring (Prometheus + Grafana)
-
-CTF Compass includes a complete monitoring stack with Prometheus, Grafana, and Alertmanager.
-
-### Start Monitoring Stack
-
-```bash
-cd /opt/ctf-compass/ctf-autopilot
-
-# Setup (first time)
-make monitor-setup
-
-# Start monitoring
-make monitor-start
-
-# Show access URLs
-make monitor-urls
-
-# Stop monitoring
-make monitor-stop
-```
-
-### Monitoring URLs
-
-| Service | URL | Description |
-|---------|-----|-------------|
-| **Grafana** | `http://YOUR_IP:3001` | Dashboards & visualization |
-| **Prometheus** | `http://YOUR_IP:9090` | Metrics & queries |
-| **Alertmanager** | `http://YOUR_IP:9093` | Alert management |
-
-Grafana credentials: `admin` / (see CREDENTIALS.txt)
-
-### Features
-
-- **System Overview Dashboard**: CPU, Memory, Disk usage
-- **Container Metrics**: Per-container resource usage
-- **Database Monitoring**: PostgreSQL connections, performance
-- **Cache Monitoring**: Redis memory, operations/sec
-- **Auto Alerts**: Container down, high resource usage, disk space
-
-## 🔔 Health Check & Alerts
-
-Automatic health monitoring with Telegram/Discord/Slack notifications.
-
-### Setup Alerts
-
-```bash
-cd /opt/ctf-compass/ctf-autopilot
-
-# Interactive setup for Telegram/Discord/Slack
-make health-setup
-
-# Test notifications
-make health-test
-
-# Setup cron job (runs every 5 minutes)
-make health-cron
-
-# Manual health check
-make health-check
-```
-
-### Supported Notification Channels
-
-- **Telegram**: Bot token + Chat ID
-- **Discord**: Webhook URL
-- **Slack**: Webhook URL
-
-Alerts are sent when:
-- ✅ Service goes DOWN
-- ✅ Service RECOVERS
-
-### Access URLs
-
-| Service | URL | Description |
-|---------|-----|-------------|
-| **Web UI** | `http://YOUR_IP:3000` | Main application |
-| **API** | `http://YOUR_IP:8000/api/` | Backend REST API |
-| **API Health** | `http://YOUR_IP:8000/api/health` | Health check endpoint |
-| **API Docs** | `http://YOUR_IP:8000/docs` | Swagger documentation |
-| **Grafana** | `http://YOUR_IP:3001` | Monitoring dashboards |
-| **Prometheus** | `http://YOUR_IP:9090` | Metrics server |
-
----
-
-## 📄 License
-
-MIT License - See [LICENSE](LICENSE) for details.
-
----
-
-## ⚠️ Disclaimer
-
-This tool is intended for:
-- ✅ Post-competition CTF writeup generation
-- ✅ Offline analysis of challenge files you have permission to analyze
-- ✅ Educational and learning purposes
-
-**DO NOT** use this tool to:
-- ❌ Attack systems without authorization
-- ❌ Analyze files you don't have permission to access
-- ❌ Circumvent security controls
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Please read our contributing guidelines before submitting a PR.
+Contributions are welcome! Please read our contributing guidelines before submitting PRs.
 
 **GitHub:** [github.com/huynhtrungpc01/ctf-compass](https://github.com/huynhtrungpc01/ctf-compass)

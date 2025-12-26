@@ -2,20 +2,23 @@
 #===============================================================================
 # CTF Compass - Production Installation Script
 # Ubuntu 24.04 LTS Only
-# Version: 1.2.0 (2025-12-25)
+# Version: 2.0.0 (2025-12-26)
 #===============================================================================
 #
 # GitHub Repository: https://github.com/huynhtrungpc01/ctf-compass.git
 #
 # ARCHITECTURE:
 #   Frontend connects directly to Docker Backend via user-configured Backend URL.
+#   No login required - single-user local deployment.
 #   No external cloud/edge functions required for core functionality.
 #
 # FEATURES:
+#   - No login required (single-user mode)
 #   - Full Autopilot AI analysis
 #   - Netcat terminal for PWN/remote challenges
 #   - AI Solve Script generation (pwntools)
 #   - Sandbox Terminal with Docker isolation
+#   - Built-in CORS Tester
 #
 # USAGE:
 #   # Fresh install
@@ -126,9 +129,9 @@ print_banner() {
     echo "║     ╚██████╗   ██║   ██║         ╚██████╗╚██████╔╝██║ ╚═╝ ██║    ║"
     echo "║      ╚═════╝   ╚═╝   ╚═╝          ╚═════╝ ╚═════╝ ╚═╝     ╚═╝    ║"
     echo "║                                                                   ║"
-    echo "║                   CTF Compass v1.2.0                              ║"
+    echo "║                   CTF Compass v2.0.0                              ║"
     echo "║             Automated CTF Challenge Analyzer                      ║"
-    echo "║             Local Docker Backend Architecture                     ║"
+    echo "║         No Login Required - Single User Mode                      ║"
     echo "║                                                                   ║"
     echo "║     GitHub: github.com/huynhtrungpc01/ctf-compass                  ║"
     echo "║                                                                   ║"
@@ -624,25 +627,23 @@ configure_environment() {
     # Simple fixed credentials for local deployment
     SECRET_KEY=$(openssl rand -base64 48 | tr -d '\n')
     POSTGRES_PASSWORD="ctfautopilot"
-    ADMIN_PASSWORD="admin"
     REDIS_PASSWORD=""
-    GRAFANA_PASSWORD="admin"
     
-    # Create .env file
+    # Detect server IP for CORS
+    SERVER_IP=$(hostname -I | awk '{print $1}')
+    
+    # Create .env file - NO LOGIN REQUIRED
     cat > .env << EOF
 #===============================================================================
-# CTF Compass Configuration
+# CTF Compass v2.0.0 Configuration
 # Generated: $(date)
-# Simple configuration for local deployment
+# No login required - single user mode
 #===============================================================================
 
 # AI Configuration (OPTIONAL - for AI analysis features)
 # Get your API key from: https://ai.megallm.io
 MEGALLM_API_KEY=
 MEGALLM_MODEL=llama3.3-70b-instruct
-
-# Authentication - Default: admin
-ADMIN_PASSWORD=$ADMIN_PASSWORD
 
 # Database - Simple defaults
 POSTGRES_USER=ctfautopilot
@@ -651,6 +652,10 @@ POSTGRES_DB=ctfautopilot
 
 # Security
 SECRET_KEY=$SECRET_KEY
+
+# CORS - allow frontend to connect
+# Add your specific origins or use * for all
+CORS_ORIGINS=http://${SERVER_IP}:3000,http://localhost:3000
 
 # Application Settings
 MAX_UPLOAD_SIZE_MB=200
@@ -678,13 +683,14 @@ EOF
     fi
     chmod 600 ctf-autopilot/infra/.env
     
-    # Display simple credentials
+    # Display simple info
     echo ""
     echo -e "${GREEN}╔═══════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${GREEN}║${NC}  ${BOLD}CTF Compass - Local Deployment${NC}                                  ${GREEN}║${NC}"
+    echo -e "${GREEN}║${NC}  ${BOLD}CTF Compass v2.0.0 - No Login Required${NC}                          ${GREEN}║${NC}"
     echo -e "${GREEN}╠═══════════════════════════════════════════════════════════════════╣${NC}"
     echo -e "${GREEN}║${NC}                                                                   ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}  Admin Password: ${CYAN}admin${NC}                                           ${GREEN}║${NC}"
+    echo -e "${GREEN}║${NC}  Just open the Web UI and set your Backend URL!                  ${GREEN}║${NC}"
+    echo -e "${GREEN}║${NC}  CORS configured for: ${CYAN}http://${SERVER_IP}:3000${NC}                   ${GREEN}║${NC}"
     echo -e "${GREEN}║${NC}                                                                   ${GREEN}║${NC}"
     echo -e "${GREEN}╚═══════════════════════════════════════════════════════════════════╝${NC}"
     echo ""
@@ -842,7 +848,7 @@ print_summary() {
     echo ""
     echo -e "${GREEN}╔═══════════════════════════════════════════════════════════════════╗${NC}"
     echo -e "${GREEN}║${NC}                                                                   ${GREEN}║${NC}"
-    echo -e "${GREEN}║${NC}        ${BOLD}✓ CTF Compass Installation Complete!${NC}                       ${GREEN}║${NC}"
+    echo -e "${GREEN}║${NC}        ${BOLD}✓ CTF Compass v2.0.0 Installation Complete!${NC}               ${GREEN}║${NC}"
     echo -e "${GREEN}║${NC}                                                                   ${GREEN}║${NC}"
     echo -e "${GREEN}╠═══════════════════════════════════════════════════════════════════╣${NC}"
     echo -e "${GREEN}║${NC}                                                                   ${GREEN}║${NC}"
@@ -852,16 +858,18 @@ print_summary() {
     echo -e "${GREEN}║${NC}    Web UI: ${CYAN}http://${SERVER_IP}:3000${NC}                             ${GREEN}║${NC}"
     echo -e "${GREEN}║${NC}    API:    ${CYAN}http://${SERVER_IP}:8000${NC}                             ${GREEN}║${NC}"
     echo -e "${GREEN}║${NC}                                                                   ${GREEN}║${NC}"
+    echo -e "${GREEN}║${NC}  ${YELLOW}✨ No login required - just open the Web UI!${NC}                   ${GREEN}║${NC}"
+    echo -e "${GREEN}║${NC}                                                                   ${GREEN}║${NC}"
     echo -e "${GREEN}║${NC}  ${BOLD}Installation Directory:${NC}                                          ${GREEN}║${NC}"
     echo -e "${GREEN}║${NC}    $INSTALL_DIR                                              ${GREEN}║${NC}"
     echo -e "${GREEN}║${NC}                                                                   ${GREEN}║${NC}"
     echo -e "${GREEN}╚═══════════════════════════════════════════════════════════════════╝${NC}"
     echo ""
     echo -e "${CYAN}Next Steps:${NC}"
-    echo "  1. Open the Web UI and log in with your admin password"
-    echo "  2. Go to Configuration page to set your MegaLLM API key"
-    echo "  3. (Optional) Configure alerts: make health-setup"
-    echo "  4. (Optional) Start monitoring: make monitor-start"
+    echo "  1. Open the Web UI at http://${SERVER_IP}:3000"
+    echo "  2. Set Backend URL to: http://${SERVER_IP}:8000"
+    echo "  3. (Optional) Go to Configuration to set your MegaLLM API key"
+    echo "  4. (Optional) Use CORS Tester: http://${SERVER_IP}:3000/cors-tester"
     echo "  5. Start analyzing CTF challenges!"
     echo ""
     echo -e "${CYAN}Quick Commands (from $INSTALL_DIR/ctf-autopilot):${NC}"
@@ -870,12 +878,6 @@ print_summary() {
     echo "  make logs          # View logs"
     echo "  make update        # Pull latest & rebuild"
     echo "  make backup        # Create database backup"
-    echo "  make health-setup  # Configure Telegram/Discord alerts"
-    echo "  make monitor-start # Start Prometheus + Grafana"
-    echo ""
-    echo -e "${CYAN}Monitoring (after 'make monitor-start'):${NC}"
-    echo "  Grafana:      http://${SERVER_IP}:3001 (admin / see CREDENTIALS.txt)"
-    echo "  Prometheus:   http://${SERVER_IP}:9090"
     echo ""
     echo -e "${CYAN}Documentation:${NC}"
     echo "  README:        $INSTALL_DIR/ctf-autopilot/README.md"

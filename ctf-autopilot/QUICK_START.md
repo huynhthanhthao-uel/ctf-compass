@@ -6,7 +6,16 @@
 curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf-autopilot/infra/scripts/deploy.sh | bash
 ```
 
-**🔑 Password: `admin`**
+**✨ No login required - just open the Web UI!**
+
+---
+
+## 📋 Post-Installation Steps
+
+1. **Open Web UI:** `http://YOUR_IP:3000`
+2. **Set Backend URL:** Enter `http://YOUR_IP:8000`
+3. **Click Test** to verify connection
+4. **Continue to Dashboard** and start analyzing!
 
 ---
 
@@ -25,7 +34,7 @@ sudo git clone https://github.com/huynhtrungpc01/ctf-compass.git
 cd ctf-compass
 
 # Copy simple config
-cp ctf-autopilot/infra/.env.local ctf-autopilot/infra/.env
+cp ctf-autopilot/infra/.env.example ctf-autopilot/infra/.env
 
 # Build sandbox image (optional)
 docker build -t ctf-autopilot-sandbox:latest ctf-autopilot/sandbox/image/
@@ -41,23 +50,13 @@ docker compose ps
 
 ---
 
-## 🔐 Default Credentials
-
-| Credential | Value |
-|------------|-------|
-| **Password** | `admin` |
-| **Database User** | `ctfautopilot` |
-| **Database Password** | `ctfautopilot` |
-
----
-
 ## 📍 Access URLs
 
 | Service | URL |
 |---------|-----|
 | **Web UI** | http://YOUR_IP:3000 |
 | **API** | http://YOUR_IP:8000 |
-| **API Docs** | http://YOUR_IP:8000/docs |
+| **CORS Tester** | http://YOUR_IP:3000/cors-tester |
 
 ---
 
@@ -96,8 +95,6 @@ docker compose ps
    docker compose restart
    ```
 
-> **Note:** Cloud Mode works without API key!
-
 ---
 
 ## 🎯 PWN/Remote Challenges (Netcat)
@@ -110,6 +107,22 @@ For challenges requiring `nc host port`:
 4. Submit job and go to the **Netcat** tab
 5. Click **Connect** to start interaction
 6. Use **Generate AI Solve Script** for pwntools code
+
+---
+
+## 🧪 CORS Troubleshooting
+
+If you encounter CORS errors:
+
+1. **Use built-in CORS Tester:** `http://YOUR_IP:3000/cors-tester`
+2. **Check your `.env` file:**
+   ```bash
+   CORS_ORIGINS=http://YOUR_IP:3000,http://localhost:3000
+   ```
+3. **Restart the API:**
+   ```bash
+   docker compose restart api
+   ```
 
 ---
 
@@ -136,11 +149,9 @@ docker compose ps
 docker compose logs api
 ```
 
-### Test login
+### Test API health
 ```bash
-curl -X POST http://localhost:8000/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"password":"admin"}'
+curl http://localhost:8000/api/health
 ```
 
 ### Full reset
@@ -153,7 +164,7 @@ docker compose up -d --build
 
 ## 📚 More Documentation
 
-- [README.md](../README.md) - Full documentation
+- [README.md](README.md) - Full documentation
 - [docs/USAGE.md](docs/USAGE.md) - User guide
 - [docs/DEBUG.md](docs/DEBUG.md) - Troubleshooting
 - [docs/RUNBOOK.md](docs/RUNBOOK.md) - Operations guide
