@@ -1,4 +1,4 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field, field_validator
 from typing import List, Optional
 import secrets
@@ -78,7 +78,8 @@ class Settings(BaseSettings):
     # CORS - Allow all origins by default for easier deployment
     # For production, set CORS_ORIGINS env var to specific origins
     # Example: CORS_ORIGINS='http://192.168.168.24:3000,http://localhost:3000'
-    cors_origins: List[str] = Field(default_factory=lambda: ["*"])
+    # NOTE: Explicitly alias to CORS_ORIGINS to ensure it is picked up in all pydantic-settings versions.
+    cors_origins: List[str] = Field(default_factory=lambda: ["*"], validation_alias="CORS_ORIGINS")
 
     @field_validator("cors_origins", mode="before")
     @classmethod
@@ -105,13 +106,13 @@ class Settings(BaseSettings):
 
     # TLS
     enable_tls: bool = False
-    
-    class Config:
-        # Load from OS env by default; optionally load .env if readable (e.g. local dev).
-        # This prevents container crashes when a host-mounted .env has restrictive permissions.
-        env_file = None
-        case_sensitive = False
-        extra = "ignore"  # Ignore extra env vars to prevent startup failures
+
+    # Pydantic v2 settings config (env still comes from OS env; env_file is injected via _env_file below)
+    model_config = SettingsConfigDict(
+        env_file=None,
+        case_sensitive=False,
+        extra="ignore",
+    )
 
 
 def _select_env_file() -> Optional[str]:
