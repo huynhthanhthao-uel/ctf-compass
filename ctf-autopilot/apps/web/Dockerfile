@@ -7,10 +7,10 @@ WORKDIR /app
 
 # Copy package files from root project
 COPY package*.json ./
+COPY bun.lockb* ./
 
-# Install dependencies
-# Use npm install with legacy-peer-deps to handle peer dependency conflicts
-RUN npm install --legacy-peer-deps 2>/dev/null || npm install --force
+# Install dependencies - try npm first, fallback methods for different scenarios
+RUN npm install --legacy-peer-deps 2>/dev/null || npm install --force || npm install
 
 # Copy source files
 COPY index.html ./
