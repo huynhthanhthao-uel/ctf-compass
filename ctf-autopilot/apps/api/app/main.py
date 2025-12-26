@@ -3,6 +3,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import asyncio
+import os
+import json
 
 from app.config import settings
 from app.middleware.security import SecurityHeadersMiddleware
@@ -11,6 +13,36 @@ from app.routers import auth, jobs, config, health, system, ai, history
 from app.routers import ws as ws_router
 from app.database import engine
 from app.models import Base
+
+
+def _parse_cors_origins_env(raw: str) -> list[str]:
+    s = (raw or "").strip()
+    if not s:
+        return ["*"]
+
+    if s.startswith("["):
+        try:
+            parsed = json.loads(s)
+            if isinstance(parsed, list):
+                return [str(x).strip() for x in parsed if str(x).strip()]
+        except Exception:
+            pass
+
+    # CSV
+    return [item.strip() for item in s.split(",") if item.strip()]
+
+
+def _get_effective_cors_origins() -> list[str]:
+    # Prefer explicit env var at runtime (most reliable in containers)
+    env_v = os.getenv("CORS_ORIGINS")
+    if env_v is not None:
+        return _parse_cors_origins_env(env_v)
+
+    # Fallback to settings (which may be default ['*'] if env hydration fails)
+    try:
+        return list(settings.cors_origins)
+    except Exception:
+        return ["*"]
 
 
 @asynccontextmanager
@@ -36,11 +68,19 @@ async def lifespan(app: FastAPI):
     if last_error is not None:
         raise last_error
 
+    # Log effective CORS config (helps diagnose container env issues)
+    try:
+        print(
+            "[startup] CORS_ORIGINS env=", repr(os.getenv("CORS_ORIGINS")),
+            "effective=", repr(_get_effective_cors_origins()),
+        )
+    except Exception:
+        pass
+
     yield
 
     # Shutdown
     await engine.dispose()
-
 
 
 app = FastAPI(
@@ -57,7 +97,7 @@ app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RateLimitMiddleware)
 
 # CORS
-cors_origins = settings.cors_origins
+cors_origins = _get_effective_cors_origins()
 allow_credentials = True
 
 # Wildcard origins cannot be combined with credentials (cookies).
