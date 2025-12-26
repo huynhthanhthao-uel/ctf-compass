@@ -4,7 +4,8 @@
 # Automatic backup with 7-day rotation
 #===============================================================================
 
-set -euo pipefail
+# Use -eo instead of -euo to handle potential unbound variables
+set -eo pipefail
 
 # Configuration
 INSTALL_DIR="${INSTALL_DIR:-/opt/ctf-compass}"

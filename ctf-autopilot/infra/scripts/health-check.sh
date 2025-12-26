@@ -4,7 +4,8 @@
 # Monitors services and sends notifications via Telegram/Discord when down
 #===============================================================================
 
-set -euo pipefail
+# Use -eo instead of -euo to handle potential unbound variables
+set -eo pipefail
 
 # Configuration
 INSTALL_DIR="${INSTALL_DIR:-/opt/ctf-compass}"
