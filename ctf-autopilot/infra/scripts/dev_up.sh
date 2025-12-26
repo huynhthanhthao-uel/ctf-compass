@@ -4,7 +4,7 @@
 # Starts only infrastructure services (Postgres, Redis) for local development
 #===============================================================================
 #
-# GitHub Repository: https://github.com/huynhtrungpc01/ctf-compass.git
+# GitHub Repository: https://github.com/huynhthanhthao-uel/ctf-compass.git
 #
 # USAGE:
 #   ./dev_up.sh [--clean]
@@ -48,7 +48,7 @@ done
 echo -e "${CYAN}"
 echo "╔═══════════════════════════════════════════════════════════════════╗"
 echo "║               CTF Compass - Development Environment               ║"
-echo "║            github.com/huynhtrungpc01/ctf-compass                   ║"
+echo "║            github.com/huynhthanhthao-uel/ctf-compass                ║"
 echo "╚═══════════════════════════════════════════════════════════════════╝"
 echo -e "${NC}"
 
@@ -130,5 +130,5 @@ echo ""
 echo -e "To clean and restart:"
 echo -e "  ${CYAN}$0 --clean${NC}"
 echo ""
-echo -e "GitHub: ${CYAN}https://github.com/huynhtrungpc01/ctf-compass${NC}"
+echo -e "GitHub: ${CYAN}https://github.com/huynhthanhthao-uel/ctf-compass${NC}"
 echo ""

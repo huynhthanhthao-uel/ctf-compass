@@ -8,7 +8,7 @@
 #===============================================================================
 #
 # USAGE (recommended):
-#   curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf-autopilot/infra/scripts/deploy.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/huynhthanhthao-uel/ctf-compass/main/ctf-autopilot/infra/scripts/deploy.sh | bash
 #
 # Or run locally from repo root:
 #   bash ctf-autopilot/infra/scripts/deploy.sh
@@ -139,7 +139,7 @@ if [[ -z "$COMPOSE_DIR" ]]; then
   echo -e "${YELLOW}📥 Cloning repository...${NC}"
   cd /tmp
   rm -rf ctf-compass
-  git clone --depth 1 https://github.com/huynhtrungpc01/ctf-compass.git
+  git clone --depth 1 https://github.com/huynhthanhthao-uel/ctf-compass.git
   COMPOSE_DIR="/tmp/ctf-compass/ctf-autopilot/infra"
   SANDBOX_DIR="/tmp/ctf-compass/ctf-autopilot/sandbox/image"
   ROOT_DIR="/tmp/ctf-compass"
