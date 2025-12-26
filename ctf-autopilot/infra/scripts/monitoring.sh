@@ -4,7 +4,8 @@
 # Manages Prometheus, Grafana, and Alertmanager
 #===============================================================================
 
-set -euo pipefail
+# Use -eo instead of -euo to handle potential unbound variables
+set -eo pipefail
 
 INSTALL_DIR="${INSTALL_DIR:-/opt/ctf-compass}"
 MONITORING_DIR="${INSTALL_DIR}/ctf-autopilot/infra/monitoring"
