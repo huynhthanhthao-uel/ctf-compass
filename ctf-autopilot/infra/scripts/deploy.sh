@@ -1,7 +1,7 @@
 #!/bin/bash
 #===============================================================================
 # CTF Compass - Simple One-Line Deploy Script (Local)
-# Version: 2.0.0 (2025-12-26)
+# Version: 2.0.1 (2025-12-26)
 # Goal: 1 command installs prerequisites + pulls code + runs docker compose.
 #
 # NO LOGIN REQUIRED - Single-user local deployment
@@ -27,7 +27,7 @@ NC='\033[0m'
 banner() {
   echo -e "${CYAN}"
   echo "╔═══════════════════════════════════════════════════════════════════╗"
-  echo "║           CTF Compass v2.0.0 - Quick Local Deploy                 ║"
+  echo "║           CTF Compass v2.0.1 - Quick Local Deploy                 ║"
   echo "║           No Login Required - Single User Mode                    ║"
   echo "╚═══════════════════════════════════════════════════════════════════╝"
   echo -e "${NC}"
@@ -81,12 +81,15 @@ ensure_docker() {
 # Determine whether we need sudo for docker commands (common when user not in docker group)
 setup_docker_cmd() {
   DOCKER="docker"
+  DOCKER_COMPOSE="docker compose"
+  
   if docker info >/dev/null 2>&1; then
     return 0
   fi
 
   if [[ -n "$SUDO" ]] && $SUDO docker info >/dev/null 2>&1; then
     DOCKER="$SUDO docker"
+    DOCKER_COMPOSE="$SUDO docker compose"
     return 0
   fi
 
@@ -108,20 +111,30 @@ setup_docker_cmd
 #-------------------------------------------------------------------------------
 COMPOSE_DIR=""
 SANDBOX_DIR=""
+ROOT_DIR=""
 
 # 1) If already installed
 if [[ -f "/opt/ctf-compass/ctf-autopilot/infra/docker-compose.yml" ]]; then
   COMPOSE_DIR="/opt/ctf-compass/ctf-autopilot/infra"
   SANDBOX_DIR="/opt/ctf-compass/ctf-autopilot/sandbox/image"
+  ROOT_DIR="/opt/ctf-compass"
 fi
 
 # 2) If running from repo root
 if [[ -z "$COMPOSE_DIR" ]] && [[ -f "./ctf-autopilot/infra/docker-compose.yml" ]]; then
   COMPOSE_DIR="./ctf-autopilot/infra"
   SANDBOX_DIR="./ctf-autopilot/sandbox/image"
+  ROOT_DIR="."
 fi
 
-# 3) Otherwise clone fresh to /tmp
+# 3) If in infra directory
+if [[ -z "$COMPOSE_DIR" ]] && [[ -f "./docker-compose.yml" ]]; then
+  COMPOSE_DIR="."
+  SANDBOX_DIR="../sandbox/image"
+  ROOT_DIR="../.."
+fi
+
+# 4) Otherwise clone fresh to /tmp
 if [[ -z "$COMPOSE_DIR" ]]; then
   echo -e "${YELLOW}📥 Cloning repository...${NC}"
   cd /tmp
@@ -129,6 +142,7 @@ if [[ -z "$COMPOSE_DIR" ]]; then
   git clone --depth 1 https://github.com/huynhtrungpc01/ctf-compass.git
   COMPOSE_DIR="/tmp/ctf-compass/ctf-autopilot/infra"
   SANDBOX_DIR="/tmp/ctf-compass/ctf-autopilot/sandbox/image"
+  ROOT_DIR="/tmp/ctf-compass"
 fi
 
 cd "$COMPOSE_DIR"
@@ -139,7 +153,7 @@ cd "$COMPOSE_DIR"
 if [[ ! -f ".env" ]]; then
   echo -e "${YELLOW}📝 Creating configuration...${NC}"
   cat > .env << 'EOF'
-# CTF Compass v2.0.0 - Simple Local Config
+# CTF Compass v2.0.1 - Simple Local Config
 # No login required - single user mode
 
 # Database
@@ -182,16 +196,16 @@ fi
 # Start services
 #-------------------------------------------------------------------------------
 echo -e "${YELLOW}🛑 Stopping existing containers...${NC}"
-$DOCKER compose down 2>/dev/null || true
+$DOCKER_COMPOSE down 2>/dev/null || true
 
 echo -e "${YELLOW}🚀 Starting services...${NC}"
-$DOCKER compose up -d
+$DOCKER_COMPOSE up -d --build
 
 #-------------------------------------------------------------------------------
 # Wait for API
 #-------------------------------------------------------------------------------
 echo -e "${YELLOW}⏳ Waiting for API...${NC}"
-MAX_WAIT=120
+MAX_WAIT=180
 WAITED=0
 while [[ $WAITED -lt $MAX_WAIT ]]; do
   if curl -sf http://localhost:8000/api/health >/dev/null 2>&1; then
@@ -201,6 +215,13 @@ while [[ $WAITED -lt $MAX_WAIT ]]; do
   WAITED=$((WAITED + 5))
   echo -e "   Waiting... ($WAITED/${MAX_WAIT}s)"
 done
+
+if [[ $WAITED -ge $MAX_WAIT ]]; then
+  echo -e "${YELLOW}⚠️ API took longer than expected. Checking status...${NC}"
+  $DOCKER_COMPOSE ps
+  echo ""
+  echo -e "${YELLOW}Check logs with: ${CYAN}$DOCKER_COMPOSE logs api${NC}"
+fi
 
 # IP
 IP=$(hostname -I 2>/dev/null | awk '{print $1}')
@@ -221,9 +242,9 @@ echo -e "${GREEN}║${NC}                                                       
 echo -e "${GREEN}╚═══════════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 echo -e "📋 Useful Commands:"
-echo -e "   ${CYAN}$DOCKER compose logs -f${NC}      # View logs"
-echo -e "   ${CYAN}$DOCKER compose restart${NC}      # Restart services"
-echo -e "   ${CYAN}$DOCKER compose down${NC}         # Stop services"
-echo -e "   ${CYAN}$DOCKER compose down -v${NC}      # Stop + delete data"
+echo -e "   ${CYAN}$DOCKER_COMPOSE logs -f${NC}      # View logs"
+echo -e "   ${CYAN}$DOCKER_COMPOSE restart${NC}      # Restart services"
+echo -e "   ${CYAN}$DOCKER_COMPOSE down${NC}         # Stop services"
+echo -e "   ${CYAN}$DOCKER_COMPOSE down -v${NC}      # Stop + delete data"
 echo ""
 echo -e "🧪 CORS Tester: ${CYAN}http://${IP}:3000/cors-tester${NC}"
