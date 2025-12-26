@@ -95,6 +95,7 @@ services:
       - SANDBOX_MEMORY_LIMIT=${SANDBOX_MEMORY_LIMIT:-512m}
       - SANDBOX_CPU_LIMIT=${SANDBOX_CPU_LIMIT:-1}
       - ENABLE_TLS=${ENABLE_TLS:-false}
+      - CORS_ORIGINS=${CORS_ORIGINS:-*}
     volumes:
       - app_data:/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -145,6 +146,7 @@ services:
       - SANDBOX_TIMEOUT_SECONDS=${SANDBOX_TIMEOUT_SECONDS:-60}
       - SANDBOX_MEMORY_LIMIT=${SANDBOX_MEMORY_LIMIT:-512m}
       - SANDBOX_CPU_LIMIT=${SANDBOX_CPU_LIMIT:-1}
+      - CORS_ORIGINS=${CORS_ORIGINS:-*}
     volumes:
       - app_data:/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
