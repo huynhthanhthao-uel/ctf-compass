@@ -2,19 +2,22 @@
 # Production-ready multi-service deployment for LOCAL backends
 #
 # GitHub: https://github.com/huynhtrungpc01/ctf-compass
-# Version: 1.2.0 (2025-12-25)
+# Version: 2.0.0 (2025-12-26)
 #
 # ARCHITECTURE:
 #   Frontend (React) connects directly to Docker Backend API via user-configured Backend URL.
+#   No login required - single-user local deployment.
 #   No external cloud/edge functions required for core functionality.
 #
 # FEATURES:
+#   - No login required (single-user mode)
 #   - Full Autopilot AI analysis
 #   - Netcat terminal for PWN challenges  
 #   - AI Solve Script generation (pwntools)
 #   - Sandbox Terminal with Docker isolation
 #   - WebSocket real-time updates
 #   - MegaLLM AI integration
+#   - Built-in CORS Tester
 #
 # USAGE:
 #   # Start services
@@ -62,8 +65,8 @@ services:
       start_period: 10s
     labels:
       - "com.ctf-compass.service=web"
-      - "com.ctf-compass.version=1.2.0"
-      - "com.ctf-compass.features=autopilot,netcat,ai-scripts,sandbox-terminal"
+      - "com.ctf-compass.version=2.0.0"
+      - "com.ctf-compass.features=autopilot,netcat,ai-scripts,sandbox-terminal,cors-tester"
 
   # =============================================================================
   # Backend API - FastAPI Application
@@ -89,7 +92,6 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD:-}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
       - MEGALLM_API_KEY=${MEGALLM_API_KEY:-}
       - MEGALLM_MODEL=${MEGALLM_MODEL:-llama3.3-70b-instruct}
       - MAX_UPLOAD_SIZE_MB=${MAX_UPLOAD_SIZE_MB:-200}
@@ -97,11 +99,12 @@ services:
       - SANDBOX_MEMORY_LIMIT=${SANDBOX_MEMORY_LIMIT:-512m}
       - SANDBOX_CPU_LIMIT=${SANDBOX_CPU_LIMIT:-1}
       - ENABLE_TLS=${ENABLE_TLS:-false}
-      # CORS_ORIGINS is loaded from env_file (.env). Not interpolated here to avoid host empty-var overrides.
+      # CORS_ORIGINS is loaded from env_file (.env) or /app/.env. Not interpolated here to avoid host empty-var overrides.
     volumes:
       - app_data:/data
       - ./.env:/app/.env:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
       postgres:
         condition: service_healthy
       redis:
@@ -118,7 +121,7 @@ services:
       start_period: 60s
     labels:
       - "com.ctf-compass.service=api"
-      - "com.ctf-compass.version=1.2.0"
+      - "com.ctf-compass.version=2.0.0"
       - "com.ctf-compass.features=autopilot,netcat,ai-scripts,sandbox-terminal,websocket"
 
   # =============================================================================
@@ -144,13 +147,12 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD:-}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
       - MEGALLM_API_KEY=${MEGALLM_API_KEY:-}
       - MEGALLM_MODEL=${MEGALLM_MODEL:-llama3.3-70b-instruct}
       - SANDBOX_TIMEOUT_SECONDS=${SANDBOX_TIMEOUT_SECONDS:-60}
       - SANDBOX_MEMORY_LIMIT=${SANDBOX_MEMORY_LIMIT:-512m}
       - SANDBOX_CPU_LIMIT=${SANDBOX_CPU_LIMIT:-1}
-      # CORS_ORIGINS is loaded from env_file (.env). Not interpolated here to avoid host empty-var overrides.
+      # CORS_ORIGINS is loaded from env_file (.env) or /app/.env. Not interpolated here to avoid host empty-var overrides.
     volumes:
       - app_data:/data
       - ./.env:/app/.env:ro
@@ -165,7 +167,7 @@ services:
       - backend
     labels:
       - "com.ctf-compass.service=worker"
-      - "com.ctf-compass.version=1.2.0"
+      - "com.ctf-compass.version=2.0.0"
 
   # =============================================================================
   # PostgreSQL Database
@@ -189,7 +191,7 @@ services:
       - backend
     labels:
       - "com.ctf-compass.service=postgres"
-      - "com.ctf-compass.version=1.2.0"
+      - "com.ctf-compass.version=2.0.0"
 
   # =============================================================================
   # Redis - Message Broker & Cache
@@ -213,7 +215,7 @@ services:
       - backend
     labels:
       - "com.ctf-compass.service=redis"
-      - "com.ctf-compass.version=1.2.0"
+      - "com.ctf-compass.version=2.0.0"
 
   # =============================================================================
   # Nginx Reverse Proxy (Production)
@@ -237,7 +239,7 @@ services:
       - frontend
     labels:
       - "com.ctf-compass.service=nginx"
-      - "com.ctf-compass.version=1.2.0"
+      - "com.ctf-compass.version=2.0.0"
 
 # =============================================================================
 # Named Volumes - Persistent Data Storage

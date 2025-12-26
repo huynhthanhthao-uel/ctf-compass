@@ -1,7 +1,10 @@
 #!/bin/bash
 #===============================================================================
 # CTF Compass - Simple One-Line Deploy Script (Local)
+# Version: 2.0.0 (2025-12-26)
 # Goal: 1 command installs prerequisites + pulls code + runs docker compose.
+#
+# NO LOGIN REQUIRED - Single-user local deployment
 #===============================================================================
 #
 # USAGE (recommended):
@@ -24,8 +27,8 @@ NC='\033[0m'
 banner() {
   echo -e "${CYAN}"
   echo "╔═══════════════════════════════════════════════════════════════════╗"
-  echo "║           CTF Compass - Quick Local Deploy                        ║"
-  echo "║           Password: admin                                         ║"
+  echo "║           CTF Compass v2.0.0 - Quick Local Deploy                 ║"
+  echo "║           No Login Required - Single User Mode                    ║"
   echo "╚═══════════════════════════════════════════════════════════════════╝"
   echo -e "${NC}"
 }
@@ -136,18 +139,32 @@ cd "$COMPOSE_DIR"
 if [[ ! -f ".env" ]]; then
   echo -e "${YELLOW}📝 Creating configuration...${NC}"
   cat > .env << 'EOF'
-# CTF Compass - Simple Local Config
-ADMIN_PASSWORD=admin
+# CTF Compass v2.0.0 - Simple Local Config
+# No login required - single user mode
+
+# Database
 POSTGRES_USER=ctfautopilot
 POSTGRES_PASSWORD=ctfautopilot
 POSTGRES_DB=ctfautopilot
+
+# Environment
 ENVIRONMENT=production
 DEBUG=false
 ENABLE_TLS=false
+
+# Sandbox limits
 MAX_UPLOAD_SIZE_MB=200
 SANDBOX_TIMEOUT_SECONDS=60
 SANDBOX_MEMORY_LIMIT=512m
 SANDBOX_CPU_LIMIT=1
+
+# CORS - allow all origins for easier local deployment
+# For specific origins: CORS_ORIGINS=http://192.168.1.100:3000,http://localhost:3000
+CORS_ORIGINS=*
+
+# AI (optional) - get key from https://ai.megallm.io
+# MEGALLM_API_KEY=your-key-here
+# MEGALLM_MODEL=llama3.3-70b-instruct
 EOF
 fi
 
@@ -197,7 +214,9 @@ echo -e "${GREEN}║${NC}                                                       
 echo -e "${GREEN}║${NC}  🌐 Web UI:   ${CYAN}http://${IP}:3000${NC}                              ${GREEN}║${NC}"
 echo -e "${GREEN}║${NC}  🔌 API:      ${CYAN}http://${IP}:8000${NC}                              ${GREEN}║${NC}"
 echo -e "${GREEN}║${NC}                                                                   ${GREEN}║${NC}"
-echo -e "${GREEN}║${NC}  🔑 Password: ${YELLOW}admin${NC}                                           ${GREEN}║${NC}"
+echo -e "${GREEN}║${NC}  ✨ No login required - just open the Web UI!                    ${GREEN}║${NC}"
+echo -e "${GREEN}║${NC}                                                                   ${GREEN}║${NC}"
+echo -e "${GREEN}║${NC}  📌 First time? Set Backend URL to: ${YELLOW}http://${IP}:8000${NC}           ${GREEN}║${NC}"
 echo -e "${GREEN}║${NC}                                                                   ${GREEN}║${NC}"
 echo -e "${GREEN}╚═══════════════════════════════════════════════════════════════════╝${NC}"
 echo ""
@@ -206,3 +225,5 @@ echo -e "   ${CYAN}$DOCKER compose logs -f${NC}      # View logs"
 echo -e "   ${CYAN}$DOCKER compose restart${NC}      # Restart services"
 echo -e "   ${CYAN}$DOCKER compose down${NC}         # Stop services"
 echo -e "   ${CYAN}$DOCKER compose down -v${NC}      # Stop + delete data"
+echo ""
+echo -e "🧪 CORS Tester: ${CYAN}http://${IP}:3000/cors-tester${NC}"
