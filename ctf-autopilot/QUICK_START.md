@@ -3,7 +3,7 @@
 ## 🚀 One-Line Deploy
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf-autopilot/infra/scripts/deploy.sh | bash
+curl -fsSL https://raw.githubusercontent.com/huynhthanhthao-uel/ctf-compass/main/ctf-autopilot/infra/scripts/deploy.sh | bash
 ```
 
 **✨ No login required - just open the Web UI!**
@@ -23,14 +23,14 @@ curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf
 
 ### Full Install (Ubuntu 24.04)
 ```bash
-curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/huynhthanhthao-uel/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash
 ```
 
 ### Manual Deploy
 ```bash
 # Clone repo
 cd /opt
-sudo git clone https://github.com/huynhtrungpc01/ctf-compass.git
+sudo git clone https://github.com/huynhthanhthao-uel/ctf-compass.git
 cd ctf-compass
 
 # Copy simple config

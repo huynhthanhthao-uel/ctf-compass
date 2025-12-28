@@ -9,7 +9,7 @@
 # USAGE:
 #   docker compose -f ctf-autopilot/infra/docker-compose.dev.yml up -d
 #
-# GitHub: https://github.com/huynhtrungpc01/ctf-compass
+# GitHub: https://github.com/huynhthanhthao-uel/ctf-compass
 
 services:
   # PostgreSQL Database

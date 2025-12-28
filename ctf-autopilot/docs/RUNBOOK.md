@@ -2,7 +2,7 @@
 
 Operations and maintenance guide for CTF Compass.
 
-**GitHub:** [github.com/huynhtrungpc01/ctf-compass](https://github.com/huynhtrungpc01/ctf-compass)
+**GitHub:** [github.com/huynhthanhthao-uel/ctf-compass](https://github.com/huynhthanhthao-uel/ctf-compass)
 
 ---
 
@@ -31,7 +31,7 @@ Operations and maintenance guide for CTF Compass.
 ### Quick Deploy (One-Line)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf-autopilot/infra/scripts/deploy.sh | bash
+curl -fsSL https://raw.githubusercontent.com/huynhthanhthao-uel/ctf-compass/main/ctf-autopilot/infra/scripts/deploy.sh | bash
 ```
 
 **Default Password: `admin`**
@@ -42,14 +42,14 @@ curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf
 
 ```bash
 # Use --clean flag to remove previous installation
-curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --clean
+curl -fsSL https://raw.githubusercontent.com/huynhthanhthao-uel/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --clean
 ```
 
 ### Manual Install
 
 ```bash
 # Clone repository
-git clone https://github.com/huynhtrungpc01/ctf-compass.git
+git clone https://github.com/huynhthanhthao-uel/ctf-compass.git
 cd ctf-compass
 
 # Install Docker if not installed
@@ -440,4 +440,4 @@ sudo ufw enable
 - **User Guide:** [USAGE.md](USAGE.md)
 - **Security:** [SECURITY.md](SECURITY.md)
 - **Architecture:** [ARCHITECTURE.md](ARCHITECTURE.md)
-- **GitHub Issues:** [github.com/huynhtrungpc01/ctf-compass/issues](https://github.com/huynhtrungpc01/ctf-compass/issues)
+- **GitHub Issues:** [github.com/huynhthanhthao-uel/ctf-compass/issues](https://github.com/huynhthanhthao-uel/ctf-compass/issues)

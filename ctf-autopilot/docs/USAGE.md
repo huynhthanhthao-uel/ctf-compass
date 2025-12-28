@@ -2,7 +2,7 @@
 
 Complete guide for using CTF Compass v2.0.0. This document covers the web interface, Full Autopilot, job creation, and analysis workflow.
 
-**GitHub:** [github.com/huynhtrungpc01/ctf-compass](https://github.com/huynhtrungpc01/ctf-compass)
+**GitHub:** [github.com/huynhthanhthao-uel/ctf-compass](https://github.com/huynhthanhthao-uel/ctf-compass)
 
 ---
 
@@ -628,4 +628,4 @@ Use the CORS Tester (`/cors-tester`) to verify configuration.
 - **Debugging Guide**: [DEBUG.md](./DEBUG.md)
 - **Runbook**: [RUNBOOK.md](./RUNBOOK.md)
 - **Architecture**: [ARCHITECTURE.md](./ARCHITECTURE.md)
-- **GitHub Issues**: [github.com/huynhtrungpc01/ctf-compass/issues](https://github.com/huynhtrungpc01/ctf-compass/issues)
+- **GitHub Issues**: [github.com/huynhthanhthao-uel/ctf-compass/issues](https://github.com/huynhthanhthao-uel/ctf-compass/issues)
