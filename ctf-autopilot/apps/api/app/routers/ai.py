@@ -6,7 +6,7 @@ from typing import List, Optional, Dict
 from uuid import UUID
 
 from app.services.ai_analysis_service import ai_analysis_service
-from app.routers.auth import require_auth
+from app.routers.auth import optional_session
 
 
 router = APIRouter(prefix="/ai", tags=["AI Analysis"])
@@ -59,7 +59,7 @@ class DetectCategoryResponse(BaseModel):
 
 
 @router.post("/analyze", response_model=AnalyzeResponse)
-async def analyze_outputs(request: AnalyzeRequest, _: None = Depends(require_auth)):
+async def analyze_outputs(request: AnalyzeRequest, _ = Depends(optional_session)):
     """Analyze command outputs and suggest next steps using AI."""
     try:
         result = await ai_analysis_service.analyze_and_suggest(
@@ -96,7 +96,7 @@ async def analyze_outputs(request: AnalyzeRequest, _: None = Depends(require_aut
 
 
 @router.post("/detect-category", response_model=DetectCategoryResponse)
-async def detect_category(request: DetectCategoryRequest, _: None = Depends(require_auth)):
+async def detect_category(request: DetectCategoryRequest, _ = Depends(optional_session)):
     """Detect challenge category from file analysis."""
     try:
         category, confidence = ai_analysis_service.detect_category(
