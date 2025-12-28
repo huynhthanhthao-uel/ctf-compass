@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.services.history_service import history_service
-from app.routers.auth import require_auth
+from app.routers.auth import optional_session
 
 
 router = APIRouter(prefix="/history", tags=["Analysis History"])
@@ -92,7 +92,7 @@ class CommandSummary(BaseModel):
     arguments: List[str]
     exit_code: Optional[int]
     stdout_preview: str
-    executed_at: datetime
+    started_at: datetime
     duration_ms: int
 
 
@@ -133,7 +133,7 @@ class SimilarSolveResponse(BaseModel):
 async def create_session(
     request: CreateSessionRequest,
     db: AsyncSession = Depends(get_db),
-    _: None = Depends(require_auth),
+    _ = Depends(optional_session),
 ):
     """Create a new analysis session."""
     try:
@@ -168,7 +168,7 @@ async def get_job_sessions(
     job_id: str,
     limit: int = 20,
     db: AsyncSession = Depends(get_db),
-    _: None = Depends(require_auth),
+    _ = Depends(optional_session),
 ):
     """Get all analysis sessions for a job."""
     try:
@@ -206,7 +206,7 @@ async def get_session_details(
     job_id: str,
     session_id: str,
     db: AsyncSession = Depends(get_db),
-    _: None = Depends(require_auth),
+    _ = Depends(optional_session),
 ):
     """Get detailed session info including commands and flags."""
     try:
@@ -243,7 +243,7 @@ async def get_session_details(
                     arguments=cmd.arguments or [],
                     exit_code=cmd.exit_code,
                     stdout_preview=(cmd.stdout or "")[:500],
-                    executed_at=cmd.executed_at,
+                    started_at=cmd.started_at,
                     duration_ms=cmd.duration_ms or 0,
                 )
                 for cmd in commands
@@ -271,7 +271,7 @@ async def update_session(
     session_id: str,
     request: UpdateSessionRequest,
     db: AsyncSession = Depends(get_db),
-    _: None = Depends(require_auth),
+    _ = Depends(optional_session),
 ):
     """Update an analysis session."""
     try:
@@ -293,7 +293,7 @@ async def end_session(
     session_id: str,
     request: EndSessionRequest,
     db: AsyncSession = Depends(get_db),
-    _: None = Depends(require_auth),
+    _ = Depends(optional_session),
 ):
     """End an analysis session."""
     try:
@@ -318,7 +318,7 @@ async def add_insight(
     session_id: str,
     request: AddInsightRequest,
     db: AsyncSession = Depends(get_db),
-    _: None = Depends(require_auth),
+    _ = Depends(optional_session),
 ):
     """Add an AI insight to the session."""
     try:
@@ -335,7 +335,7 @@ async def record_effective_tool(
     session_id: str,
     request: RecordToolRequest,
     db: AsyncSession = Depends(get_db),
-    _: None = Depends(require_auth),
+    _ = Depends(optional_session),
 ):
     """Record a tool that produced useful results."""
     try:
@@ -352,7 +352,7 @@ async def save_to_global_history(
     session_id: str,
     request: SaveToGlobalRequest,
     db: AsyncSession = Depends(get_db),
-    _: None = Depends(require_auth),
+    _ = Depends(optional_session),
 ):
     """Save a successful solve to global history for AI learning."""
     try:
@@ -380,7 +380,7 @@ async def save_to_global_history(
 async def recommend_tools(
     request: RecommendToolsRequest,
     db: AsyncSession = Depends(get_db),
-    _: None = Depends(require_auth),
+    _ = Depends(optional_session),
 ):
     """Get tool recommendations based on past successful solves."""
     try:
@@ -397,7 +397,7 @@ async def get_similar_solves(
     request: RecommendToolsRequest,
     limit: int = 5,
     db: AsyncSession = Depends(get_db),
-    _: None = Depends(require_auth),
+    _ = Depends(optional_session),
 ):
     """Get similar past solves for reference."""
     try:

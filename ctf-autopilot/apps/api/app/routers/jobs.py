@@ -18,7 +18,7 @@ from app.schemas import (
     CommandListResponse, CommandResponse,
     ArtifactListResponse, ArtifactInfo, FlagCandidateResponse,
 )
-from app.routers.auth import get_current_session, verify_csrf
+from app.routers.auth import optional_session, optional_csrf
 from app.services.file_service import FileService
 from app.services.job_service import JobService
 from app.services.sandbox_service import SandboxService
@@ -49,8 +49,8 @@ async def create_job(
     flag_format: str = Form(default=r"CTF\{[^}]+\}"),
     files: List[UploadFile] = File(...),
     db: AsyncSession = Depends(get_db),
-    _session = Depends(get_current_session),
-    _csrf = Depends(verify_csrf),
+    _session = Depends(optional_session),
+    _csrf = Depends(optional_csrf),
 ):
     """Create a new analysis job."""
     # Validate files
@@ -90,7 +90,7 @@ async def list_jobs(
     limit: int = 50,
     offset: int = 0,
     db: AsyncSession = Depends(get_db),
-    _session = Depends(get_current_session),
+    _session = Depends(optional_session),
 ):
     """List all jobs."""
     query = select(Job).order_by(Job.created_at.desc())
@@ -121,7 +121,7 @@ async def list_jobs(
 async def get_job(
     job_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _session = Depends(get_current_session),
+    _session = Depends(optional_session),
 ):
     """Get job details."""
     result = await db.execute(select(Job).where(Job.id == job_id))
@@ -149,8 +149,8 @@ async def run_job(
     job_id: UUID,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
-    _session = Depends(get_current_session),
-    _csrf = Depends(verify_csrf),
+    _session = Depends(optional_session),
+    _csrf = Depends(optional_csrf),
 ):
     """Start job execution."""
     result = await db.execute(select(Job).where(Job.id == job_id))
@@ -183,7 +183,7 @@ async def run_job(
 async def get_commands(
     job_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _session = Depends(get_current_session),
+    _session = Depends(optional_session),
 ):
     """Get executed commands."""
     result = await db.execute(
@@ -202,7 +202,7 @@ async def get_commands(
 async def get_artifacts(
     job_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _session = Depends(get_current_session),
+    _session = Depends(optional_session),
 ):
     """List job artifacts."""
     file_service = FileService()
@@ -215,7 +215,7 @@ async def get_artifacts(
 async def download_report(
     job_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _session = Depends(get_current_session),
+    _session = Depends(optional_session),
 ):
     """Download generated writeup."""
     file_service = FileService()
@@ -235,7 +235,7 @@ async def download_report(
 async def download_bundle(
     job_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _session = Depends(get_current_session),
+    _session = Depends(optional_session),
 ):
     """Download all artifacts as zip."""
     file_service = FileService()
@@ -269,7 +269,7 @@ async def download_bundle(
 async def get_job_files(
     job_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _session = Depends(get_current_session),
+    _session = Depends(optional_session),
 ):
     """List files available in job workspace."""
     result = await db.execute(select(Job).where(Job.id == job_id))
@@ -306,8 +306,8 @@ async def execute_terminal_command(
     job_id: UUID,
     request: TerminalCommandRequest,
     db: AsyncSession = Depends(get_db),
-    _session = Depends(get_current_session),
-    _csrf = Depends(verify_csrf),
+    _session = Depends(optional_session),
+    _csrf = Depends(optional_csrf),
 ):
     """Execute a command in the sandbox terminal."""
     # Verify job exists
@@ -373,7 +373,7 @@ async def download_artifact(
     job_id: UUID,
     artifact_path: str,
     db: AsyncSession = Depends(get_db),
-    _session = Depends(get_current_session),
+    _session = Depends(optional_session),
 ):
     """Download a specific artifact file."""
     # Verify job exists

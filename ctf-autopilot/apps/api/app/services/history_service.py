@@ -133,7 +133,7 @@ class HistoryService:
         cmd_result = await db.execute(
             select(Command)
             .where(Command.session_id == session_id)
-            .order_by(Command.executed_at)
+            .order_by(Command.started_at)
         )
         commands = list(cmd_result.scalars().all())
         

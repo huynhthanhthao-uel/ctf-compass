@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.config import settings
 from app.schemas import ConfigResponse, ConfigUpdate
-from app.routers.auth import get_current_session, verify_csrf
+from app.routers.auth import optional_session, optional_csrf
 from app.services.sandbox_service import SandboxService
 
 
@@ -13,7 +13,7 @@ router = APIRouter()
 
 @router.get("", response_model=ConfigResponse)
 async def get_config(
-    _session = Depends(get_current_session),
+    _session = Depends(optional_session),
 ):
     """Get current configuration."""
     sandbox_service = SandboxService()
@@ -29,8 +29,8 @@ async def get_config(
 @router.patch("", response_model=ConfigResponse)
 async def update_config(
     config: ConfigUpdate,
-    _session = Depends(get_current_session),
-    _csrf = Depends(verify_csrf),
+    _session = Depends(optional_session),
+    _csrf = Depends(optional_csrf),
 ):
     """Update configuration (runtime only, not persisted)."""
     # Note: This only updates runtime settings, not .env

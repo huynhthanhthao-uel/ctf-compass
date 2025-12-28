@@ -43,6 +43,33 @@ async def get_current_session(
     return session
 
 
+async def optional_session(
+    auth_session_id: str = Cookie(None, alias="session_id"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Optional session - does not raise error if no session.
+    
+    For v2.0.0 "No Login Required" mode, all endpoints use this.
+    Authentication is optional - if session exists, validate it.
+    If no session, allow access anyway (single-user mode).
+    """
+    if not auth_session_id:
+        return None
+    
+    try:
+        result = await db.execute(
+            select(Session).where(Session.id == auth_session_id)
+        )
+        session = result.scalar_one_or_none()
+        
+        if session and session.expires_at >= datetime.utcnow():
+            return session
+    except Exception:
+        pass
+    
+    return None
+
+
 def verify_csrf(
     session: Session = Depends(get_current_session),
     csrf_token: str = Cookie(None, alias="csrf_token"),
@@ -53,15 +80,33 @@ def verify_csrf(
     return True
 
 
-async def require_auth(
-    session: Session = Depends(get_current_session),
-) -> None:
-    """Simple auth dependency that just requires a valid session.
+def optional_csrf(
+    session = Depends(optional_session),
+    csrf_token: str = Cookie(None, alias="csrf_token"),
+):
+    """Optional CSRF - for v2.0.0 'No Login Required' mode.
     
-    Use this for endpoints that need authentication but don't need CSRF protection
-    (e.g., GET requests, internal API calls).
+    If session exists, verify CSRF. Otherwise, allow access.
     """
-    # Session validation is already done by get_current_session
+    if session is None:
+        return True
+    
+    if csrf_token and secrets.compare_digest(csrf_token, session.csrf_token):
+        return True
+    
+    # No session means no CSRF needed in single-user mode
+    return True
+
+
+async def require_auth(
+    session: Session = Depends(optional_session),
+) -> None:
+    """Auth dependency for v2.0.0 - always allows access (single-user mode).
+    
+    In v2.0.0, authentication is optional. This dependency exists for
+    backwards compatibility but does not enforce login.
+    """
+    # Always allow in single-user mode (v2.0.0)
     return None
 
 
@@ -107,11 +152,12 @@ async def login(
 @router.post("/logout")
 async def logout(
     response: Response,
-    session: Session = Depends(get_current_session),
+    session = Depends(optional_session),
     db: AsyncSession = Depends(get_db),
 ):
     """End current session."""
-    await db.execute(delete(Session).where(Session.id == session.id))
+    if session:
+        await db.execute(delete(Session).where(Session.id == session.id))
     
     response.delete_cookie("session_id")
     response.delete_cookie("csrf_token")
@@ -120,9 +166,17 @@ async def logout(
 
 
 @router.get("/me")
-async def get_current_user(session: Session = Depends(get_current_session)):
+async def get_current_user(session = Depends(optional_session)):
     """Get current session info."""
+    if session:
+        return {
+            "authenticated": True,
+            "expires_at": session.expires_at,
+        }
+    
+    # v2.0.0: Return success even without session (single-user mode)
     return {
         "authenticated": True,
-        "expires_at": session.expires_at,
+        "mode": "single-user",
+        "message": "No login required in v2.0.0",
     }

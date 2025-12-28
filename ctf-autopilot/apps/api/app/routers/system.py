@@ -9,7 +9,7 @@ import json
 import asyncio
 import shutil
 
-from app.routers.auth import get_current_session, verify_csrf
+from app.routers.auth import optional_session, optional_csrf
 from app.config import settings
 
 
@@ -196,7 +196,7 @@ def _check_for_updates() -> dict:
 
 @router.get("/check-update", response_model=UpdateCheckResponse)
 async def check_update(
-    _session=Depends(get_current_session),
+    _session=Depends(optional_session),
 ):
     """Check if updates are available."""
     result = _check_for_updates()
@@ -316,8 +316,8 @@ async def _run_update_stream():
 
 @router.post("/update")
 async def perform_update(
-    _session=Depends(get_current_session),
-    _csrf=Depends(verify_csrf),
+    _session=Depends(optional_session),
+    _csrf=Depends(optional_csrf),
 ):
     """Perform system update with streaming progress."""
     return StreamingResponse(
@@ -333,7 +333,7 @@ async def perform_update(
 
 @router.get("/api-key", response_model=ApiKeyResponse)
 async def get_api_key_status(
-    _session=Depends(get_current_session),
+    _session=Depends(optional_session),
 ):
     """Check if API key is configured."""
     # Check environment variable first, then runtime config
@@ -354,8 +354,8 @@ async def get_api_key_status(
 @router.post("/api-key", response_model=ApiKeyResponse)
 async def set_api_key(
     request: ApiKeyUpdateRequest,
-    _session=Depends(get_current_session),
-    _csrf=Depends(verify_csrf),
+    _session=Depends(optional_session),
+    _csrf=Depends(optional_csrf),
 ):
     """Update the MegaLLM API key (runtime only)."""
     if not request.api_key or len(request.api_key) < 10:
@@ -398,7 +398,7 @@ async def set_api_key(
 
 @router.get("/models", response_model=ModelConfigResponse)
 async def get_model_config(
-    _session=Depends(get_current_session),
+    _session=Depends(optional_session),
 ):
     """Get current model configuration."""
     return ModelConfigResponse(
@@ -411,8 +411,8 @@ async def get_model_config(
 @router.post("/models", response_model=ModelConfigResponse)
 async def set_model_config(
     request: ModelConfigRequest,
-    _session=Depends(get_current_session),
-    _csrf=Depends(verify_csrf),
+    _session=Depends(optional_session),
+    _csrf=Depends(optional_csrf),
 ):
     """Update model configuration."""
     if request.analysis_model:
@@ -465,7 +465,7 @@ class RunScriptResponse(BaseModel):
 @router.get("/sandbox/tools", response_model=ToolAvailabilityResponse)
 async def check_tool_availability(
     refresh: bool = False,
-    _session=Depends(get_current_session),
+    _session=Depends(optional_session),
 ):
     """Check which tools are installed in the sandbox."""
     from app.services.sandbox_service import SandboxService
@@ -478,7 +478,7 @@ async def check_tool_availability(
 
 @router.get("/sandbox/python-packages", response_model=PythonPackagesResponse)
 async def get_python_packages(
-    _session=Depends(get_current_session),
+    _session=Depends(optional_session),
 ):
     """Get list of pre-installed Python packages in sandbox."""
     from app.services.sandbox_service import SandboxService
@@ -496,8 +496,8 @@ async def get_python_packages(
 @router.post("/sandbox/run-script", response_model=RunScriptResponse)
 async def run_python_script(
     request: RunScriptRequest,
-    _session=Depends(get_current_session),
-    _csrf=Depends(verify_csrf),
+    _session=Depends(optional_session),
+    _csrf=Depends(optional_csrf),
 ):
     """Run a Python script in the sandbox."""
     from app.services.sandbox_service import SandboxService
