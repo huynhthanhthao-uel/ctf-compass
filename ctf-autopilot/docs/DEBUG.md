@@ -2,7 +2,7 @@
 
 Complete debugging guide for CTF Compass v2.0.0. This document covers common issues, CORS debugging, Cloud Mode, and step-by-step troubleshooting procedures.
 
-**GitHub:** [github.com/huynhtrungpc01/ctf-compass](https://github.com/huynhtrungpc01/ctf-compass)
+**GitHub:** [github.com/huynhthanhthao-uel/ctf-compass](https://github.com/huynhthanhthao-uel/ctf-compass)
 
 ---
 
@@ -605,7 +605,7 @@ sudo bash /opt/ctf-compass/ctf-autopilot/infra/scripts/update.sh
 ### Clean Reinstall
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --clean
+curl -fsSL https://raw.githubusercontent.com/huynhthanhthao-uel/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash -s -- --clean
 ```
 
 ### Reset Frontend State
@@ -672,4 +672,4 @@ When debugging, follow this checklist:
 - **Update Logs:** `/var/log/ctf-compass-update.log`
 - **Usage Guide:** [USAGE.md](./USAGE.md)
 - **Runbook:** [RUNBOOK.md](./RUNBOOK.md)
-- **GitHub Issues:** [github.com/huynhtrungpc01/ctf-compass/issues](https://github.com/huynhtrungpc01/ctf-compass/issues)
+- **GitHub Issues:** [github.com/huynhthanhthao-uel/ctf-compass/issues](https://github.com/huynhthanhthao-uel/ctf-compass/issues)

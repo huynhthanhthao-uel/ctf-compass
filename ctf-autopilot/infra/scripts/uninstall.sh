@@ -175,7 +175,7 @@ else
 fi
 echo -e "${GREEN}║                                                                   ║${NC}"
 echo -e "${GREEN}║  To reinstall:                                                   ║${NC}"
-echo -e "${GREEN}║  ${CYAN}curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/${NC}       ${GREEN}║${NC}"
+echo -e "${GREEN}║  ${CYAN}curl -fsSL https://raw.githubusercontent.com/huynhthanhthao-uel/${NC}   ${GREEN}║${NC}"
 echo -e "${GREEN}║  ${CYAN}  ctf-compass/main/ctf-autopilot/infra/scripts/${NC}                  ${GREEN}║${NC}"
 echo -e "${GREEN}║  ${CYAN}  install_ubuntu_24.04.sh | sudo bash${NC}                            ${GREEN}║${NC}"
 echo -e "${GREEN}║                                                                   ║${NC}"

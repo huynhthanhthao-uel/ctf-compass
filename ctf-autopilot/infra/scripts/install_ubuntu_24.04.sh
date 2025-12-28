@@ -133,7 +133,7 @@ print_banner() {
     echo "║             Automated CTF Challenge Analyzer                      ║"
     echo "║         No Login Required - Single User Mode                      ║"
     echo "║                                                                   ║"
-    echo "║     GitHub: github.com/huynhtrungpc01/ctf-compass                  ║"
+    echo "║     GitHub: github.com/huynhthanhthao-uel/ctf-compass               ║"
     echo "║                                                                   ║"
     echo "╚═══════════════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
@@ -375,7 +375,7 @@ handle_clean_only() {
         
         echo ""
         echo -e "  To reinstall CTF Compass:"
-        echo -e "  ${BOLD}curl -fsSL https://raw.githubusercontent.com/huynhtrungpc01/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash${NC}"
+        echo -e "  ${BOLD}curl -fsSL https://raw.githubusercontent.com/huynhthanhthao-uel/ctf-compass/main/ctf-autopilot/infra/scripts/install_ubuntu_24.04.sh | sudo bash${NC}"
         echo ""
         
         exit 0
@@ -884,7 +884,7 @@ print_summary() {
     echo "  User Guide:    $INSTALL_DIR/ctf-autopilot/docs/USAGE.md"
     echo "  Troubleshoot:  $INSTALL_DIR/ctf-autopilot/docs/DEBUG.md"
     echo ""
-    echo -e "${CYAN}GitHub:${NC} https://github.com/huynhtrungpc01/ctf-compass"
+    echo -e "${CYAN}GitHub:${NC} https://github.com/huynhthanhthao-uel/ctf-compass"
     echo ""
 }
 

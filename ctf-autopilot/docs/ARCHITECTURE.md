@@ -4,7 +4,7 @@
 
 CTF Compass is a hybrid architecture containing a React/Vite frontend, FastAPI backend, Lovable Cloud Edge Functions, and isolated Docker sandbox for secure CTF challenge analysis.
 
-**GitHub:** [github.com/huynhtrungpc01/ctf-compass](https://github.com/huynhtrungpc01/ctf-compass)
+**GitHub:** [github.com/huynhthanhthao-uel/ctf-compass](https://github.com/huynhthanhthao-uel/ctf-compass)
 
 ---
 
