@@ -7,9 +7,9 @@ from app.database import engine
 router = APIRouter()
 
 
-@router.get("/health")
-async def health_check():
-    """Health check endpoint - simple ping without DB check."""
+@router.get("/health/detailed")
+async def health_check_detailed():
+    """Detailed health check endpoint with service info."""
     return {
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat(),

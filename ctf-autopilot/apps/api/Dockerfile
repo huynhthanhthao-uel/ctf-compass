@@ -38,9 +38,9 @@ USER appuser
 # Expose port
 EXPOSE 8000
 
-# Health check - extended start period for DB initialization
-HEALTHCHECK --interval=15s --timeout=10s --start-period=120s --retries=10 \
-    CMD curl -f http://localhost:8000/api/health || exit 1
+# Health check - simple ping, generous timing for slow containers
+HEALTHCHECK --interval=10s --timeout=5s --start-period=180s --retries=20 \
+    CMD curl -sf http://localhost:8000/api/health || exit 1
 
 # Run application
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

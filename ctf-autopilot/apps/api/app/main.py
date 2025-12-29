@@ -124,6 +124,14 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+
+# Simple root health check - available immediately (before lifespan completes)
+@app.get("/api/health")
+async def root_health():
+    """Simple health check that works before full startup."""
+    from datetime import datetime
+    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+
 # Security middleware
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RateLimitMiddleware)
