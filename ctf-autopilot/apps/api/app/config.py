@@ -1,5 +1,5 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field, field_validator
+from pydantic import Field
 from typing import List, Optional
 import secrets
 import os
@@ -75,49 +75,31 @@ class Settings(BaseSettings):
     def runs_dir(self) -> str:
         return f"{self.data_dir}/runs"
     
-    # CORS - Allow all origins by default for easier deployment
-    # For production, set CORS_ORIGINS env var to specific origins
-    # Example: CORS_ORIGINS='http://192.168.168.24:3000,http://localhost:3000'
-    # NOTE: Explicitly alias to CORS_ORIGINS to ensure it is picked up in all pydantic-settings versions.
-    cors_origins: List[str] = Field(default_factory=lambda: ["*"], validation_alias="CORS_ORIGINS")
+    # CORS - stored as string to avoid pydantic-settings JSON parsing issues
+    # Supports: "*", "http://a,http://b", or '["http://a","http://b"]'
+    cors_origins_raw: str = Field(default="*", validation_alias="CORS_ORIGINS")
 
-    @field_validator("cors_origins", mode="before")
-    @classmethod
-    def _parse_cors_origins(cls, v):
-        """Parse CORS origins from env.
-
-        Supports:
-        - JSON list: ["http://a","http://b"]
-        - CSV: http://a,http://b
-        - Single value: * or http://example.com
-
-        NOTE: In some container setups, pydantic-settings may not hydrate list fields from env.
-        We defensively fall back to reading os.getenv("CORS_ORIGINS") when defaults are used.
-        """
-        env_v = os.getenv("CORS_ORIGINS")
-        if env_v and (v is None or v == ["*"] or v == "*"):
-            v = env_v
-
-        if v is None:
+    @property
+    def cors_origins(self) -> List[str]:
+        """Parse CORS origins from raw string."""
+        v = self.cors_origins_raw.strip() if self.cors_origins_raw else ""
+        if not v or v == "*":
             return ["*"]
-        if isinstance(v, str):
-            s = v.strip()
-            if not s:
-                return ["*"]
-            if s.startswith("["):
-                try:
-                    parsed = json.loads(s)
-                    if isinstance(parsed, list):
-                        return parsed
-                except Exception:
-                    pass
-            return [item.strip() for item in s.split(",") if item.strip()]
-        return v
+        # Try JSON array first
+        if v.startswith("["):
+            try:
+                parsed = json.loads(v)
+                if isinstance(parsed, list):
+                    return [str(x).strip() for x in parsed if x]
+            except Exception:
+                pass
+        # Fall back to comma-separated
+        return [x.strip() for x in v.split(",") if x.strip()]
 
     # TLS
     enable_tls: bool = False
 
-    # Pydantic v2 settings config (env still comes from OS env; env_file is injected via _env_file below)
+    # Pydantic v2 settings config
     model_config = SettingsConfigDict(
         env_file=None,
         case_sensitive=False,
