@@ -1,7 +1,9 @@
 # FastAPI Backend
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
+from datetime import datetime
 import asyncio
 import os
 import json
@@ -13,6 +15,22 @@ from app.routers import auth, jobs, config, health, system, ai, history
 from app.routers import ws as ws_router
 from app.database import engine
 from app.models import Base
+
+
+# ============================================================
+# CRITICAL: Health check app runs INDEPENDENTLY of main app
+# This ensures /api/health responds BEFORE DB is ready
+# ============================================================
+health_app = FastAPI(docs_url=None, redoc_url=None)
+
+
+@health_app.get("/api/health")
+async def simple_health():
+    """Ultra-simple health check - no DB, no dependencies."""
+    return JSONResponse(
+        content={"status": "healthy", "timestamp": datetime.utcnow().isoformat()},
+        status_code=200
+    )
 
 
 def _parse_cors_origins_env(raw: str) -> list[str]:
@@ -124,13 +142,15 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Mount health_app so /api/health works BEFORE lifespan completes
+app.mount("/health-probe", health_app)
 
-# Simple root health check - available immediately (before lifespan completes)
+
+# Also add direct health endpoint for when app is fully ready
 @app.get("/api/health")
 async def root_health():
-    """Simple health check that works before full startup."""
-    from datetime import datetime
-    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+    """Health check - app is fully started."""
+    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat(), "ready": True}
 
 # Security middleware
 app.add_middleware(SecurityHeadersMiddleware)
