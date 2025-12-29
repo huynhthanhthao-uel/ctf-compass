@@ -1,8 +1,6 @@
 # FastAPI Backend
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from contextlib import asynccontextmanager
 from datetime import datetime
 import asyncio
 import os
@@ -18,19 +16,10 @@ from app.models import Base
 
 
 # ============================================================
-# CRITICAL: Health check app runs INDEPENDENTLY of main app
-# This ensures /api/health responds BEFORE DB is ready
+# Global state for tracking initialization (non-blocking)
 # ============================================================
-health_app = FastAPI(docs_url=None, redoc_url=None)
-
-
-@health_app.get("/api/health")
-async def simple_health():
-    """Ultra-simple health check - no DB, no dependencies."""
-    return JSONResponse(
-        content={"status": "healthy", "timestamp": datetime.utcnow().isoformat()},
-        status_code=200
-    )
+_db_ready = False
+_db_error: str | None = None
 
 
 def _parse_cors_origins_env(raw: str) -> list[str]:
@@ -51,12 +40,7 @@ def _parse_cors_origins_env(raw: str) -> list[str]:
 
 
 def _read_dotenv_value(key: str) -> str | None:
-    """Read a value from a local .env file.
-
-    This is a defensive fallback for container setups where env_file hydration may fail.
-    Supports basic KEY=VALUE and quoted values.
-    """
-
+    """Read a value from a local .env file."""
     for path in ("/app/.env", ".env"):
         try:
             if not os.path.isfile(path):
@@ -77,80 +61,108 @@ def _read_dotenv_value(key: str) -> str | None:
 
 
 def _get_effective_cors_origins() -> list[str]:
-    # Prefer explicit env var at runtime (most reliable in containers)
     env_v = os.getenv("CORS_ORIGINS")
-    # IMPORTANT: Treat empty string as "unset" (compose may pass CORS_ORIGINS='')
     if env_v is not None and env_v.strip():
         return _parse_cors_origins_env(env_v)
 
-    # Fallback: try reading from mounted /app/.env (if any)
     file_v = _read_dotenv_value("CORS_ORIGINS")
     if file_v is not None and str(file_v).strip():
         return _parse_cors_origins_env(file_v)
 
-    # Fallback to settings (which may be default ['*'] if env hydration fails)
     try:
         return list(settings.cors_origins)
     except Exception:
         return ["*"]
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Startup: wait for DB and initialize schema (first boot)
-    max_attempts = 30
+async def _init_database_background():
+    """Initialize database in background - does NOT block app startup."""
+    global _db_ready, _db_error
+    
+    max_attempts = 60  # Try for up to 2 minutes
     delay_seconds = 2
 
-    last_error: Exception | None = None
     for attempt in range(1, max_attempts + 1):
         try:
             async with engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
-            last_error = None
-            break
+            _db_ready = True
+            _db_error = None
+            print(f"[startup] Database initialized successfully (attempt {attempt})")
+            
+            # Log CORS config
+            try:
+                dotenv_v = _read_dotenv_value("CORS_ORIGINS")
+                print(f"[startup] CORS_ORIGINS env={os.getenv('CORS_ORIGINS')!r} dotenv={dotenv_v!r} effective={_get_effective_cors_origins()!r}")
+            except Exception:
+                pass
+            return
         except Exception as e:
-            last_error = e
-            # Keep retrying for a short window (common in docker-compose start order)
+            _db_error = str(e)
+            print(f"[startup] DB init attempt {attempt}/{max_attempts} failed: {e}")
             if attempt < max_attempts:
-                print(f"[startup] DB init failed (attempt {attempt}/{max_attempts}): {e}")
                 await asyncio.sleep(delay_seconds)
-
-    if last_error is not None:
-        raise last_error
-
-    # Log effective CORS config (helps diagnose container env issues)
-    try:
-        dotenv_v = _read_dotenv_value("CORS_ORIGINS")
-        print(
-            f"[startup] CORS_ORIGINS env={os.getenv('CORS_ORIGINS')!r} dotenv={dotenv_v!r} effective={_get_effective_cors_origins()!r}"
-        )
-    except Exception:
-        pass
-
-    yield
-
-    # Shutdown
-    await engine.dispose()
+    
+    print(f"[startup] WARNING: Database initialization failed after {max_attempts} attempts")
 
 
+# ============================================================
+# Create FastAPI app WITHOUT blocking lifespan
+# This ensures health check is available IMMEDIATELY
+# ============================================================
 app = FastAPI(
     title="CTF Autopilot Analyzer",
     description="Security-first CTF challenge analyzer and writeup generator",
     version="1.0.0",
     docs_url="/api/docs" if settings.debug else None,
     redoc_url="/api/redoc" if settings.debug else None,
-    lifespan=lifespan,
 )
 
-# Mount health_app so /api/health works BEFORE lifespan completes
-app.mount("/health-probe", health_app)
 
-
-# Also add direct health endpoint for when app is fully ready
+# ============================================================
+# CRITICAL: Health check endpoint - available IMMEDIATELY
+# Docker healthcheck will hit this endpoint
+# ============================================================
 @app.get("/api/health")
-async def root_health():
-    """Health check - app is fully started."""
-    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat(), "ready": True}
+async def health_check():
+    """
+    Simple health check - returns healthy as soon as app starts.
+    This is what Docker healthcheck uses.
+    """
+    return {
+        "status": "healthy",
+        "timestamp": datetime.utcnow().isoformat(),
+        "db_ready": _db_ready,
+    }
+
+
+@app.get("/api/health/ready")
+async def readiness_check():
+    """Readiness check - returns ready only when DB is initialized."""
+    if _db_ready:
+        return {"status": "ready", "timestamp": datetime.utcnow().isoformat()}
+    else:
+        return {
+            "status": "initializing",
+            "timestamp": datetime.utcnow().isoformat(),
+            "error": _db_error,
+        }
+
+
+# ============================================================
+# Startup event - triggers background DB init (non-blocking)
+# ============================================================
+@app.on_event("startup")
+async def on_startup():
+    """Start background database initialization."""
+    asyncio.create_task(_init_database_background())
+
+
+@app.on_event("shutdown")
+async def on_shutdown():
+    """Cleanup on shutdown."""
+    await engine.dispose()
+
 
 # Security middleware
 app.add_middleware(SecurityHeadersMiddleware)
@@ -160,8 +172,6 @@ app.add_middleware(RateLimitMiddleware)
 cors_origins = _get_effective_cors_origins()
 allow_credentials = True
 
-# Wildcard origins cannot be combined with credentials (cookies).
-# If '*' is present, we fall back to non-credentialed CORS.
 if any(origin == "*" for origin in cors_origins):
     cors_origins = ["*"]
     allow_credentials = False

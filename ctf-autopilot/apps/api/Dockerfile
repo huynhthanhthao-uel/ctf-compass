@@ -38,9 +38,9 @@ USER appuser
 # Expose port
 EXPOSE 8000
 
-# Health check - try mounted health app first (works before lifespan), fallback to main
-HEALTHCHECK --interval=10s --timeout=5s --start-period=180s --retries=30 \
-    CMD curl -sf http://localhost:8000/health-probe/api/health || curl -sf http://localhost:8000/api/health || exit 1
+# Health check - simple and fast, app responds immediately now
+HEALTHCHECK --interval=5s --timeout=3s --start-period=10s --retries=3 \
+    CMD curl -sf http://localhost:8000/api/health || exit 1
 
 # Run application
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
